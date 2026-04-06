@@ -217,16 +217,15 @@ def statistics():
 
     top_vendor = vendor_product_counts_query.first()
     vendors_with_products = (
-        db.session.query(func.count(Vendor.id))
+        db.session.query(func.count(func.distinct(Vendor.id)))
         .join(Product, Product.vendor_id == Vendor.id)
-        .distinct()
         .scalar()
         or 0
     )
     average_products_per_vendor = (
         round(total_products / total_vendors, 2) if total_vendors else 0
     )
-    vendors_without_products = total_vendors - vendors_with_products
+    vendors_without_products = max(total_vendors - vendors_with_products, 0)
 
     cpe_part_counts = (
         db.session.query(CPEEntry.part, func.count(CPEEntry.id).label("count"))
