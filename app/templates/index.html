@@ -32,66 +32,29 @@
   </form>
 </div>
 
-<div class="grid grid-2">
-  <div class="card">
-    <h2>Results</h2>
-    {% if results %}
-      <table>
-        <thead>
-          <tr><th>CPE</th><th>Vendor / Product</th><th>Version</th></tr>
-        </thead>
-        <tbody>
-        {% for cpe in results %}
-          <tr>
-            <td><a href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}"><code>{{ cpe.cpe_uri }}</code></a></td>
-            <td>
-              <a href="{{ url_for('main.vendor_detail', vendor_uuid=cpe.vendor.uuid) }}">{{ cpe.vendor.title or cpe.vendor.name }}</a>
-              /
-              <a href="{{ url_for('main.product_detail', product_uuid=cpe.product.uuid) }}">{{ cpe.product.title or cpe.product.name }}</a>
-            </td>
-            <td>{{ cpe.version }}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p>No matching CPE entries yet.</p>
-    {% endif %}
-  </div>
-
-  <div class="card">
-    <h2>Browse vendors</h2>
-    <ul>
-      {% for vendor in vendors %}
-        <li><a href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a></li>
-      {% else %}
-        <li>No vendors yet.</li>
+<div class="card">
+  <h2>Results</h2>
+  {% if results %}
+    <table>
+      <thead>
+        <tr><th>CPE</th><th>Vendor / Product</th><th>Version</th></tr>
+      </thead>
+      <tbody>
+      {% for cpe in results %}
+        <tr>
+          <td><a href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}"><code>{{ cpe.cpe_uri }}</code></a></td>
+          <td>
+            <a href="{{ url_for('main.vendor_detail', vendor_uuid=cpe.vendor.uuid) }}">{{ cpe.vendor.title or cpe.vendor.name }}</a>
+            /
+            <a href="{{ url_for('main.product_detail', product_uuid=cpe.product.uuid) }}">{{ cpe.product.title or cpe.product.name }}</a>
+          </td>
+          <td>{{ cpe.version }}</td>
+        </tr>
       {% endfor %}
-    </ul>
-    {% if vendors %}
-      <div class="muted">
-        <p>Page {{ vendor_page }} of {{ vendor_total_pages }}</p>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          {% if vendor_has_prev %}
-            <a
-              class="button"
-              href="{{ url_for('main.index', q=q, vendor_q=vendor_q, product_q=product_q, part=part, vendor_page=vendor_page - 1) }}"
-            >
-              <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
-            </a>
-          {% endif %}
-          {% if vendor_has_next %}
-            <a
-              class="button"
-              href="{{ url_for('main.index', q=q, vendor_q=vendor_q, product_q=product_q, part=part, vendor_page=vendor_page + 1) }}"
-            >
-              Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-            </a>
-          {% endif %}
-        </div>
-      </div>
-    {% endif %}
-    <p><a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i>Propose a new vendor or product</a></p>
-  </div>
+      </tbody>
+    </table>
+  {% else %}
+    <p>No matching CPE entries yet.</p>
+  {% endif %}
 </div>
 {% endblock %}
