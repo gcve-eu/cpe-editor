@@ -9,6 +9,25 @@
 </div>
 
 <div class="card">
+  <h2>Approved notes</h2>
+  <ul>
+    {% for note in vendor_notes %}
+      <li>
+        <p>{{ note.note_text }}</p>
+        <p class="muted">
+          Submitted by {{ note.submitter_name or "Unknown submitter" }}
+          {% if note.submitter_email %}(<a href="mailto:{{ note.submitter_email }}">{{ note.submitter_email }}</a>){% endif %}
+          on {{ note.submitted_at.strftime("%Y-%m-%d %H:%M UTC") if note.submitted_at else "Unknown date" }}.
+          Approved on {{ note.approved_at.strftime("%Y-%m-%d %H:%M UTC") if note.approved_at else "Not available" }}.
+        </p>
+      </li>
+    {% else %}
+      <li>No approved notes yet.</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="card">
   <h2>Products</h2>
   <ul>
     {% for product in vendor.products %}

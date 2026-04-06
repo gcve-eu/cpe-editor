@@ -23,6 +23,12 @@ class Vendor(TimestampMixin, db.Model):
     notes = db.Column(db.Text, nullable=True)
 
     products = db.relationship("Product", back_populates="vendor", cascade="all, delete-orphan")
+    note_entries = db.relationship(
+        "EntityNote",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+        order_by="desc(EntityNote.approved_at), desc(EntityNote.submitted_at)",
+    )
 
     __table_args__ = (
         db.Index("ix_vendor_name_lower", db.func.lower(name)),
@@ -40,6 +46,12 @@ class Product(TimestampMixin, db.Model):
 
     vendor = db.relationship("Vendor", back_populates="products")
     cpes = db.relationship("CPEEntry", back_populates="product", cascade="all, delete-orphan")
+    note_entries = db.relationship(
+        "EntityNote",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="desc(EntityNote.approved_at), desc(EntityNote.submitted_at)",
+    )
 
     __table_args__ = (
         db.UniqueConstraint("vendor_id", "name", name="uq_product_vendor_name"),
@@ -117,3 +129,22 @@ class Proposal(TimestampMixin, db.Model):
     vendor = db.relationship("Vendor")
     product = db.relationship("Product")
     cpe_entry = db.relationship("CPEEntry")
+    note_entry = db.relationship("EntityNote", back_populates="proposal", uselist=False)
+
+
+class EntityNote(TimestampMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
+    proposal_id = db.Column(
+        db.Integer, db.ForeignKey("proposal.id"), nullable=True, unique=True, index=True
+    )
+    note_text = db.Column(db.Text, nullable=False)
+    submitter_name = db.Column(db.String(255), nullable=True)
+    submitter_email = db.Column(db.String(255), nullable=True)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    approved_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    vendor = db.relationship("Vendor", back_populates="note_entries")
+    product = db.relationship("Product", back_populates="note_entries")
+    proposal = db.relationship("Proposal", back_populates="note_entry")

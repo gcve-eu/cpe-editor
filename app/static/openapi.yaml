@@ -183,6 +183,10 @@ components:
           nullable: true
         product_count:
           type: integer
+        approved_notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntityNote'
     Product:
       type: object
       properties:
@@ -215,6 +219,40 @@ components:
           nullable: true
         cpe_count:
           type: integer
+        approved_notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntityNote'
+    EntityNote:
+      type: object
+      properties:
+        id:
+          type: integer
+        vendor_id:
+          type: integer
+          nullable: true
+        product_id:
+          type: integer
+          nullable: true
+        proposal_id:
+          type: integer
+          nullable: true
+        note_text:
+          type: string
+        submitter_name:
+          type: string
+          nullable: true
+        submitter_email:
+          type: string
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
     CPEEntry:
       type: object
       properties:

@@ -15,7 +15,7 @@ from flask import (
 )
 from sqlalchemy import func, or_, text
 
-from .models import CPEEntry, Product, Proposal, Vendor, db
+from .models import CPEEntry, EntityNote, Product, Proposal, Vendor, db
 from .utils import build_cpe_uri, normalize_token
 
 bp = Blueprint("main", __name__)
@@ -44,6 +44,14 @@ def _serialize_vendor(vendor):
         "created_at": vendor.created_at.isoformat() if vendor.created_at else None,
         "updated_at": vendor.updated_at.isoformat() if vendor.updated_at else None,
         "product_count": len(vendor.products),
+        "approved_notes": [
+            _serialize_entity_note(note)
+            for note in sorted(
+                vendor.note_entries,
+                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                reverse=True,
+            )
+        ],
     }
 
 
@@ -59,6 +67,28 @@ def _serialize_product(product):
         "created_at": product.created_at.isoformat() if product.created_at else None,
         "updated_at": product.updated_at.isoformat() if product.updated_at else None,
         "cpe_count": len(product.cpes),
+        "approved_notes": [
+            _serialize_entity_note(note)
+            for note in sorted(
+                product.note_entries,
+                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                reverse=True,
+            )
+        ],
+    }
+
+
+def _serialize_entity_note(note):
+    return {
+        "id": note.id,
+        "vendor_id": note.vendor_id,
+        "product_id": note.product_id,
+        "proposal_id": note.proposal_id,
+        "note_text": note.note_text,
+        "submitter_name": note.submitter_name,
+        "submitter_email": note.submitter_email,
+        "submitted_at": note.submitted_at.isoformat() if note.submitted_at else None,
+        "approved_at": note.approved_at.isoformat() if note.approved_at else None,
     }
 
 
@@ -255,13 +285,23 @@ def statistics():
 @bp.route("/vendors/<string:vendor_uuid>")
 def vendor_detail(vendor_uuid):
     vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
-    return render_template("vendor_detail.html", vendor=vendor)
+    vendor_notes = (
+        EntityNote.query.filter_by(vendor_id=vendor.id)
+        .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc())
+        .all()
+    )
+    return render_template("vendor_detail.html", vendor=vendor, vendor_notes=vendor_notes)
 
 
 @bp.route("/products/<string:product_uuid>")
 def product_detail(product_uuid):
     product = Product.query.filter_by(uuid=product_uuid).first_or_404()
-    return render_template("product_detail.html", product=product)
+    product_notes = (
+        EntityNote.query.filter_by(product_id=product.id)
+        .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc())
+        .all()
+    )
+    return render_template("product_detail.html", product=product, product_notes=product_notes)
 
 
 @bp.route("/cpes/<int:cpe_id>")
@@ -685,12 +725,32 @@ def apply_proposal(proposal: Proposal):
         if not vendor:
             raise ValueError("A target vendor is required for a vendor note proposal.")
         vendor.notes = proposal.proposed_notes
+        note = EntityNote(
+            vendor_id=vendor.id,
+            proposal_id=proposal.id,
+            note_text=proposal.proposed_notes,
+            submitter_name=proposal.submitter_name,
+            submitter_email=proposal.submitter_email,
+            submitted_at=proposal.created_at or datetime.utcnow(),
+            approved_at=proposal.reviewed_at or datetime.utcnow(),
+        )
+        db.session.add(note)
         return
 
     if proposal.proposal_type == "edit_product_note":
         if not product:
             raise ValueError("A target product is required for a product note proposal.")
         product.notes = proposal.proposed_notes
+        note = EntityNote(
+            product_id=product.id,
+            proposal_id=proposal.id,
+            note_text=proposal.proposed_notes,
+            submitter_name=proposal.submitter_name,
+            submitter_email=proposal.submitter_email,
+            submitted_at=proposal.created_at or datetime.utcnow(),
+            approved_at=proposal.reviewed_at or datetime.utcnow(),
+        )
+        db.session.add(note)
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")
