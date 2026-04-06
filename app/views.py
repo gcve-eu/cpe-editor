@@ -93,19 +93,17 @@ def _serialize_cpe(cpe):
 # --- Public views -------------------------------------------------------------
 @bp.route("/")
 def index():
-    q = (request.args.get("q") or "").strip()
     vendor_q = (request.args.get("vendor_q") or "").strip()
     product_q = (request.args.get("product_q") or "").strip()
     part = (request.args.get("part") or "").strip()
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
     per_page = 25
-    has_search_filters = any([q, vendor_q, product_q, part])
+    has_search_filters = any([vendor_q, product_q, part])
 
     if not has_search_filters:
         return render_template(
             "index.html",
             results=[],
-            q=q,
             vendor_q=vendor_q,
             product_q=product_q,
             part=part,
@@ -118,19 +116,6 @@ def index():
         )
 
     query = CPEEntry.query.join(Vendor).join(Product)
-    if q:
-        like = f"%{q.lower()}%"
-        query = query.filter(
-            or_(
-                func.lower(CPEEntry.cpe_uri).like(like),
-                func.lower(CPEEntry.title).like(like),
-                func.lower(Vendor.name).like(like),
-                func.lower(Vendor.title).like(like),
-                func.lower(Product.name).like(like),
-                func.lower(Product.title).like(like),
-                func.lower(CPEEntry.version).like(like),
-            )
-        )
     if vendor_q:
         vendor_like = f"{vendor_q.lower()}%"
         query = query.filter(
@@ -161,7 +146,6 @@ def index():
     return render_template(
         "index.html",
         results=results,
-        q=q,
         vendor_q=vendor_q,
         product_q=product_q,
         part=part,

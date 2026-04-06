@@ -3,12 +3,8 @@
 {% block content %}
 <div class="card">
   <h1>Search CPEs</h1>
-  <p class="muted">Search by CPE URI, vendor, product, title, or version.</p>
+  <p class="muted">Search by vendor and product prefixes, then narrow by part.</p>
   <form method="get" class="grid grid-2">
-    <div>
-      <label for="q">Query</label>
-      <input id="q" name="q" value="{{ q }}" placeholder="exchange_server, microsoft, cpe:2.3:...">
-    </div>
     <div>
       <label for="vendor_q">Vendor starts with</label>
       <input id="vendor_q" name="vendor_q" value="{{ vendor_q }}" placeholder="microsoft">
@@ -27,7 +23,7 @@
       </select>
     </div>
     <div>
-      <button type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search</button>
+      <button class="search-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Search CPEs</span></button>
     </div>
   </form>
 </div>
@@ -66,7 +62,7 @@
         {% if has_prev %}
           <a
             class="button secondary"
-            href="{{ url_for('main.index', q=q, vendor_q=vendor_q, product_q=product_q, part=part, page=page-1) }}"
+            href="{{ url_for('main.index', vendor_q=vendor_q, product_q=product_q, part=part, page=page-1) }}"
           >
             <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
           </a>
@@ -74,7 +70,7 @@
         {% if has_next %}
           <a
             class="button secondary"
-            href="{{ url_for('main.index', q=q, vendor_q=vendor_q, product_q=product_q, part=part, page=page+1) }}"
+            href="{{ url_for('main.index', vendor_q=vendor_q, product_q=product_q, part=part, page=page+1) }}"
           >
             Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
           </a>
