@@ -112,6 +112,30 @@
     .flash { padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1rem; background: #eef4ff; border: 1px solid #cbdcfb; }
     .muted { color: var(--muted); }
     .pill { display: inline-flex; align-items: center; gap: .3rem; padding: .2rem .6rem; border-radius: 999px; background: #eef2ff; font-size: .85rem; }
+    .info-box {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: .85rem;
+      padding: .95rem 1rem;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #eef4ff 0%, #f7faff 100%);
+      border: 1px solid #c7d7f7;
+      margin-bottom: 1rem;
+    }
+    .info-box .icon {
+      width: 2.2rem;
+      height: 2.2rem;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #dbe8ff;
+      color: #1d4ed8;
+      font-size: 1rem;
+      margin-top: .15rem;
+    }
+    .info-box h2, .info-box h3 { margin: 0 0 .25rem; font-size: 1.05rem; }
+    .info-box p { margin: 0; }
     code { white-space: pre-wrap; word-break: break-word; }
     footer { padding-top: .25rem; }
   </style>
