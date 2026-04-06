@@ -4,6 +4,7 @@
 <div class="card">
   <h1>Submit a proposal</h1>
   <p class="muted">Anonymous contributions are allowed. An admin must accept them before publication.</p>
+  <p class="muted">All fields are optional for proposal submission. Add only what you know, and reviewers can fill in the rest.</p>
   <form method="post">
     <div class="grid grid-2">
       <div>
@@ -27,60 +28,61 @@
 
     <div class="grid grid-2">
       <div>
-        <label for="submitter_name">Your name</label>
-        <input id="submitter_name" name="submitter_name">
+        <label for="submitter_name">Your name (optional)</label>
+        <input id="submitter_name" name="submitter_name" placeholder="Optional">
       </div>
       <div>
-        <label for="submitter_email">Your email</label>
-        <input id="submitter_email" name="submitter_email" type="email">
+        <label for="submitter_email">Your email (optional)</label>
+        <input id="submitter_email" name="submitter_email" type="email" placeholder="Optional">
       </div>
     </div>
 
     <div class="grid grid-2">
       <div>
-        <label for="vendor_id">Existing vendor</label>
+        <label for="vendor_id">Existing vendor (optional)</label>
         <select id="vendor_id" name="vendor_id">
           <option value="">None selected</option>
           {% for vendor in vendors %}
-            <option value="{{ vendor.id }}">{{ vendor.title or vendor.name }}</option>
+            <option value="{{ vendor.id }}" data-vendor-name="{{ vendor.name }}" data-vendor-title="{{ vendor.title or vendor.name }}">{{ vendor.title or vendor.name }}</option>
           {% endfor %}
         </select>
+        <small class="muted">Selecting a vendor can auto-fill the proposed vendor fields for new entries.</small>
       </div>
       <div>
-        <label for="product_id">Existing product ID</label>
+        <label for="product_id">Existing product ID (optional)</label>
         <input id="product_id" name="product_id" placeholder="Optional skeleton shortcut; replace with searchable picker later">
       </div>
     </div>
 
     <div class="grid grid-2">
       <div>
-        <label for="cpe_entry_id">Existing CPE entry ID</label>
-        <input id="cpe_entry_id" name="cpe_entry_id" placeholder="Needed for edit proposals">
+        <label for="cpe_entry_id">Existing CPE entry ID (optional)</label>
+        <input id="cpe_entry_id" name="cpe_entry_id" placeholder="Needed only for edit proposals">
       </div>
       <div>
-        <label for="proposed_vendor_name">Proposed vendor token</label>
+        <label for="proposed_vendor_name">Proposed vendor token (optional)</label>
         <input id="proposed_vendor_name" name="proposed_vendor_name" placeholder="e.g. microsoft">
       </div>
     </div>
 
     <div class="grid grid-2">
       <div>
-        <label for="proposed_vendor_title">Vendor display title</label>
+        <label for="proposed_vendor_title">Vendor display title (optional)</label>
         <input id="proposed_vendor_title" name="proposed_vendor_title" placeholder="e.g. Microsoft">
       </div>
       <div>
-        <label for="proposed_product_name">Proposed product token</label>
+        <label for="proposed_product_name">Proposed product token (optional)</label>
         <input id="proposed_product_name" name="proposed_product_name" placeholder="e.g. exchange_server">
       </div>
     </div>
 
     <div class="grid grid-2">
       <div>
-        <label for="proposed_product_title">Product display title</label>
+        <label for="proposed_product_title">Product display title (optional)</label>
         <input id="proposed_product_title" name="proposed_product_title" placeholder="e.g. Exchange Server">
       </div>
       <div>
-        <label for="proposed_title">CPE display title</label>
+        <label for="proposed_title">CPE display title (optional)</label>
         <input id="proposed_title" name="proposed_title" placeholder="e.g. Microsoft Exchange Server 2019">
       </div>
     </div>
@@ -96,13 +98,42 @@
       <div><label for="proposed_other">Other</label><input id="proposed_other" name="proposed_other" value="*"></div>
     </div>
 
-    <label for="proposed_notes">Notes</label>
+    <label for="proposed_notes">Notes (optional)</label>
     <textarea id="proposed_notes" name="proposed_notes"></textarea>
 
-    <label for="rationale">Why should this be changed?</label>
-    <textarea id="rationale" name="rationale" placeholder="Source, justification, references, etc."></textarea>
+    <label for="rationale">Why should this be changed? (optional)</label>
+    <textarea id="rationale" name="rationale" placeholder="Optional: source, justification, references, etc."></textarea>
 
     <p><button type="submit">Submit proposal</button></p>
   </form>
 </div>
+<script>
+  (function () {
+    const proposalType = document.getElementById("proposal_type");
+    const vendorSelect = document.getElementById("vendor_id");
+    const vendorNameInput = document.getElementById("proposed_vendor_name");
+    const vendorTitleInput = document.getElementById("proposed_vendor_title");
+    const typesForAutoFill = new Set(["new_cpe", "new_product"]);
+
+    function maybeAutoFillVendor() {
+      const selectedOption = vendorSelect.options[vendorSelect.selectedIndex];
+      if (!selectedOption || !selectedOption.value) {
+        return;
+      }
+      if (!typesForAutoFill.has(proposalType.value)) {
+        return;
+      }
+
+      if (!vendorNameInput.value.trim()) {
+        vendorNameInput.value = selectedOption.dataset.vendorName || "";
+      }
+      if (!vendorTitleInput.value.trim()) {
+        vendorTitleInput.value = selectedOption.dataset.vendorTitle || "";
+      }
+    }
+
+    vendorSelect.addEventListener("change", maybeAutoFillVendor);
+    proposalType.addEventListener("change", maybeAutoFillVendor);
+  })();
+</script>
 {% endblock %}
