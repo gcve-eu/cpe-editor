@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Browse Vendors{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Browse vendors</h1>
+  <ul>
+    {% for vendor in vendors %}
+      <li><a href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a></li>
+    {% else %}
+      <li>No vendors yet.</li>
+    {% endfor %}
+  </ul>
+  {% if vendors %}
+    <div class="muted">
+      <p>Page {{ vendor_page }} of {{ vendor_total_pages }}</p>
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        {% if vendor_has_prev %}
+          <a class="button" href="{{ url_for('main.vendors', page=vendor_page - 1) }}">
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
+          </a>
+        {% endif %}
+        {% if vendor_has_next %}
+          <a class="button" href="{{ url_for('main.vendors', page=vendor_page + 1) }}">
+            Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+  <p><a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i>Propose a new vendor or product</a></p>
+</div>
+{% endblock %}

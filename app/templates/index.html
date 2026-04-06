@@ -34,6 +34,10 @@
 
 <div class="card">
   <h2>Results</h2>
+  <p class="muted">
+    Showing {{ results|length }} of {{ total_results }} result{% if total_results != 1 %}s{% endif %}
+    (page {{ page }} of {{ total_pages }}).
+  </p>
   {% if results %}
     <table>
       <thead>
@@ -53,6 +57,26 @@
       {% endfor %}
       </tbody>
     </table>
+    {% if total_pages > 1 %}
+      <div class="action-row" style="margin-top: 1rem;">
+        {% if has_prev %}
+          <a
+            class="button secondary"
+            href="{{ url_for('main.index', q=q, vendor_q=vendor_q, product_q=product_q, part=part, page=page-1) }}"
+          >
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
+          </a>
+        {% endif %}
+        {% if has_next %}
+          <a
+            class="button secondary"
+            href="{{ url_for('main.index', q=q, vendor_q=vendor_q, product_q=product_q, part=part, page=page+1) }}"
+          >
+            Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          </a>
+        {% endif %}
+      </div>
+    {% endif %}
   {% else %}
     <p>No matching CPE entries yet.</p>
   {% endif %}

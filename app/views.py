@@ -39,6 +39,8 @@ def index():
     vendor_q = (request.args.get("vendor_q") or "").strip()
     product_q = (request.args.get("product_q") or "").strip()
     part = (request.args.get("part") or "").strip()
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = 25
 
     query = CPEEntry.query.join(Vendor).join(Product)
     if q:
@@ -73,7 +75,14 @@ def index():
     if part:
         query = query.filter(CPEEntry.part == part)
 
-    results = query.order_by(Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc()).limit(100).all()
+    ordered_query = query.order_by(Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc())
+    total_results = ordered_query.count()
+    total_pages = max((total_results + per_page - 1) // per_page, 1)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * per_page
+    results = ordered_query.offset(offset).limit(per_page).all()
+
     return render_template(
         "index.html",
         results=results,
@@ -81,6 +90,11 @@ def index():
         vendor_q=vendor_q,
         product_q=product_q,
         part=part,
+        page=page,
+        total_pages=total_pages,
+        has_prev=page > 1,
+        has_next=page < total_pages,
+        total_results=total_results,
     )
 
 
