@@ -68,6 +68,29 @@
         <li>No vendors yet.</li>
       {% endfor %}
     </ul>
+    {% if vendors %}
+      <div class="muted">
+        <p>Page {{ vendor_page }} of {{ vendor_total_pages }}</p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          {% if vendor_has_prev %}
+            <a
+              class="button"
+              href="{{ url_for('main.index', q=q, vendor_q=vendor_q, product_q=product_q, part=part, vendor_page=vendor_page - 1) }}"
+            >
+              <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
+            </a>
+          {% endif %}
+          {% if vendor_has_next %}
+            <a
+              class="button"
+              href="{{ url_for('main.index', q=q, vendor_q=vendor_q, product_q=product_q, part=part, vendor_page=vendor_page + 1) }}"
+            >
+              Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
     <p><a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i>Propose a new vendor or product</a></p>
   </div>
 </div>
