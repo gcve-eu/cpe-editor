@@ -396,8 +396,16 @@ def api_cpes():
 def proposal_new():
     vendors = Vendor.query.order_by(Vendor.name.asc()).all()
     preselected_vendor_id = request.args.get("vendor_id", type=int)
+    preselected_product_id = request.args.get("product_id", type=int)
     preselected_proposal_type = request.args.get("proposal_type", "edit_cpe")
-    allowed_types = {"edit_cpe", "new_cpe", "new_product", "new_vendor_product"}
+    allowed_types = {
+        "edit_cpe",
+        "new_cpe",
+        "new_product",
+        "new_vendor_product",
+        "edit_vendor_note",
+        "edit_product_note",
+    }
     if preselected_proposal_type not in allowed_types:
         preselected_proposal_type = "edit_cpe"
 
@@ -406,6 +414,12 @@ def proposal_new():
         preselected_vendor = Vendor.query.get(preselected_vendor_id)
         if not preselected_vendor:
             preselected_vendor_id = None
+
+    preselected_product = None
+    if preselected_product_id:
+        preselected_product = Product.query.get(preselected_product_id)
+        if not preselected_product:
+            preselected_product_id = None
 
     if request.method == "POST":
         proposal_type = request.form.get("proposal_type", "edit_cpe")
@@ -438,8 +452,8 @@ def proposal_new():
             proposed_notes=request.form.get("proposed_notes"),
         )
 
-        vendor_name = request.form.get("proposed_vendor_name") or ""
-        product_name = request.form.get("proposed_product_name") or ""
+        vendor_name = (request.form.get("proposed_vendor_name") or "").strip()
+        product_name = (request.form.get("proposed_product_name") or "").strip()
         part_value = request.form.get("proposed_part") or "a"
         if proposal_type in {"new_cpe", "edit_cpe", "new_vendor_product", "new_product"}:
             if vendor_id and not vendor_name:
@@ -462,6 +476,18 @@ def proposal_new():
                 proposal.proposed_other,
             )
 
+        if proposal_type == "edit_vendor_note" and not proposal.vendor_id:
+            flash("Please select an existing vendor for a vendor note proposal.", "danger")
+            return redirect(url_for("main.proposal_new", proposal_type="edit_vendor_note"))
+
+        if proposal_type == "edit_product_note" and not proposal.product_id:
+            flash("Please select an existing product for a product note proposal.", "danger")
+            return redirect(url_for("main.proposal_new", proposal_type="edit_product_note"))
+
+        if proposal_type in {"edit_vendor_note", "edit_product_note"} and not (proposal.proposed_notes or "").strip():
+            flash("Please provide the proposed note text.", "danger")
+            return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+
         db.session.add(proposal)
         db.session.commit()
         flash("Proposal submitted. An admin will review it.", "success")
@@ -471,8 +497,10 @@ def proposal_new():
         "proposal_form.html",
         vendors=vendors,
         preselected_vendor_id=preselected_vendor_id,
+        preselected_product_id=preselected_product_id,
         preselected_proposal_type=preselected_proposal_type,
         preselected_vendor=preselected_vendor,
+        preselected_product=preselected_product,
     )
 
 
@@ -651,6 +679,18 @@ def apply_proposal(proposal: Proposal):
         new_cpe.other = proposal.proposed_other or cpe.other
         new_cpe.title = proposal.proposed_title or cpe.title
         new_cpe.notes = proposal.proposed_notes or cpe.notes
+        return
+
+    if proposal.proposal_type == "edit_vendor_note":
+        if not vendor:
+            raise ValueError("A target vendor is required for a vendor note proposal.")
+        vendor.notes = proposal.proposed_notes
+        return
+
+    if proposal.proposal_type == "edit_product_note":
+        if not product:
+            raise ValueError("A target product is required for a product note proposal.")
+        product.notes = proposal.proposed_notes
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")

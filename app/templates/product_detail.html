@@ -12,6 +12,14 @@
 
 <div class="card">
   <h2>CPE entries</h2>
+  <p>
+    <a
+      class="button"
+      href="{{ url_for('main.proposal_new', proposal_type='edit_product_note', vendor_id=product.vendor_id, product_id=product.id) }}"
+    >
+      <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>Propose a note for this product
+    </a>
+  </p>
   <table>
     <thead><tr><th>CPE URI</th><th>Version</th><th>Part</th></tr></thead>
     <tbody>
