@@ -34,10 +34,14 @@
 
 <div class="card">
   <h2>Results</h2>
-  <p class="muted">
-    Showing {{ results|length }} of {{ total_results }} result{% if total_results != 1 %}s{% endif %}
-    (page {{ page }} of {{ total_pages }}).
-  </p>
+  {% if has_search_filters %}
+    <p class="muted">
+      Showing {{ results|length }} of {{ total_results }} result{% if total_results != 1 %}s{% endif %}
+      (page {{ page }} of {{ total_pages }}).
+    </p>
+  {% else %}
+    <p class="muted">Enter a query or filter and click Search to view results.</p>
+  {% endif %}
   {% if results %}
     <table>
       <thead>
@@ -78,7 +82,9 @@
       </div>
     {% endif %}
   {% else %}
-    <p>No matching CPE entries yet.</p>
+    {% if has_search_filters %}
+      <p>No matching CPE entries yet.</p>
+    {% endif %}
   {% endif %}
 </div>
 {% endblock %}

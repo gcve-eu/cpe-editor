@@ -41,6 +41,23 @@ def index():
     part = (request.args.get("part") or "").strip()
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
     per_page = 25
+    has_search_filters = any([q, vendor_q, product_q, part])
+
+    if not has_search_filters:
+        return render_template(
+            "index.html",
+            results=[],
+            q=q,
+            vendor_q=vendor_q,
+            product_q=product_q,
+            part=part,
+            page=1,
+            total_pages=1,
+            has_prev=False,
+            has_next=False,
+            total_results=0,
+            has_search_filters=has_search_filters,
+        )
 
     query = CPEEntry.query.join(Vendor).join(Product)
     if q:
@@ -95,6 +112,7 @@ def index():
         has_prev=page > 1,
         has_next=page < total_pages,
         total_results=total_results,
+        has_search_filters=has_search_filters,
     )
 
 
