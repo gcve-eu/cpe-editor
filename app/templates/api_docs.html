@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}API Docs - CPE Editor{% endblock %}
+{% block content %}
+<section class="card">
+  <h1><i class="fa-solid fa-book-open" aria-hidden="true"></i> OpenAPI Documentation</h1>
+  <p class="muted">
+    This page renders the OpenAPI spec at
+    <code>{{ url_for('main.api_openapi_spec') }}</code>.
+  </p>
+  <div id="swagger-ui"></div>
+</section>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>
+  window.addEventListener('load', function () {
+    SwaggerUIBundle({
+      url: "{{ url_for('main.api_openapi_spec') }}",
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+      docExpansion: 'none',
+      presets: [SwaggerUIBundle.presets.apis]
+    });
+  });
+</script>
+{% endblock %}

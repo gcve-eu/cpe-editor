@@ -5,9 +5,11 @@ from flask import (
     Blueprint,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
@@ -30,6 +32,62 @@ def admin_required(view_func):
         return view_func(*args, **kwargs)
 
     return wrapped
+
+
+def _serialize_vendor(vendor):
+    return {
+        "id": vendor.id,
+        "uuid": vendor.uuid,
+        "name": vendor.name,
+        "title": vendor.title,
+        "notes": vendor.notes,
+        "created_at": vendor.created_at.isoformat() if vendor.created_at else None,
+        "updated_at": vendor.updated_at.isoformat() if vendor.updated_at else None,
+        "product_count": len(vendor.products),
+    }
+
+
+def _serialize_product(product):
+    return {
+        "id": product.id,
+        "uuid": product.uuid,
+        "vendor_id": product.vendor_id,
+        "vendor_uuid": product.vendor.uuid if product.vendor else None,
+        "name": product.name,
+        "title": product.title,
+        "notes": product.notes,
+        "created_at": product.created_at.isoformat() if product.created_at else None,
+        "updated_at": product.updated_at.isoformat() if product.updated_at else None,
+        "cpe_count": len(product.cpes),
+    }
+
+
+def _serialize_cpe(cpe):
+    return {
+        "id": cpe.id,
+        "vendor_id": cpe.vendor_id,
+        "vendor_uuid": cpe.vendor.uuid if cpe.vendor else None,
+        "product_id": cpe.product_id,
+        "product_uuid": cpe.product.uuid if cpe.product else None,
+        "cpe_uri": cpe.cpe_uri,
+        "cpe_name_id": cpe.cpe_name_id,
+        "deprecated": cpe.deprecated,
+        "deprecated_by": cpe.deprecated_by,
+        "part": cpe.part,
+        "version": cpe.version,
+        "update": cpe.update,
+        "edition": cpe.edition,
+        "language": cpe.language,
+        "sw_edition": cpe.sw_edition,
+        "target_sw": cpe.target_sw,
+        "target_hw": cpe.target_hw,
+        "other": cpe.other,
+        "title": cpe.title,
+        "notes": cpe.notes,
+        "from_proposal": cpe.from_proposal,
+        "created_at": cpe.created_at.isoformat() if cpe.created_at else None,
+        "updated_at": cpe.updated_at.isoformat() if cpe.updated_at else None,
+    }
 
 
 # --- Public views -------------------------------------------------------------
@@ -155,6 +213,128 @@ def product_detail(product_uuid):
 def cpe_detail(cpe_id):
     cpe = CPEEntry.query.get_or_404(cpe_id)
     return render_template("cpe_detail.html", cpe=cpe)
+
+
+@bp.route("/api/openapi.yaml")
+def api_openapi_spec():
+    return send_from_directory(current_app.static_folder, "openapi.yaml")
+
+
+@bp.route("/api/docs")
+def api_docs():
+    return render_template("api_docs.html")
+
+
+@bp.route("/api/vendors")
+def api_vendors():
+    q = (request.args.get("q") or "").strip()
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+
+    query = Vendor.query
+    if q:
+        like = f"%{q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Vendor.name).like(like),
+                func.lower(Vendor.title).like(like),
+            )
+        )
+
+    total = query.count()
+    results = (
+        query.order_by(Vendor.name.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return jsonify(
+        {
+            "items": [_serialize_vendor(vendor) for vendor in results],
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": max((total + per_page - 1) // per_page, 1),
+        }
+    )
+
+
+@bp.route("/api/vendors/<string:vendor_uuid>")
+def api_vendor_detail(vendor_uuid):
+    vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
+    return jsonify(_serialize_vendor(vendor))
+
+
+@bp.route("/api/products/<string:product_uuid>")
+def api_product_detail(product_uuid):
+    product = Product.query.filter_by(uuid=product_uuid).first_or_404()
+    return jsonify(_serialize_product(product))
+
+
+@bp.route("/api/cpes/<int:cpe_id>")
+def api_cpe_detail(cpe_id):
+    cpe = CPEEntry.query.get_or_404(cpe_id)
+    return jsonify(_serialize_cpe(cpe))
+
+
+@bp.route("/api/cpes")
+def api_cpes():
+    q = (request.args.get("q") or "").strip()
+    vendor_q = (request.args.get("vendor_q") or "").strip()
+    product_q = (request.args.get("product_q") or "").strip()
+    part = (request.args.get("part") or "").strip()
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+
+    query = CPEEntry.query.join(Vendor).join(Product)
+    if q:
+        like = f"%{q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(CPEEntry.cpe_uri).like(like),
+                func.lower(CPEEntry.title).like(like),
+                func.lower(Vendor.name).like(like),
+                func.lower(Vendor.title).like(like),
+                func.lower(Product.name).like(like),
+                func.lower(Product.title).like(like),
+                func.lower(CPEEntry.version).like(like),
+            )
+        )
+    if vendor_q:
+        vendor_like = f"{vendor_q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Vendor.name).like(vendor_like),
+                func.lower(Vendor.title).like(vendor_like),
+            )
+        )
+    if product_q:
+        product_like = f"{product_q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Product.name).like(product_like),
+                func.lower(Product.title).like(product_like),
+            )
+        )
+    if part:
+        query = query.filter(CPEEntry.part == part)
+
+    total = query.count()
+    results = (
+        query.order_by(Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return jsonify(
+        {
+            "items": [_serialize_cpe(cpe) for cpe in results],
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": max((total + per_page - 1) // per_page, 1),
+        }
+    )
 
 
 @bp.route("/proposals/new", methods=["GET", "POST"])

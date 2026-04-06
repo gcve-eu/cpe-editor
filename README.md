@@ -54,6 +54,28 @@ Admin defaults are read from environment variables:
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
 
+## OpenAPI interface
+
+This project now includes a read-only OpenAPI interface for browsing core records.
+
+- Swagger UI: `GET /api/docs`
+- OpenAPI spec file: `GET /api/openapi.yaml`
+
+Currently documented API endpoints:
+
+- `GET /api/vendors` (search and pagination)
+- `GET /api/vendors/{vendor_uuid}`
+- `GET /api/products/{product_uuid}`
+- `GET /api/cpes` (search and pagination)
+- `GET /api/cpes/{cpe_id}`
+
+### Quick API examples
+
+```bash
+curl "http://127.0.0.1:5000/api/vendors?page=1&per_page=5"
+curl "http://127.0.0.1:5000/api/cpes?vendor_q=microsoft&part=a&per_page=10"
+```
+
 ## Import the NVD CPE feed
 
 The importer accepts either a URL or a local tarball path.

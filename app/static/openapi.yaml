@@ -1,0 +1,305 @@
+openapi: 3.0.3
+info:
+  title: CPE Editor API
+  version: 1.0.0
+  description: |
+    Read-only API for browsing vendors, products, and CPE entries managed by CPE Editor.
+servers:
+  - url: /
+tags:
+  - name: Vendors
+  - name: Products
+  - name: CPE Entries
+paths:
+  /api/vendors:
+    get:
+      tags: [Vendors]
+      summary: List vendors
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Case-insensitive text search on vendor name or title.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Vendor list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVendors'
+  /api/vendors/{vendor_uuid}:
+    get:
+      tags: [Vendors]
+      summary: Get vendor by UUID
+      parameters:
+        - in: path
+          name: vendor_uuid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vendor detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vendor'
+        '404':
+          description: Not found
+  /api/products/{product_uuid}:
+    get:
+      tags: [Products]
+      summary: Get product by UUID
+      parameters:
+        - in: path
+          name: product_uuid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          description: Not found
+  /api/cpes:
+    get:
+      tags: [CPE Entries]
+      summary: List CPE entries
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Broad case-insensitive search over URI, title, vendor, product, and version.
+        - in: query
+          name: vendor_q
+          schema:
+            type: string
+          description: Vendor name/title prefix filter.
+        - in: query
+          name: product_q
+          schema:
+            type: string
+          description: Product name/title prefix filter.
+        - in: query
+          name: part
+          schema:
+            type: string
+            enum: [a, o, h]
+          description: CPE part value.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: CPE list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCPEs'
+  /api/cpes/{cpe_id}:
+    get:
+      tags: [CPE Entries]
+      summary: Get CPE by numeric ID
+      parameters:
+        - in: path
+          name: cpe_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: CPE detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CPEEntry'
+        '404':
+          description: Not found
+components:
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+    Vendor:
+      type: object
+      properties:
+        id:
+          type: integer
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        product_count:
+          type: integer
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        uuid:
+          type: string
+          format: uuid
+        vendor_id:
+          type: integer
+        vendor_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        title:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        cpe_count:
+          type: integer
+    CPEEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        vendor_id:
+          type: integer
+        vendor_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        product_id:
+          type: integer
+        product_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        cpe_uri:
+          type: string
+        cpe_name_id:
+          type: string
+          format: uuid
+          nullable: true
+        deprecated:
+          type: boolean
+        deprecated_by:
+          type: string
+          nullable: true
+        part:
+          type: string
+        version:
+          type: string
+          nullable: true
+        update:
+          type: string
+          nullable: true
+        edition:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        sw_edition:
+          type: string
+          nullable: true
+        target_sw:
+          type: string
+          nullable: true
+        target_hw:
+          type: string
+          nullable: true
+        other:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        from_proposal:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    PaginatedVendors:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Vendor'
+    PaginatedCPEs:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CPEEntry'
