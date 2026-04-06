@@ -4,6 +4,7 @@
 <div class="card">
   <h1>{{ vendor.title or vendor.name }}</h1>
   <p class="muted">Vendor token: <code>{{ vendor.name }}</code></p>
+  <p class="muted">Vendor UUID: <code>{{ vendor.uuid }}</code></p>
   <p>{{ vendor.notes or "No vendor notes yet." }}</p>
 </div>
 
@@ -11,7 +12,10 @@
   <h2>Products</h2>
   <ul>
     {% for product in vendor.products %}
-      <li><a href="{{ url_for('main.product_detail', product_id=product.id) }}">{{ product.title or product.name }}</a></li>
+      <li>
+        <a href="{{ url_for('main.product_detail', product_uuid=product.uuid) }}">{{ product.title or product.name }}</a>
+        <span class="muted">(<code>{{ product.uuid }}</code>)</span>
+      </li>
     {% else %}
       <li>No products yet.</li>
     {% endfor %}

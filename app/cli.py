@@ -526,21 +526,23 @@ def validate_app_dataset(dataset: dict):
 def upsert_vendors(vendor_rows: list[dict], vendor_id_by_uuid: dict[str, int]) -> int:
     count = 0
     for row in vendor_rows:
-        uuid = row["uuid"]
-        vendor = Vendor.query.filter_by(uuid=uuid).first()
+        imported_uuid = row["uuid"]
+        vendor = Vendor.query.filter_by(uuid=imported_uuid).first()
         if vendor is None:
             vendor = Vendor.query.filter_by(name=row["name"]).first()
         if vendor is None:
-            vendor = Vendor(uuid=uuid, name=row["name"])
+            vendor = Vendor(uuid=imported_uuid, name=row["name"])
             db.session.add(vendor)
-        vendor.uuid = uuid
+        if not vendor.uuid:
+            vendor.uuid = imported_uuid
         vendor.name = row["name"]
         vendor.title = row.get("title")
         vendor.notes = row.get("notes")
         vendor.created_at = parse_datetime_or_none(row.get("created_at")) or vendor.created_at
         vendor.updated_at = parse_datetime_or_none(row.get("updated_at")) or vendor.updated_at
         db.session.flush()
-        vendor_id_by_uuid[uuid] = vendor.id
+        vendor_id_by_uuid[imported_uuid] = vendor.id
+        vendor_id_by_uuid[vendor.uuid] = vendor.id
         count += 1
     db.session.commit()
     return count
@@ -553,20 +555,21 @@ def upsert_products(
 ) -> int:
     count = 0
     for row in product_rows:
-        uuid = row["uuid"]
+        imported_uuid = row["uuid"]
         vendor_uuid = row["vendor_uuid"]
         vendor_id = vendor_id_by_uuid.get(vendor_uuid)
         if vendor_id is None:
             raise click.ClickException(
-                f"Dataset refers to unknown vendor_uuid {vendor_uuid!r} for product {uuid!r}."
+                f"Dataset refers to unknown vendor_uuid {vendor_uuid!r} for product {imported_uuid!r}."
             )
-        product = Product.query.filter_by(uuid=uuid).first()
+        product = Product.query.filter_by(uuid=imported_uuid).first()
         if product is None:
             product = Product.query.filter_by(vendor_id=vendor_id, name=row["name"]).first()
         if product is None:
-            product = Product(uuid=uuid, vendor_id=vendor_id, name=row["name"])
+            product = Product(uuid=imported_uuid, vendor_id=vendor_id, name=row["name"])
             db.session.add(product)
-        product.uuid = uuid
+        if not product.uuid:
+            product.uuid = imported_uuid
         product.vendor_id = vendor_id
         product.name = row["name"]
         product.title = row.get("title")
@@ -574,7 +577,8 @@ def upsert_products(
         product.created_at = parse_datetime_or_none(row.get("created_at")) or product.created_at
         product.updated_at = parse_datetime_or_none(row.get("updated_at")) or product.updated_at
         db.session.flush()
-        product_id_by_uuid[uuid] = product.id
+        product_id_by_uuid[imported_uuid] = product.id
+        product_id_by_uuid[product.uuid] = product.id
         count += 1
     db.session.commit()
     return count

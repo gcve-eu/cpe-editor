@@ -10,8 +10,8 @@
     <span class="pill">update: {{ cpe.update }}</span>
   </p>
   <table>
-    <tr><th>Vendor</th><td><a href="{{ url_for('main.vendor_detail', vendor_id=cpe.vendor.id) }}">{{ cpe.vendor.title or cpe.vendor.name }}</a></td></tr>
-    <tr><th>Product</th><td><a href="{{ url_for('main.product_detail', product_id=cpe.product.id) }}">{{ cpe.product.title or cpe.product.name }}</a></td></tr>
+    <tr><th>Vendor</th><td><a href="{{ url_for('main.vendor_detail', vendor_uuid=cpe.vendor.uuid) }}">{{ cpe.vendor.title or cpe.vendor.name }}</a> <span class="muted">(<code>{{ cpe.vendor.uuid }}</code>)</span></td></tr>
+    <tr><th>Product</th><td><a href="{{ url_for('main.product_detail', product_uuid=cpe.product.uuid) }}">{{ cpe.product.title or cpe.product.name }}</a> <span class="muted">(<code>{{ cpe.product.uuid }}</code>)</span></td></tr>
     <tr><th>Edition</th><td>{{ cpe.edition }}</td></tr>
     <tr><th>Language</th><td>{{ cpe.language }}</td></tr>
     <tr><th>Software edition</th><td>{{ cpe.sw_edition }}</td></tr>

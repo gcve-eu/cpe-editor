@@ -45,9 +45,9 @@
           <tr>
             <td><a href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}"><code>{{ cpe.cpe_uri }}</code></a></td>
             <td>
-              <a href="{{ url_for('main.vendor_detail', vendor_id=cpe.vendor.id) }}">{{ cpe.vendor.title or cpe.vendor.name }}</a>
+              <a href="{{ url_for('main.vendor_detail', vendor_uuid=cpe.vendor.uuid) }}">{{ cpe.vendor.title or cpe.vendor.name }}</a>
               /
-              <a href="{{ url_for('main.product_detail', product_id=cpe.product.id) }}">{{ cpe.product.title or cpe.product.name }}</a>
+              <a href="{{ url_for('main.product_detail', product_uuid=cpe.product.uuid) }}">{{ cpe.product.title or cpe.product.name }}</a>
             </td>
             <td>{{ cpe.version }}</td>
           </tr>
@@ -63,7 +63,7 @@
     <h2>Browse vendors</h2>
     <ul>
       {% for vendor in vendors %}
-        <li><a href="{{ url_for('main.vendor_detail', vendor_id=vendor.id) }}">{{ vendor.title or vendor.name }}</a></li>
+        <li><a href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a></li>
       {% else %}
         <li>No vendors yet.</li>
       {% endfor %}

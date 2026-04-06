@@ -86,15 +86,15 @@ def index():
     )
 
 
-@bp.route("/vendors/<int:vendor_id>")
-def vendor_detail(vendor_id):
-    vendor = Vendor.query.get_or_404(vendor_id)
+@bp.route("/vendors/<string:vendor_uuid>")
+def vendor_detail(vendor_uuid):
+    vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
     return render_template("vendor_detail.html", vendor=vendor)
 
 
-@bp.route("/products/<int:product_id>")
-def product_detail(product_id):
-    product = Product.query.get_or_404(product_id)
+@bp.route("/products/<string:product_uuid>")
+def product_detail(product_uuid):
+    product = Product.query.filter_by(uuid=product_uuid).first_or_404()
     return render_template("product_detail.html", product=product)
 
 
