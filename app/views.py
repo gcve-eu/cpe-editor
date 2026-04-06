@@ -183,11 +183,14 @@ def vendors():
 
 @bp.route("/statistics")
 def statistics():
+    vendor_page = max(request.args.get("vendor_page", default=1, type=int) or 1, 1)
+    vendors_per_page = 25
+
     total_vendors = db.session.query(func.count(Vendor.id)).scalar() or 0
     total_products = db.session.query(func.count(Product.id)).scalar() or 0
     total_cpes = db.session.query(func.count(CPEEntry.id)).scalar() or 0
 
-    vendor_product_counts = (
+    vendor_product_counts_query = (
         db.session.query(
             Vendor.id.label("vendor_id"),
             Vendor.uuid.label("vendor_uuid"),
@@ -198,15 +201,32 @@ def statistics():
         .outerjoin(Product, Product.vendor_id == Vendor.id)
         .group_by(Vendor.id, Vendor.uuid, Vendor.name, Vendor.title)
         .order_by(func.count(Product.id).desc(), Vendor.name.asc())
+    )
+
+    vendor_product_total = vendor_product_counts_query.count()
+    vendor_product_total_pages = max((vendor_product_total + vendors_per_page - 1) // vendors_per_page, 1)
+    if vendor_page > vendor_product_total_pages:
+        vendor_page = vendor_product_total_pages
+    vendor_offset = (vendor_page - 1) * vendors_per_page
+    vendor_product_counts = (
+        vendor_product_counts_query
+        .offset(vendor_offset)
+        .limit(vendors_per_page)
         .all()
     )
 
-    vendors_with_products = [row for row in vendor_product_counts if row.product_count > 0]
+    top_vendor = vendor_product_counts_query.first()
+    vendors_with_products = (
+        db.session.query(func.count(Vendor.id))
+        .join(Product, Product.vendor_id == Vendor.id)
+        .distinct()
+        .scalar()
+        or 0
+    )
     average_products_per_vendor = (
         round(total_products / total_vendors, 2) if total_vendors else 0
     )
-    top_vendor = vendors_with_products[0] if vendors_with_products else None
-    vendors_without_products = len(vendor_product_counts) - len(vendors_with_products)
+    vendors_without_products = total_vendors - vendors_with_products
 
     cpe_part_counts = (
         db.session.query(CPEEntry.part, func.count(CPEEntry.id).label("count"))
@@ -224,6 +244,11 @@ def statistics():
         top_vendor=top_vendor,
         vendors_without_products=vendors_without_products,
         vendor_product_counts=vendor_product_counts,
+        vendor_page=vendor_page,
+        vendor_total_pages=vendor_product_total_pages,
+        vendor_has_prev=vendor_page > 1,
+        vendor_has_next=vendor_page < vendor_product_total_pages,
+        vendor_rank_start=vendor_offset + 1,
         cpe_part_counts=cpe_part_counts,
     )
 

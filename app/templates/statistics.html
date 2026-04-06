@@ -64,7 +64,7 @@
         <tbody>
           {% for item in vendor_product_counts %}
             <tr>
-              <td>{{ loop.index }}</td>
+              <td>{{ vendor_rank_start + loop.index0 }}</td>
               <td>
                 <a href="{{ url_for('main.vendor_detail', vendor_uuid=item.vendor_uuid) }}">
                   {{ item.vendor_title or item.vendor_name }}
@@ -75,6 +75,21 @@
           {% endfor %}
         </tbody>
       </table>
+      <div class="muted" style="margin-top: 0.75rem;">
+        <p>Page {{ vendor_page }} of {{ vendor_total_pages }}</p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          {% if vendor_has_prev %}
+            <a class="button" href="{{ url_for('main.statistics', vendor_page=vendor_page - 1) }}">
+              <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
+            </a>
+          {% endif %}
+          {% if vendor_has_next %}
+            <a class="button" href="{{ url_for('main.statistics', vendor_page=vendor_page + 1) }}">
+              Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </a>
+          {% endif %}
+        </div>
+      </div>
     {% else %}
       <p class="muted">No vendors available yet.</p>
     {% endif %}
