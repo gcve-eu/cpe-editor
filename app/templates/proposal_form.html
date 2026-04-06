@@ -24,21 +24,33 @@
           </select>
         </div>
         <div>
-          <label for="vendor_id">Existing vendor <span class="required-marker">*</span></label>
-          <select id="vendor_id" name="vendor_id">
-            <option value="">None selected</option>
-            {% for vendor in vendors %}
-              <option
-                value="{{ vendor.id }}"
-                data-vendor-name="{{ vendor.name }}"
-                data-vendor-title="{{ vendor.title or vendor.name }}"
-                {% if preselected_vendor_id and preselected_vendor_id == vendor.id %}selected{% endif %}
-              >
-                {{ vendor.title or vendor.name }}
-              </option>
-            {% endfor %}
-          </select>
-          <small class="muted">This is prefilled when opened from a vendor page.</small>
+          <div id="existing_vendor_group">
+            <label for="vendor_id">Existing vendor <span class="required-marker">*</span></label>
+            <select id="vendor_id" name="vendor_id">
+              <option value="">None selected</option>
+              {% for vendor in vendors %}
+                <option
+                  value="{{ vendor.id }}"
+                  data-vendor-name="{{ vendor.name }}"
+                  data-vendor-title="{{ vendor.title or vendor.name }}"
+                  {% if preselected_vendor_id and preselected_vendor_id == vendor.id %}selected{% endif %}
+                >
+                  {{ vendor.title or vendor.name }}
+                </option>
+              {% endfor %}
+            </select>
+            <small class="muted">This is prefilled when opened from a vendor page.</small>
+          </div>
+          <div id="new_vendor_group" style="display:none;">
+            <label for="proposed_vendor_name">New vendor token <span class="required-marker">*</span></label>
+            <input
+              id="proposed_vendor_name"
+              name="proposed_vendor_name"
+              placeholder="e.g. microsoft"
+              value=""
+            >
+            <small class="muted">Required only for "Add a new vendor and product".</small>
+          </div>
         </div>
       </div>
       <div class="grid grid-2">
@@ -88,15 +100,6 @@
           <label for="cpe_entry_id">Existing CPE entry ID (optional)</label>
           <input id="cpe_entry_id" name="cpe_entry_id" placeholder="Needed only for edit proposals">
         </div>
-        <div>
-          <label for="proposed_vendor_name">Proposed vendor token (optional)</label>
-          <input
-            id="proposed_vendor_name"
-            name="proposed_vendor_name"
-            placeholder="e.g. microsoft"
-            value="{% if preselected_vendor %}{{ preselected_vendor.name }}{% endif %}"
-          >
-        </div>
       </div>
 
       <div class="grid grid-2">
@@ -140,9 +143,23 @@
   (function () {
     const proposalType = document.getElementById("proposal_type");
     const vendorSelect = document.getElementById("vendor_id");
+    const existingVendorGroup = document.getElementById("existing_vendor_group");
+    const newVendorGroup = document.getElementById("new_vendor_group");
     const vendorNameInput = document.getElementById("proposed_vendor_name");
     const vendorTitleInput = document.getElementById("proposed_vendor_title");
     const typesForAutoFill = new Set(["new_cpe", "new_product"]);
+
+    function syncVendorFieldMode() {
+      const isNewVendorProduct = proposalType.value === "new_vendor_product";
+      existingVendorGroup.style.display = isNewVendorProduct ? "none" : "";
+      newVendorGroup.style.display = isNewVendorProduct ? "" : "none";
+      vendorSelect.required = !isNewVendorProduct;
+      vendorNameInput.required = isNewVendorProduct;
+      if (isNewVendorProduct) {
+        vendorSelect.value = "";
+        vendorNameInput.value = "";
+      }
+    }
 
     function maybeAutoFillVendor() {
       const selectedOption = vendorSelect.options[vendorSelect.selectedIndex];
@@ -161,8 +178,10 @@
       }
     }
 
+    proposalType.addEventListener("change", syncVendorFieldMode);
     vendorSelect.addEventListener("change", maybeAutoFillVendor);
     proposalType.addEventListener("change", maybeAutoFillVendor);
+    syncVendorFieldMode();
     maybeAutoFillVendor();
   })();
 </script>
