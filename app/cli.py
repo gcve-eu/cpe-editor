@@ -14,6 +14,9 @@ from .models import CPEEntry, Product, Proposal, Vendor, db
 from .utils import parse_cpe23_uri, product_uuid_for_names, vendor_uuid_for_name
 
 DEFAULT_NVD_CPE_FEED = "https://nvd.nist.gov/feeds/json/cpe/2.0/nvdcpe-2.0.tar.gz"
+DEFAULT_NVD_CPE_MATCH_FEED = (
+    "https://nvd.nist.gov/feeds/json/cpematch/2.0/nvdcpematch-2.0.tar.gz"
+)
 APP_DATASET_VERSION = "1"
 
 
@@ -211,6 +214,130 @@ def register_cli(app):
             f"products={created_products}, skipped={skipped}"
         )
 
+    @app.cli.command("import-nvd-cpematches")
+    @click.option(
+        "--source",
+        default=DEFAULT_NVD_CPE_MATCH_FEED,
+        show_default=True,
+        help="Path or URL to an NVD CPE Match 2.0 tar.gz feed.",
+    )
+    @click.option(
+        "--batch-size",
+        default=2000,
+        show_default=True,
+        type=int,
+        help="Number of CPE rows between commits.",
+    )
+    def import_nvd_cpematches(source: str, batch_size: int):
+        """Import concrete CPE names from the NVD CPE Match 2.0 feed."""
+        db.create_all()
+
+        vendor_cache = {v.name: v for v in Vendor.query.all()}
+        product_cache = {(p.vendor_id, p.name): p for p in Product.query.all()}
+
+        imported = 0
+        skipped = 0
+        created_vendors = 0
+        created_products = 0
+
+        for match in iter_nvd_match_strings(source):
+            match_data = match.get("matchString") or {}
+            entries = match_data.get("matches") or []
+            if not entries:
+                skipped += 1
+                continue
+
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    skipped += 1
+                    continue
+
+                cpe_uri = entry.get("cpeName")
+                if not cpe_uri:
+                    skipped += 1
+                    continue
+
+                existing = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
+                if existing:
+                    skipped += 1
+                    continue
+
+                parsed = parse_cpe23_uri(cpe_uri)
+                if not parsed:
+                    skipped += 1
+                    continue
+
+                vendor_name = parsed["vendor"]
+                product_name = parsed["product"]
+
+                vendor = vendor_cache.get(vendor_name)
+                if not vendor:
+                    vendor = Vendor(
+                        uuid=vendor_uuid_for_name(vendor_name),
+                        name=vendor_name,
+                        title=titleize_token(vendor_name),
+                    )
+                    db.session.add(vendor)
+                    db.session.flush()
+                    vendor_cache[vendor_name] = vendor
+                    created_vendors += 1
+                elif not vendor.uuid:
+                    vendor.uuid = vendor_uuid_for_name(vendor_name)
+
+                product_key = (vendor.id, product_name)
+                product = product_cache.get(product_key)
+                if not product:
+                    product = Product(
+                        uuid=product_uuid_for_names(vendor_name, product_name),
+                        vendor_id=vendor.id,
+                        name=product_name,
+                        title=titleize_token(product_name),
+                    )
+                    db.session.add(product)
+                    db.session.flush()
+                    product_cache[product_key] = product
+                    created_products += 1
+                elif not product.uuid:
+                    product.uuid = product_uuid_for_names(vendor_name, product_name)
+
+                db.session.add(
+                    CPEEntry(
+                        vendor_id=vendor.id,
+                        product_id=product.id,
+                        cpe_uri=cpe_uri,
+                        cpe_name_id=entry.get("cpeNameId"),
+                        deprecated=False,
+                        deprecated_by=None,
+                        part=parsed["part"],
+                        version=parsed["version"],
+                        update=parsed["update"],
+                        edition=parsed["edition"],
+                        language=parsed["language"],
+                        sw_edition=parsed["sw_edition"],
+                        target_sw=parsed["target_sw"],
+                        target_hw=parsed["target_hw"],
+                        other=parsed["other"],
+                        title=titleize_token(product_name),
+                        notes="Imported from NVD CPE Match 2.0 feed",
+                    )
+                )
+                imported += 1
+
+                total_processed = imported + skipped
+                if total_processed % batch_size == 0:
+                    db.session.commit()
+                    click.echo(
+                        f"Processed {total_processed} items | new CPEs={imported} "
+                        f"vendors={created_vendors} products={created_products} skipped={skipped}"
+                    )
+
+        backfill_missing_uuids()
+        db.session.commit()
+        click.echo(
+            f"Done. new CPEs={imported}, vendors={created_vendors}, "
+            f"products={created_products}, skipped={skipped}"
+        )
+
     @app.cli.command("export-app-dataset")
     @click.option(
         "--output",
@@ -344,6 +471,35 @@ def iter_nvd_products(source: str):
 
     raise click.ClickException(
         "Unexpected NVD feed structure: missing top-level 'products' list."
+    )
+
+
+def iter_nvd_match_strings(source: str):
+    blob = open_source_bytes(source)
+    with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as archive:
+        member = next(
+            (m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")),
+            None,
+        )
+        if not member:
+            raise click.ClickException(
+                "Could not find a JSON file inside the NVD CPE Match tar.gz feed."
+            )
+        extracted = archive.extractfile(member)
+        if extracted is None:
+            raise click.ClickException(
+                "Could not extract the JSON file from the NVD CPE Match tar.gz feed."
+            )
+        payload = json.load(extracted)
+
+    match_strings = payload.get("matchStrings")
+    if isinstance(match_strings, list):
+        for item in match_strings:
+            yield item
+        return
+
+    raise click.ClickException(
+        "Unexpected NVD CPE Match feed structure: missing top-level 'matchStrings' list."
     )
 
 

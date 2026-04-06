@@ -105,6 +105,21 @@ What the importer does:
 - stores `cpeNameId`, `deprecated`, and `deprecatedBy` when present
 - backfills missing UUIDs on already-existing vendors/products
 
+## Import the NVD CPE Match feed
+
+The CPE Match importer reads concrete `cpeName` values from each `matchString.matches[]`
+entry and imports only records that do not already exist by `cpe_uri`.
+
+```bash
+python -m flask --app run import-nvd-cpematches
+```
+
+Or from a local archive:
+
+```bash
+python -m flask --app run import-nvd-cpematches --source /path/to/nvdcpematch-2.0.tar.gz
+```
+
 ## Notes about UUIDs
 
 - `Vendor.uuid` is generated deterministically from the normalized vendor name
