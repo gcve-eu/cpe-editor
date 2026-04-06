@@ -424,6 +424,7 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
             "other": cpe.other,
             "title": cpe.title,
             "notes": cpe.notes,
+            "from_proposal": cpe.from_proposal,
             "created_at": isoformat_or_none(cpe.created_at),
             "updated_at": isoformat_or_none(cpe.updated_at),
         }
@@ -616,6 +617,7 @@ def upsert_cpes(
         cpe.other = row.get("other") or "*"
         cpe.title = row.get("title")
         cpe.notes = row.get("notes")
+        cpe.from_proposal = bool(row.get("from_proposal", False))
         cpe.created_at = parse_datetime_or_none(row.get("created_at")) or cpe.created_at
         cpe.updated_at = parse_datetime_or_none(row.get("updated_at")) or cpe.updated_at
         count += 1

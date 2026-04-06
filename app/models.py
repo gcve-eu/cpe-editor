@@ -69,6 +69,7 @@ class CPEEntry(TimestampMixin, db.Model):
     other = db.Column(db.String(255), nullable=True, default="*")
     title = db.Column(db.String(255), nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    from_proposal = db.Column(db.Boolean, nullable=False, default=False, index=True)
 
     product = db.relationship("Product", back_populates="cpes")
     vendor = db.relationship("Vendor")

@@ -273,6 +273,27 @@ def apply_proposal(proposal: Proposal):
     product = proposal.product
     cpe = proposal.cpe_entry
 
+    def create_proposal_cpe(vendor_id: int, product_id: int, cpe_uri: str | None):
+        cpe = CPEEntry(
+            vendor_id=vendor_id,
+            product_id=product_id,
+            cpe_uri=cpe_uri,
+            part=proposal.proposed_part or "a",
+            version=proposal.proposed_version or "*",
+            update=proposal.proposed_update or "*",
+            edition=proposal.proposed_edition or "*",
+            language=proposal.proposed_language or "*",
+            sw_edition=proposal.proposed_sw_edition or "*",
+            target_sw=proposal.proposed_target_sw or "*",
+            target_hw=proposal.proposed_target_hw or "*",
+            other=proposal.proposed_other or "*",
+            title=proposal.proposed_title,
+            notes=proposal.proposed_notes,
+            from_proposal=True,
+        )
+        db.session.add(cpe)
+        return cpe
+
     if proposal.proposal_type == "new_vendor_product":
         vendor = Vendor(
             name=normalize_token(proposal.proposed_vendor_name),
@@ -289,23 +310,7 @@ def apply_proposal(proposal: Proposal):
         db.session.add(product)
         db.session.flush()
 
-        cpe = CPEEntry(
-            vendor_id=vendor.id,
-            product_id=product.id,
-            cpe_uri=proposal.proposed_cpe_uri,
-            part=proposal.proposed_part or "a",
-            version=proposal.proposed_version or "*",
-            update=proposal.proposed_update or "*",
-            edition=proposal.proposed_edition or "*",
-            language=proposal.proposed_language or "*",
-            sw_edition=proposal.proposed_sw_edition or "*",
-            target_sw=proposal.proposed_target_sw or "*",
-            target_hw=proposal.proposed_target_hw or "*",
-            other=proposal.proposed_other or "*",
-            title=proposal.proposed_title,
-            notes=proposal.proposed_notes,
-        )
-        db.session.add(cpe)
+        create_proposal_cpe(vendor.id, product.id, proposal.proposed_cpe_uri)
         return
 
     if proposal.proposal_type == "new_product":
@@ -319,77 +324,45 @@ def apply_proposal(proposal: Proposal):
         db.session.add(product)
         db.session.flush()
 
-        cpe = CPEEntry(
-            vendor_id=vendor.id,
-            product_id=product.id,
-            cpe_uri=proposal.proposed_cpe_uri,
-            part=proposal.proposed_part or "a",
-            version=proposal.proposed_version or "*",
-            update=proposal.proposed_update or "*",
-            edition=proposal.proposed_edition or "*",
-            language=proposal.proposed_language or "*",
-            sw_edition=proposal.proposed_sw_edition or "*",
-            target_sw=proposal.proposed_target_sw or "*",
-            target_hw=proposal.proposed_target_hw or "*",
-            other=proposal.proposed_other or "*",
-            title=proposal.proposed_title,
-            notes=proposal.proposed_notes,
-        )
-        db.session.add(cpe)
+        create_proposal_cpe(vendor.id, product.id, proposal.proposed_cpe_uri)
         return
 
     if proposal.proposal_type == "new_cpe":
         if not vendor or not product:
             raise ValueError("Vendor and product are required for a new CPE proposal.")
-        cpe = CPEEntry(
-            vendor_id=vendor.id,
-            product_id=product.id,
-            cpe_uri=proposal.proposed_cpe_uri,
-            part=proposal.proposed_part or "a",
-            version=proposal.proposed_version or "*",
-            update=proposal.proposed_update or "*",
-            edition=proposal.proposed_edition or "*",
-            language=proposal.proposed_language or "*",
-            sw_edition=proposal.proposed_sw_edition or "*",
-            target_sw=proposal.proposed_target_sw or "*",
-            target_hw=proposal.proposed_target_hw or "*",
-            other=proposal.proposed_other or "*",
-            title=proposal.proposed_title,
-            notes=proposal.proposed_notes,
-        )
-        db.session.add(cpe)
+        create_proposal_cpe(vendor.id, product.id, proposal.proposed_cpe_uri)
         return
 
     if proposal.proposal_type == "edit_cpe":
         if not cpe:
             raise ValueError("A target CPE entry is required for an edit proposal.")
-        cpe.part = proposal.proposed_part or cpe.part
-        cpe.version = proposal.proposed_version or cpe.version
-        cpe.update = proposal.proposed_update or cpe.update
-        cpe.edition = proposal.proposed_edition or cpe.edition
-        cpe.language = proposal.proposed_language or cpe.language
-        cpe.sw_edition = proposal.proposed_sw_edition or cpe.sw_edition
-        cpe.target_sw = proposal.proposed_target_sw or cpe.target_sw
-        cpe.target_hw = proposal.proposed_target_hw or cpe.target_hw
-        cpe.other = proposal.proposed_other or cpe.other
-        cpe.title = proposal.proposed_title or cpe.title
-        cpe.notes = proposal.proposed_notes or cpe.notes
-
         vendor_name = proposal.proposed_vendor_name or cpe.vendor.name
         product_name = proposal.proposed_product_name or cpe.product.name
-        cpe.cpe_uri = build_cpe_uri(
+        cpe_uri = proposal.proposed_cpe_uri or build_cpe_uri(
             proposal.proposed_part or cpe.part,
             vendor_name,
             product_name,
-            cpe.version,
-            cpe.update,
-            cpe.edition,
-            cpe.language,
-            cpe.sw_edition,
-            cpe.target_sw,
-            cpe.target_hw,
-            cpe.other,
+            proposal.proposed_version or cpe.version,
+            proposal.proposed_update or cpe.update,
+            proposal.proposed_edition or cpe.edition,
+            proposal.proposed_language or cpe.language,
+            proposal.proposed_sw_edition or cpe.sw_edition,
+            proposal.proposed_target_sw or cpe.target_sw,
+            proposal.proposed_target_hw or cpe.target_hw,
+            proposal.proposed_other or cpe.other,
         )
+        new_cpe = create_proposal_cpe(cpe.vendor_id, cpe.product_id, cpe_uri)
+        new_cpe.part = proposal.proposed_part or cpe.part
+        new_cpe.version = proposal.proposed_version or cpe.version
+        new_cpe.update = proposal.proposed_update or cpe.update
+        new_cpe.edition = proposal.proposed_edition or cpe.edition
+        new_cpe.language = proposal.proposed_language or cpe.language
+        new_cpe.sw_edition = proposal.proposed_sw_edition or cpe.sw_edition
+        new_cpe.target_sw = proposal.proposed_target_sw or cpe.target_sw
+        new_cpe.target_hw = proposal.proposed_target_hw or cpe.target_hw
+        new_cpe.other = proposal.proposed_other or cpe.other
+        new_cpe.title = proposal.proposed_title or cpe.title
+        new_cpe.notes = proposal.proposed_notes or cpe.notes
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")
