@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Statistics{% endblock %}
+{% block content %}
+  <h1><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Dataset statistics</h1>
+  <p class="muted">A quick overview of vendors, products, and CPE records in this instance.</p>
+
+  <section class="grid grid-2">
+    <article class="card">
+      <h2><i class="fa-solid fa-building" aria-hidden="true"></i> Total vendors</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ total_vendors }}</strong></p>
+    </article>
+    <article class="card">
+      <h2><i class="fa-solid fa-cube" aria-hidden="true"></i> Total products</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ total_products }}</strong></p>
+    </article>
+    <article class="card">
+      <h2><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Total CPE entries</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ total_cpes }}</strong></p>
+    </article>
+    <article class="card">
+      <h2><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Average products per vendor</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ average_products_per_vendor }}</strong></p>
+    </article>
+  </section>
+
+  <section class="card">
+    <h2><i class="fa-solid fa-lightbulb" aria-hidden="true"></i> Additional insights</h2>
+    <ul>
+      {% if top_vendor %}
+        <li>
+          Top vendor by product count:
+          <a href="{{ url_for('main.vendor_detail', vendor_uuid=top_vendor.vendor_uuid) }}">
+            {{ top_vendor.vendor_title or top_vendor.vendor_name }}
+          </a>
+          ({{ top_vendor.product_count }} products)
+        </li>
+      {% else %}
+        <li>No vendor has products yet.</li>
+      {% endif %}
+      <li>Vendors without products: {{ vendors_without_products }}</li>
+    </ul>
+
+    {% if cpe_part_counts %}
+      <h3>CPE part distribution</h3>
+      <ul>
+        {% for part_stat in cpe_part_counts %}
+          <li><code>{{ part_stat.part }}</code>: {{ part_stat.count }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2><i class="fa-solid fa-list-ol" aria-hidden="true"></i> Vendors sorted by number of products</h2>
+    {% if vendor_product_counts %}
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Vendor</th>
+            <th>Products</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in vendor_product_counts %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>
+                <a href="{{ url_for('main.vendor_detail', vendor_uuid=item.vendor_uuid) }}">
+                  {{ item.vendor_title or item.vendor_name }}
+                </a>
+              </td>
+              <td>{{ item.product_count }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No vendors available yet.</p>
+    {% endif %}
+  </section>
+{% endblock %}

@@ -181,6 +181,53 @@ def vendors():
     )
 
 
+@bp.route("/statistics")
+def statistics():
+    total_vendors = db.session.query(func.count(Vendor.id)).scalar() or 0
+    total_products = db.session.query(func.count(Product.id)).scalar() or 0
+    total_cpes = db.session.query(func.count(CPEEntry.id)).scalar() or 0
+
+    vendor_product_counts = (
+        db.session.query(
+            Vendor.id.label("vendor_id"),
+            Vendor.uuid.label("vendor_uuid"),
+            Vendor.name.label("vendor_name"),
+            Vendor.title.label("vendor_title"),
+            func.count(Product.id).label("product_count"),
+        )
+        .outerjoin(Product, Product.vendor_id == Vendor.id)
+        .group_by(Vendor.id, Vendor.uuid, Vendor.name, Vendor.title)
+        .order_by(func.count(Product.id).desc(), Vendor.name.asc())
+        .all()
+    )
+
+    vendors_with_products = [row for row in vendor_product_counts if row.product_count > 0]
+    average_products_per_vendor = (
+        round(total_products / total_vendors, 2) if total_vendors else 0
+    )
+    top_vendor = vendors_with_products[0] if vendors_with_products else None
+    vendors_without_products = len(vendor_product_counts) - len(vendors_with_products)
+
+    cpe_part_counts = (
+        db.session.query(CPEEntry.part, func.count(CPEEntry.id).label("count"))
+        .group_by(CPEEntry.part)
+        .order_by(func.count(CPEEntry.id).desc())
+        .all()
+    )
+
+    return render_template(
+        "statistics.html",
+        total_vendors=total_vendors,
+        total_products=total_products,
+        total_cpes=total_cpes,
+        average_products_per_vendor=average_products_per_vendor,
+        top_vendor=top_vendor,
+        vendors_without_products=vendors_without_products,
+        vendor_product_counts=vendor_product_counts,
+        cpe_part_counts=cpe_part_counts,
+    )
+
+
 @bp.route("/vendors/<string:vendor_uuid>")
 def vendor_detail(vendor_uuid):
     vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
