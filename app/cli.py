@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import click
+from sqlalchemy import text
 
 from .models import CPEEntry, Product, Proposal, Vendor, db
 from .utils import parse_cpe23_uri, product_uuid_for_names, vendor_uuid_for_name
@@ -25,6 +26,31 @@ def register_cli(app):
             db.drop_all()
         db.create_all()
         click.echo("Database initialized.")
+
+    @app.cli.command("reindex-db")
+    @click.option(
+        "--analyze/--no-analyze",
+        default=True,
+        show_default=True,
+        help="Refresh planner statistics after rebuilding indexes.",
+    )
+    def reindex_db(analyze: bool):
+        """Rebuild DB indexes (SQLite) and optionally refresh stats."""
+        db.create_all()
+        engine = db.session.get_bind()
+        dialect = engine.dialect.name if engine else ""
+
+        if dialect == "sqlite":
+            db.session.execute(text("REINDEX"))
+            click.echo("SQLite REINDEX completed.")
+        else:
+            click.echo("REINDEX is only executed for SQLite in this command.")
+
+        if analyze:
+            db.session.execute(text("ANALYZE"))
+            click.echo("ANALYZE completed.")
+
+        db.session.commit()
 
     @app.cli.command("import-nvd-cpes")
     @click.option(

@@ -24,6 +24,11 @@ class Vendor(TimestampMixin, db.Model):
 
     products = db.relationship("Product", back_populates="vendor", cascade="all, delete-orphan")
 
+    __table_args__ = (
+        db.Index("ix_vendor_name_lower", db.func.lower(name)),
+        db.Index("ix_vendor_title_lower", db.func.lower(title)),
+    )
+
 
 class Product(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -36,7 +41,12 @@ class Product(TimestampMixin, db.Model):
     vendor = db.relationship("Vendor", back_populates="products")
     cpes = db.relationship("CPEEntry", back_populates="product", cascade="all, delete-orphan")
 
-    __table_args__ = (db.UniqueConstraint("vendor_id", "name", name="uq_product_vendor_name"),)
+    __table_args__ = (
+        db.UniqueConstraint("vendor_id", "name", name="uq_product_vendor_name"),
+        db.Index("ix_product_vendor_name_lower", "vendor_id", db.func.lower(name)),
+        db.Index("ix_product_name_lower", db.func.lower(name)),
+        db.Index("ix_product_title_lower", db.func.lower(title)),
+    )
 
 
 class CPEEntry(TimestampMixin, db.Model):
@@ -62,6 +72,11 @@ class CPEEntry(TimestampMixin, db.Model):
 
     product = db.relationship("Product", back_populates="cpes")
     vendor = db.relationship("Vendor")
+
+    __table_args__ = (
+        db.Index("ix_cpe_vendor_product_part", "vendor_id", "product_id", "part"),
+        db.Index("ix_cpe_product_version", "product_id", "version"),
+    )
 
 
 class Proposal(TimestampMixin, db.Model):

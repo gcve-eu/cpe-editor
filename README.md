@@ -13,6 +13,7 @@ A small Flask for a moderated CPE editor:
 - SQLite storage with SQLAlchemy models
 - vendor / product / CPE browse pages
 - simple search over vendor, product, title, version, and CPE URI
+- dedicated vendor/product prefix filters optimized for faster lookup
 - proposal workflow for:
   - editing an existing CPE
   - adding a CPE to an existing vendor/product
@@ -87,6 +88,20 @@ What the importer does:
 - `Vendor.uuid` is generated deterministically from the normalized vendor name
 - `Product.uuid` is generated deterministically from `vendor + product`
 - this makes repeated imports idempotent for vendor/product identity inside this app
+
+## Rebuild indexes / refresh query stats
+
+Use the CLI command below after large imports or bulk edits:
+
+```bash
+python -m flask --app run reindex-db
+```
+
+By default it also refreshes planner statistics (`ANALYZE`). To skip that:
+
+```bash
+python -m flask --app run reindex-db --no-analyze
+```
 
 ## Important schema note
 

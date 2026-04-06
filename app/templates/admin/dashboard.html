@@ -4,6 +4,9 @@
 <div class="card">
   <h1>Admin dashboard</h1>
   <p><a class="button secondary" href="{{ url_for('main.bootstrap_sample_data') }}">Create sample data</a></p>
+  <form method="post" action="{{ url_for('main.admin_reindex') }}">
+    <button type="submit" class="secondary">Reindex database</button>
+  </form>
 </div>
 
 <div class="card">

@@ -11,7 +11,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import or_
+from sqlalchemy import func, or_, text
 
 from .models import CPEEntry, Product, Proposal, Vendor, db
 from .utils import build_cpe_uri, normalize_token
@@ -36,20 +36,38 @@ def admin_required(view_func):
 @bp.route("/")
 def index():
     q = (request.args.get("q") or "").strip()
+    vendor_q = (request.args.get("vendor_q") or "").strip()
+    product_q = (request.args.get("product_q") or "").strip()
     part = (request.args.get("part") or "").strip()
 
     query = CPEEntry.query.join(Vendor).join(Product)
     if q:
-        like = f"%{q}%"
+        like = f"%{q.lower()}%"
         query = query.filter(
             or_(
-                CPEEntry.cpe_uri.ilike(like),
-                CPEEntry.title.ilike(like),
-                Vendor.name.ilike(like),
-                Vendor.title.ilike(like),
-                Product.name.ilike(like),
-                Product.title.ilike(like),
-                CPEEntry.version.ilike(like),
+                func.lower(CPEEntry.cpe_uri).like(like),
+                func.lower(CPEEntry.title).like(like),
+                func.lower(Vendor.name).like(like),
+                func.lower(Vendor.title).like(like),
+                func.lower(Product.name).like(like),
+                func.lower(Product.title).like(like),
+                func.lower(CPEEntry.version).like(like),
+            )
+        )
+    if vendor_q:
+        vendor_like = f"{vendor_q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Vendor.name).like(vendor_like),
+                func.lower(Vendor.title).like(vendor_like),
+            )
+        )
+    if product_q:
+        product_like = f"{product_q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Product.name).like(product_like),
+                func.lower(Product.title).like(product_like),
             )
         )
     if part:
@@ -57,7 +75,15 @@ def index():
 
     results = query.order_by(Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc()).limit(100).all()
     vendors = Vendor.query.order_by(Vendor.name.asc()).limit(50).all()
-    return render_template("index.html", results=results, vendors=vendors, q=q, part=part)
+    return render_template(
+        "index.html",
+        results=results,
+        vendors=vendors,
+        q=q,
+        vendor_q=vendor_q,
+        product_q=product_q,
+        part=part,
+    )
 
 
 @bp.route("/vendors/<int:vendor_id>")
@@ -176,6 +202,25 @@ def admin_dashboard():
     pending = Proposal.query.filter_by(status="pending").order_by(Proposal.created_at.asc()).all()
     recent = Proposal.query.order_by(Proposal.created_at.desc()).limit(20).all()
     return render_template("admin/dashboard.html", pending=pending, recent=recent)
+
+
+@bp.route("/admin/reindex", methods=["POST"])
+@admin_required
+def admin_reindex():
+    engine = db.session.get_bind()
+    dialect = engine.dialect.name if engine else ""
+    db.create_all()
+
+    if dialect == "sqlite":
+        db.session.execute(text("REINDEX"))
+        db.session.execute(text("ANALYZE"))
+        db.session.commit()
+        flash("SQLite indexes rebuilt and statistics refreshed.", "success")
+    else:
+        db.session.execute(text("ANALYZE"))
+        db.session.commit()
+        flash("Index statistics refreshed using ANALYZE.", "info")
+    return redirect(url_for("main.admin_dashboard"))
 
 
 @bp.route("/admin/proposals/<int:proposal_id>", methods=["GET", "POST"])
