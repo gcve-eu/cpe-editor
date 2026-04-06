@@ -107,6 +107,17 @@ def cpe_detail(cpe_id):
 @bp.route("/proposals/new", methods=["GET", "POST"])
 def proposal_new():
     vendors = Vendor.query.order_by(Vendor.name.asc()).all()
+    preselected_vendor_id = request.args.get("vendor_id", type=int)
+    preselected_proposal_type = request.args.get("proposal_type", "edit_cpe")
+    allowed_types = {"edit_cpe", "new_cpe", "new_product", "new_vendor_product"}
+    if preselected_proposal_type not in allowed_types:
+        preselected_proposal_type = "edit_cpe"
+
+    preselected_vendor = None
+    if preselected_vendor_id:
+        preselected_vendor = Vendor.query.get(preselected_vendor_id)
+        if not preselected_vendor:
+            preselected_vendor_id = None
 
     if request.method == "POST":
         proposal_type = request.form.get("proposal_type", "edit_cpe")
@@ -168,7 +179,13 @@ def proposal_new():
         flash("Proposal submitted. An admin will review it.", "success")
         return redirect(url_for("main.index"))
 
-    return render_template("proposal_form.html", vendors=vendors)
+    return render_template(
+        "proposal_form.html",
+        vendors=vendors,
+        preselected_vendor_id=preselected_vendor_id,
+        preselected_proposal_type=preselected_proposal_type,
+        preselected_vendor=preselected_vendor,
+    )
 
 
 # --- Admin -------------------------------------------------------------------

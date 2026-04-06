@@ -16,6 +16,13 @@
       <li>No products yet.</li>
     {% endfor %}
   </ul>
-  <p><a class="button" href="{{ url_for('main.proposal_new') }}">Propose a product for this vendor</a></p>
+  <p>
+    <a
+      class="button"
+      href="{{ url_for('main.proposal_new', proposal_type='new_product', vendor_id=vendor.id) }}"
+    >
+      Propose a product for this vendor
+    </a>
+  </p>
 </div>
 {% endblock %}

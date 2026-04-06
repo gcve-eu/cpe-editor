@@ -4,105 +4,134 @@
 <div class="card">
   <h1>Submit a proposal</h1>
   <p class="muted">Anonymous contributions are allowed. An admin must accept them before publication.</p>
-  <p class="muted">All fields are optional for proposal submission. Add only what you know, and reviewers can fill in the rest.</p>
+  <style>
+    .form-section { border: 1px solid #dce3f0; border-radius: 10px; padding: 1rem; margin: 1rem 0; background: #fafcff; }
+    .form-section h2 { margin-top: 0; font-size: 1.05rem; }
+    .form-section.required { border-color: #0b57d0; background: #f3f7ff; }
+    .required-marker { color: #b3261e; font-weight: 700; }
+  </style>
   <form method="post">
-    <div class="grid grid-2">
-      <div>
-        <label for="proposal_type">Proposal type</label>
-        <select id="proposal_type" name="proposal_type">
-          <option value="edit_cpe">Edit an existing CPE</option>
-          <option value="new_cpe">Add a CPE to an existing vendor/product</option>
-          <option value="new_product">Add a product to an existing vendor</option>
-          <option value="new_vendor_product">Add a new vendor and product</option>
-        </select>
+    <div class="form-section required">
+      <h2>Required for "Add a product to an existing vendor"</h2>
+      <div class="grid grid-2">
+        <div>
+          <label for="proposal_type">Proposal type <span class="required-marker">*</span></label>
+          <select id="proposal_type" name="proposal_type">
+            <option value="edit_cpe" {% if preselected_proposal_type == "edit_cpe" %}selected{% endif %}>Edit an existing CPE</option>
+            <option value="new_cpe" {% if preselected_proposal_type == "new_cpe" %}selected{% endif %}>Add a CPE to an existing vendor/product</option>
+            <option value="new_product" {% if preselected_proposal_type == "new_product" %}selected{% endif %}>Add a product to an existing vendor</option>
+            <option value="new_vendor_product" {% if preselected_proposal_type == "new_vendor_product" %}selected{% endif %}>Add a new vendor and product</option>
+          </select>
+        </div>
+        <div>
+          <label for="vendor_id">Existing vendor <span class="required-marker">*</span></label>
+          <select id="vendor_id" name="vendor_id">
+            <option value="">None selected</option>
+            {% for vendor in vendors %}
+              <option
+                value="{{ vendor.id }}"
+                data-vendor-name="{{ vendor.name }}"
+                data-vendor-title="{{ vendor.title or vendor.name }}"
+                {% if preselected_vendor_id and preselected_vendor_id == vendor.id %}selected{% endif %}
+              >
+                {{ vendor.title or vendor.name }}
+              </option>
+            {% endfor %}
+          </select>
+          <small class="muted">This is prefilled when opened from a vendor page.</small>
+        </div>
       </div>
-      <div>
-        <label for="proposed_part">Part</label>
-        <select id="proposed_part" name="proposed_part">
-          <option value="a">Application (a)</option>
-          <option value="o">Operating system (o)</option>
-          <option value="h">Hardware (h)</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="grid grid-2">
-      <div>
-        <label for="submitter_name">Your name (optional)</label>
-        <input id="submitter_name" name="submitter_name" placeholder="Optional">
-      </div>
-      <div>
-        <label for="submitter_email">Your email (optional)</label>
-        <input id="submitter_email" name="submitter_email" type="email" placeholder="Optional">
-      </div>
-    </div>
-
-    <div class="grid grid-2">
-      <div>
-        <label for="vendor_id">Existing vendor (optional)</label>
-        <select id="vendor_id" name="vendor_id">
-          <option value="">None selected</option>
-          {% for vendor in vendors %}
-            <option value="{{ vendor.id }}" data-vendor-name="{{ vendor.name }}" data-vendor-title="{{ vendor.title or vendor.name }}">{{ vendor.title or vendor.name }}</option>
-          {% endfor %}
-        </select>
-        <small class="muted">Selecting a vendor can auto-fill the proposed vendor fields for new entries.</small>
-      </div>
-      <div>
-        <label for="product_id">Existing product ID (optional)</label>
-        <input id="product_id" name="product_id" placeholder="Optional skeleton shortcut; replace with searchable picker later">
+      <div class="grid grid-2">
+        <div>
+          <label for="proposed_product_name">Proposed product token <span class="required-marker">*</span></label>
+          <input id="proposed_product_name" name="proposed_product_name" placeholder="e.g. exchange_server" required>
+          <small class="muted">For "Add a product to an existing vendor", this is the one required product field.</small>
+        </div>
+        <div>
+          <label for="proposed_product_title">Product display title (optional)</label>
+          <input id="proposed_product_title" name="proposed_product_title" placeholder="e.g. Exchange Server">
+        </div>
       </div>
     </div>
 
-    <div class="grid grid-2">
-      <div>
-        <label for="cpe_entry_id">Existing CPE entry ID (optional)</label>
-        <input id="cpe_entry_id" name="cpe_entry_id" placeholder="Needed only for edit proposals">
+    <div class="form-section">
+      <h2>Optional details (help reviewers)</h2>
+      <p class="muted">Everything below is optional. Add only what you know.</p>
+      <div class="grid grid-2">
+        <div>
+          <label for="proposed_part">Part</label>
+          <select id="proposed_part" name="proposed_part">
+            <option value="a">Application (a)</option>
+            <option value="o">Operating system (o)</option>
+            <option value="h">Hardware (h)</option>
+          </select>
+        </div>
+        <div>
+          <label for="product_id">Existing product ID (optional)</label>
+          <input id="product_id" name="product_id" placeholder="Optional skeleton shortcut; replace with searchable picker later">
+        </div>
       </div>
-      <div>
-        <label for="proposed_vendor_name">Proposed vendor token (optional)</label>
-        <input id="proposed_vendor_name" name="proposed_vendor_name" placeholder="e.g. microsoft">
+
+      <div class="grid grid-2">
+        <div>
+          <label for="submitter_name">Your name (optional)</label>
+          <input id="submitter_name" name="submitter_name" placeholder="Optional">
+        </div>
+        <div>
+          <label for="submitter_email">Your email (optional)</label>
+          <input id="submitter_email" name="submitter_email" type="email" placeholder="Optional">
+        </div>
       </div>
+
+      <div class="grid grid-2">
+        <div>
+          <label for="cpe_entry_id">Existing CPE entry ID (optional)</label>
+          <input id="cpe_entry_id" name="cpe_entry_id" placeholder="Needed only for edit proposals">
+        </div>
+        <div>
+          <label for="proposed_vendor_name">Proposed vendor token (optional)</label>
+          <input
+            id="proposed_vendor_name"
+            name="proposed_vendor_name"
+            placeholder="e.g. microsoft"
+            value="{% if preselected_vendor %}{{ preselected_vendor.name }}{% endif %}"
+          >
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div>
+          <label for="proposed_vendor_title">Vendor display title (optional)</label>
+          <input
+            id="proposed_vendor_title"
+            name="proposed_vendor_title"
+            placeholder="e.g. Microsoft"
+            value="{% if preselected_vendor %}{{ preselected_vendor.title or preselected_vendor.name }}{% endif %}"
+          >
+        </div>
+        <div>
+          <label for="proposed_title">CPE display title (optional)</label>
+          <input id="proposed_title" name="proposed_title" placeholder="e.g. Microsoft Exchange Server 2019">
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div><label for="proposed_version">Version</label><input id="proposed_version" name="proposed_version" value="*"></div>
+        <div><label for="proposed_update">Update</label><input id="proposed_update" name="proposed_update" value="*"></div>
+        <div><label for="proposed_edition">Edition</label><input id="proposed_edition" name="proposed_edition" value="*"></div>
+        <div><label for="proposed_language">Language</label><input id="proposed_language" name="proposed_language" value="*"></div>
+        <div><label for="proposed_sw_edition">Software edition</label><input id="proposed_sw_edition" name="proposed_sw_edition" value="*"></div>
+        <div><label for="proposed_target_sw">Target software</label><input id="proposed_target_sw" name="proposed_target_sw" value="*"></div>
+        <div><label for="proposed_target_hw">Target hardware</label><input id="proposed_target_hw" name="proposed_target_hw" value="*"></div>
+        <div><label for="proposed_other">Other</label><input id="proposed_other" name="proposed_other" value="*"></div>
+      </div>
+
+      <label for="proposed_notes">Notes (optional)</label>
+      <textarea id="proposed_notes" name="proposed_notes"></textarea>
+
+      <label for="rationale">Why should this be changed? (optional)</label>
+      <textarea id="rationale" name="rationale" placeholder="Optional: source, justification, references, etc."></textarea>
     </div>
-
-    <div class="grid grid-2">
-      <div>
-        <label for="proposed_vendor_title">Vendor display title (optional)</label>
-        <input id="proposed_vendor_title" name="proposed_vendor_title" placeholder="e.g. Microsoft">
-      </div>
-      <div>
-        <label for="proposed_product_name">Proposed product token (optional)</label>
-        <input id="proposed_product_name" name="proposed_product_name" placeholder="e.g. exchange_server">
-      </div>
-    </div>
-
-    <div class="grid grid-2">
-      <div>
-        <label for="proposed_product_title">Product display title (optional)</label>
-        <input id="proposed_product_title" name="proposed_product_title" placeholder="e.g. Exchange Server">
-      </div>
-      <div>
-        <label for="proposed_title">CPE display title (optional)</label>
-        <input id="proposed_title" name="proposed_title" placeholder="e.g. Microsoft Exchange Server 2019">
-      </div>
-    </div>
-
-    <div class="grid grid-2">
-      <div><label for="proposed_version">Version</label><input id="proposed_version" name="proposed_version" value="*"></div>
-      <div><label for="proposed_update">Update</label><input id="proposed_update" name="proposed_update" value="*"></div>
-      <div><label for="proposed_edition">Edition</label><input id="proposed_edition" name="proposed_edition" value="*"></div>
-      <div><label for="proposed_language">Language</label><input id="proposed_language" name="proposed_language" value="*"></div>
-      <div><label for="proposed_sw_edition">Software edition</label><input id="proposed_sw_edition" name="proposed_sw_edition" value="*"></div>
-      <div><label for="proposed_target_sw">Target software</label><input id="proposed_target_sw" name="proposed_target_sw" value="*"></div>
-      <div><label for="proposed_target_hw">Target hardware</label><input id="proposed_target_hw" name="proposed_target_hw" value="*"></div>
-      <div><label for="proposed_other">Other</label><input id="proposed_other" name="proposed_other" value="*"></div>
-    </div>
-
-    <label for="proposed_notes">Notes (optional)</label>
-    <textarea id="proposed_notes" name="proposed_notes"></textarea>
-
-    <label for="rationale">Why should this be changed? (optional)</label>
-    <textarea id="rationale" name="rationale" placeholder="Optional: source, justification, references, etc."></textarea>
 
     <p><button type="submit">Submit proposal</button></p>
   </form>
@@ -134,6 +163,7 @@
 
     vendorSelect.addEventListener("change", maybeAutoFillVendor);
     proposalType.addEventListener("change", maybeAutoFillVendor);
+    maybeAutoFillVendor();
   })();
 </script>
 {% endblock %}
