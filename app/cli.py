@@ -447,26 +447,25 @@ def open_source_bytes(source: str) -> bytes:
 
 def iter_nvd_products(source: str):
     blob = open_source_bytes(source)
+    imported_any = False
     with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as archive:
-        member = next(
-            (m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")),
-            None,
-        )
-        if not member:
+        members = [m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")]
+        if not members:
             raise click.ClickException(
                 "Could not find a JSON file inside the NVD tar.gz feed."
             )
-        extracted = archive.extractfile(member)
-        if extracted is None:
-            raise click.ClickException(
-                "Could not extract the JSON file from the NVD tar.gz feed."
-            )
-        payload = json.load(extracted)
+        for member in sorted(members, key=lambda m: m.name):
+            extracted = archive.extractfile(member)
+            if extracted is None:
+                continue
+            payload = json.load(extracted)
+            products = payload.get("products")
+            if isinstance(products, list):
+                imported_any = True
+                for item in products:
+                    yield item
 
-    products = payload.get("products")
-    if isinstance(products, list):
-        for item in products:
-            yield item
+    if imported_any:
         return
 
     raise click.ClickException(
@@ -476,26 +475,25 @@ def iter_nvd_products(source: str):
 
 def iter_nvd_match_strings(source: str):
     blob = open_source_bytes(source)
+    imported_any = False
     with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as archive:
-        member = next(
-            (m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")),
-            None,
-        )
-        if not member:
+        members = [m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")]
+        if not members:
             raise click.ClickException(
                 "Could not find a JSON file inside the NVD CPE Match tar.gz feed."
             )
-        extracted = archive.extractfile(member)
-        if extracted is None:
-            raise click.ClickException(
-                "Could not extract the JSON file from the NVD CPE Match tar.gz feed."
-            )
-        payload = json.load(extracted)
+        for member in sorted(members, key=lambda m: m.name):
+            extracted = archive.extractfile(member)
+            if extracted is None:
+                continue
+            payload = json.load(extracted)
+            match_strings = payload.get("matchStrings")
+            if isinstance(match_strings, list):
+                imported_any = True
+                for item in match_strings:
+                    yield item
 
-    match_strings = payload.get("matchStrings")
-    if isinstance(match_strings, list):
-        for item in match_strings:
-            yield item
+    if imported_any:
         return
 
     raise click.ClickException(
