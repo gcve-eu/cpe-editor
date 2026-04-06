@@ -139,6 +139,9 @@ def register_cli(app):
                 created_products += 1
             elif not product.uuid:
                 product.uuid = product_uuid_for_names(vendor_name, product_name)
+            else:
+                skipped += 1
+                continue
 
             titles = cpe_data.get("titles") or []
             title = pick_english_title(titles) or titleize_token(product_name)
