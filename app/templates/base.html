@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CPE Editor{% endblock %}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f7f7fb; color: #222; }
+    header, main, footer { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+    nav { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+    nav a { text-decoration: none; color: #0b57d0; }
+    .card { background: white; padding: 1rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 1rem; }
+    .grid { display: grid; gap: 1rem; }
+    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    label { display:block; font-weight: 600; margin: .5rem 0 .25rem; }
+    input, select, textarea, button { width: 100%; padding: .65rem; border-radius: 8px; border: 1px solid #c9ced6; box-sizing: border-box; }
+    textarea { min-height: 110px; }
+    button, .button { cursor: pointer; background: #0b57d0; color: white; border: none; text-decoration: none; display: inline-block; width: auto; padding: .7rem 1rem; }
+    .button.secondary { background: #666; }
+    .button.warning { background: #a36a00; }
+    .button.danger { background: #b3261e; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: .75rem; border-bottom: 1px solid #e6e9ef; vertical-align: top; }
+    .flash { padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1rem; background: #eef4ff; }
+    .muted { color: #666; }
+    .pill { display: inline-block; padding: .2rem .6rem; border-radius: 999px; background: #eef2ff; font-size: .85rem; }
+    code { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+<header>
+  <nav>
+    <a href="{{ url_for('main.index') }}"><strong>CPE Editor</strong></a>
+    <a href="{{ url_for('main.proposal_new') }}">Submit proposal</a>
+    <a href="{{ url_for('main.admin_dashboard') }}">Admin</a>
+    {% if session.get('is_admin') %}
+      <a href="{{ url_for('main.admin_logout') }}">Logout</a>
+    {% else %}
+      <a href="{{ url_for('main.admin_login') }}">Admin login</a>
+    {% endif %}
+  </nav>
+</header>
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="flash">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<footer>
+  <p class="muted">Skeleton Flask app for moderated CPE editing.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Product {{ product.title or product.name }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ product.title or product.name }}</h1>
+  <p class="muted">Vendor: <a href="{{ url_for('main.vendor_detail', vendor_id=product.vendor.id) }}">{{ product.vendor.title or product.vendor.name }}</a></p>
+  <p class="muted">Product token: <code>{{ product.name }}</code></p>
+  <p>{{ product.notes or "No product notes yet." }}</p>
+</div>
+
+<div class="card">
+  <h2>CPE entries</h2>
+  <table>
+    <thead><tr><th>CPE URI</th><th>Version</th><th>Part</th></tr></thead>
+    <tbody>
+    {% for cpe in product.cpes %}
+      <tr>
+        <td><a href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}"><code>{{ cpe.cpe_uri }}</code></a></td>
+        <td>{{ cpe.version }}</td>
+        <td>{{ cpe.part }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3">No CPE entries yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ cpe.cpe_uri }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ cpe.title or "CPE entry" }}</h1>
+  <p><code>{{ cpe.cpe_uri }}</code></p>
+  <p>
+    <span class="pill">part: {{ cpe.part }}</span>
+    <span class="pill">version: {{ cpe.version }}</span>
+    <span class="pill">update: {{ cpe.update }}</span>
+  </p>
+  <table>
+    <tr><th>Vendor</th><td><a href="{{ url_for('main.vendor_detail', vendor_id=cpe.vendor.id) }}">{{ cpe.vendor.title or cpe.vendor.name }}</a></td></tr>
+    <tr><th>Product</th><td><a href="{{ url_for('main.product_detail', product_id=cpe.product.id) }}">{{ cpe.product.title or cpe.product.name }}</a></td></tr>
+    <tr><th>Edition</th><td>{{ cpe.edition }}</td></tr>
+    <tr><th>Language</th><td>{{ cpe.language }}</td></tr>
+    <tr><th>Software edition</th><td>{{ cpe.sw_edition }}</td></tr>
+    <tr><th>Target software</th><td>{{ cpe.target_sw }}</td></tr>
+    <tr><th>Target hardware</th><td>{{ cpe.target_hw }}</td></tr>
+    <tr><th>Other</th><td>{{ cpe.other }}</td></tr>
+    <tr><th>Notes</th><td>{{ cpe.notes or "—" }}</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Contribute</h2>
+  <p>You can submit an edit proposal for this CPE entry or suggest a related product/vendor addition.</p>
+  <a class="button" href="{{ url_for('main.proposal_new') }}">Submit a proposal</a>
+</div>
+{% endblock %}

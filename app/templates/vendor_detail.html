@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Vendor {{ vendor.title or vendor.name }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ vendor.title or vendor.name }}</h1>
+  <p class="muted">Vendor token: <code>{{ vendor.name }}</code></p>
+  <p>{{ vendor.notes or "No vendor notes yet." }}</p>
+</div>
+
+<div class="card">
+  <h2>Products</h2>
+  <ul>
+    {% for product in vendor.products %}
+      <li><a href="{{ url_for('main.product_detail', product_id=product.id) }}">{{ product.title or product.name }}</a></li>
+    {% else %}
+      <li>No products yet.</li>
+    {% endfor %}
+  </ul>
+  <p><a class="button" href="{{ url_for('main.proposal_new') }}">Propose a product for this vendor</a></p>
+</div>
+{% endblock %}

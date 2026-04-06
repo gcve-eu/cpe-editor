@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Admin dashboard{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Admin dashboard</h1>
+  <p><a class="button secondary" href="{{ url_for('main.bootstrap_sample_data') }}">Create sample data</a></p>
+</div>
+
+<div class="card">
+  <h2>Pending proposals</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Type</th><th>Submitted by</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+    {% for proposal in pending %}
+      <tr>
+        <td>#{{ proposal.id }}</td>
+        <td>{{ proposal.proposal_type }}</td>
+        <td>{{ proposal.submitter_name or 'Anonymous' }}</td>
+        <td>{{ proposal.created_at }}</td>
+        <td><a class="button" href="{{ url_for('main.admin_proposal_review', proposal_id=proposal.id) }}">Review</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5">No pending proposals.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Recent proposals</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Status</th><th>Type</th><th>Candidate CPE</th></tr></thead>
+    <tbody>
+    {% for proposal in recent %}
+      <tr>
+        <td>#{{ proposal.id }}</td>
+        <td>{{ proposal.status }}</td>
+        <td>{{ proposal.proposal_type }}</td>
+        <td><code>{{ proposal.proposed_cpe_uri or '—' }}</code></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4">No proposals yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
