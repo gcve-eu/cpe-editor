@@ -27,7 +27,7 @@
       </select>
     </div>
     <div>
-      <button type="submit">Search</button>
+      <button type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search</button>
     </div>
   </form>
 </div>
@@ -68,7 +68,7 @@
         <li>No vendors yet.</li>
       {% endfor %}
     </ul>
-    <p><a class="button" href="{{ url_for('main.proposal_new') }}">Propose a new vendor or product</a></p>
+    <p><a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i>Propose a new vendor or product</a></p>
   </div>
 </div>
 {% endblock %}

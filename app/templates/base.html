@@ -4,39 +4,116 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}CPE Editor{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWix+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkR4j8v+9P6Q5f8QxN3fRyE8J6f8tBtQYwVA==" crossorigin="anonymous" referrerpolicy="no-referrer">
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; background: #f7f7fb; color: #222; }
+    :root {
+      --bg: #f2f5fb;
+      --card-bg: #ffffff;
+      --text: #1f2937;
+      --muted: #667085;
+      --primary: #2563eb;
+      --primary-soft: #e9f0ff;
+      --border: #dbe3f0;
+      --shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Inter, "Segoe UI", Roboto, system-ui, sans-serif;
+      margin: 0;
+      background: radial-gradient(circle at top, #eef4ff 0%, var(--bg) 45%);
+      color: var(--text);
+      line-height: 1.45;
+    }
     header, main, footer { max-width: 1100px; margin: 0 auto; padding: 1rem; }
-    nav { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
-    nav a { text-decoration: none; color: #0b57d0; }
-    .card { background: white; padding: 1rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 1rem; }
+    header { padding-top: 1.2rem; }
+    nav {
+      display: flex;
+      gap: .75rem;
+      flex-wrap: wrap;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: .65rem;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+    nav a {
+      text-decoration: none;
+      color: #1d4ed8;
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .45rem .65rem;
+      border-radius: 10px;
+      transition: background-color .18s ease;
+    }
+    nav a:hover { background: var(--primary-soft); }
+    nav .brand {
+      color: #0f172a;
+      margin-right: .5rem;
+      font-weight: 700;
+    }
+    .card {
+      background: var(--card-bg);
+      padding: 1.1rem;
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 1rem;
+      border: 1px solid var(--border);
+    }
     .grid { display: grid; gap: 1rem; }
     .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
     label { display:block; font-weight: 600; margin: .5rem 0 .25rem; }
-    input, select, textarea, button { width: 100%; padding: .65rem; border-radius: 8px; border: 1px solid #c9ced6; box-sizing: border-box; }
+    input, select, textarea, button {
+      width: 100%;
+      padding: .65rem;
+      border-radius: 10px;
+      border: 1px solid #c7d0e0;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+    }
     textarea { min-height: 110px; }
-    button, .button { cursor: pointer; background: #0b57d0; color: white; border: none; text-decoration: none; display: inline-block; width: auto; padding: .7rem 1rem; }
-    .button.secondary { background: #666; }
-    .button.warning { background: #a36a00; }
-    .button.danger { background: #b3261e; }
+    button, .button {
+      cursor: pointer;
+      background: var(--primary);
+      color: white;
+      border: none;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .45rem;
+      width: auto;
+      padding: .7rem 1rem;
+      border-radius: 10px;
+      transition: transform .15s ease, opacity .15s ease;
+    }
+    button:hover, .button:hover { transform: translateY(-1px); opacity: .95; }
+    .button.secondary, button.secondary { background: #4b5563; }
+    .button.warning, button.warning { background: #a36a00; }
+    .button.danger, button.danger { background: #b3261e; }
+    .action-row { display: flex; gap: .6rem; flex-wrap: wrap; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: .75rem; border-bottom: 1px solid #e6e9ef; vertical-align: top; }
-    .flash { padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1rem; background: #eef4ff; }
-    .muted { color: #666; }
-    .pill { display: inline-block; padding: .2rem .6rem; border-radius: 999px; background: #eef2ff; font-size: .85rem; }
+    .flash { padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1rem; background: #eef4ff; border: 1px solid #cbdcfb; }
+    .muted { color: var(--muted); }
+    .pill { display: inline-flex; align-items: center; gap: .3rem; padding: .2rem .6rem; border-radius: 999px; background: #eef2ff; font-size: .85rem; }
     code { white-space: pre-wrap; word-break: break-word; }
+    footer { padding-top: .25rem; }
   </style>
 </head>
 <body>
 <header>
   <nav>
-    <a href="{{ url_for('main.index') }}"><strong>CPE Editor</strong></a>
-    <a href="{{ url_for('main.proposal_new') }}">Submit proposal</a>
-    <a href="{{ url_for('main.admin_dashboard') }}">Admin</a>
+    <a class="brand" href="{{ url_for('main.index') }}"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><strong>CPE Editor</strong></a>
+    <a href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</a>
+    <a href="{{ url_for('main.admin_dashboard') }}"><i class="fa-solid fa-user-gear" aria-hidden="true"></i>Admin</a>
     {% if session.get('is_admin') %}
-      <a href="{{ url_for('main.admin_logout') }}">Logout</a>
+      <a href="{{ url_for('main.admin_logout') }}"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Logout</a>
     {% else %}
-      <a href="{{ url_for('main.admin_login') }}">Admin login</a>
+      <a href="{{ url_for('main.admin_login') }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>Admin login</a>
     {% endif %}
   </nav>
 </header>
@@ -44,7 +121,7 @@
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for category, message in messages %}
-        <div class="flash">{{ message }}</div>
+        <div class="flash"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> {{ message }}</div>
       {% endfor %}
     {% endif %}
   {% endwith %}

@@ -3,9 +3,9 @@
 {% block content %}
 <div class="card">
   <h1>Admin dashboard</h1>
-  <p><a class="button secondary" href="{{ url_for('main.bootstrap_sample_data') }}">Create sample data</a></p>
+  <p><a class="button secondary" href="{{ url_for('main.bootstrap_sample_data') }}"><i class="fa-solid fa-flask" aria-hidden="true"></i>Create sample data</a></p>
   <form method="post" action="{{ url_for('main.admin_reindex') }}">
-    <button type="submit" class="secondary">Reindex database</button>
+    <button type="submit" class="secondary"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>Reindex database</button>
   </form>
 </div>
 
@@ -20,7 +20,7 @@
         <td>{{ proposal.proposal_type }}</td>
         <td>{{ proposal.submitter_name or 'Anonymous' }}</td>
         <td>{{ proposal.created_at }}</td>
-        <td><a class="button" href="{{ url_for('main.admin_proposal_review', proposal_id=proposal.id) }}">Review</a></td>
+        <td><a class="button" href="{{ url_for('main.admin_proposal_review', proposal_id=proposal.id) }}"><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>Review</a></td>
       </tr>
     {% else %}
       <tr><td colspan="5">No pending proposals.</td></tr>

@@ -31,8 +31,8 @@
     <label for="review_comment">Review comment</label>
     <textarea id="review_comment" name="review_comment">{{ proposal.review_comment or '' }}</textarea>
     <p>
-      <button type="submit" name="action" value="accept">Accept</button>
-      <button class="button danger" type="submit" name="action" value="reject">Reject</button>
+      <button type="submit" name="action" value="accept"><i class="fa-solid fa-check" aria-hidden="true"></i>Accept</button>
+      <button class="button danger" type="submit" name="action" value="reject"><i class="fa-solid fa-xmark" aria-hidden="true"></i>Reject</button>
     </p>
   </form>
 </div>
