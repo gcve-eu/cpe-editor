@@ -1,7 +1,10 @@
 from datetime import datetime
 from functools import wraps
+from hmac import compare_digest
+import secrets
 
 from flask import (
+    abort,
     Blueprint,
     current_app,
     flash,
@@ -22,6 +25,30 @@ bp = Blueprint("main", __name__)
 
 
 # --- Helpers -----------------------------------------------------------------
+def _get_csrf_token():
+    token = session.get("_csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["_csrf_token"] = token
+    return token
+
+
+@bp.app_context_processor
+def inject_csrf_token():
+    return {"csrf_token": _get_csrf_token}
+
+
+@bp.before_app_request
+def validate_csrf_token():
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return None
+    session_token = session.get("_csrf_token")
+    form_token = request.form.get("csrf_token")
+    if not session_token or not form_token or not compare_digest(session_token, form_token):
+        abort(400, description="Invalid or missing CSRF token.")
+    return None
+
+
 
 def admin_required(view_func):
     @wraps(view_func)
@@ -562,7 +589,7 @@ def admin_login():
     return render_template("admin/login.html")
 
 
-@bp.route("/admin/logout")
+@bp.route("/admin/logout", methods=["POST"])
 def admin_logout():
     session.clear()
     flash("Logged out.", "info")
@@ -757,7 +784,7 @@ def apply_proposal(proposal: Proposal):
 
 
 # --- Sample data --------------------------------------------------------------
-@bp.route("/admin/bootstrap-sample-data")
+@bp.route("/admin/bootstrap-sample-data", methods=["POST"])
 @admin_required
 def bootstrap_sample_data():
     if Vendor.query.count() > 0:

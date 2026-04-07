@@ -11,6 +11,7 @@
     .required-marker { color: #b3261e; font-weight: 700; }
   </style>
   <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-section required">
       <h2>Required for "Add a product to an existing vendor"</h2>
       <div class="grid grid-2">

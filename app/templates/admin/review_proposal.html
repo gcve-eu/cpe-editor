@@ -29,6 +29,7 @@
 
 <div class="card">
   <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="review_comment">Review comment</label>
     <textarea id="review_comment" name="review_comment">{{ proposal.review_comment or '' }}</textarea>
     <p>

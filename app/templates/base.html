@@ -49,6 +49,20 @@
       transition: background-color .18s ease;
     }
     nav a:hover { background: var(--primary-soft); }
+    nav .inline-form { margin: 0; }
+    nav .nav-button {
+      border: none;
+      background: transparent;
+      color: #1d4ed8;
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .45rem .65rem;
+      border-radius: 10px;
+      cursor: pointer;
+      font: inherit;
+    }
+    nav .nav-button:hover { background: var(--primary-soft); }
     nav .brand {
       color: #0f172a;
       margin-right: .5rem;
@@ -163,7 +177,10 @@
     <a href="{{ url_for('main.api_docs') }}"><i class="fa-solid fa-code" aria-hidden="true"></i>API docs</a>
     <a href="{{ url_for('main.admin_dashboard') }}"><i class="fa-solid fa-user-gear" aria-hidden="true"></i>Admin</a>
     {% if session.get('is_admin') %}
-      <a href="{{ url_for('main.admin_logout') }}"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Logout</a>
+      <form method="post" action="{{ url_for('main.admin_logout') }}" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="nav-button"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Logout</button>
+      </form>
     {% else %}
       <a href="{{ url_for('main.admin_login') }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>Admin login</a>
     {% endif %}
