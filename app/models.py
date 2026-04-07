@@ -29,6 +29,20 @@ class Vendor(TimestampMixin, db.Model):
         cascade="all, delete-orphan",
         order_by="desc(EntityNote.approved_at), desc(EntityNote.submitted_at)",
     )
+    outgoing_relationships = db.relationship(
+        "EntityRelationship",
+        foreign_keys="EntityRelationship.source_vendor_id",
+        back_populates="source_vendor",
+        cascade="all, delete-orphan",
+        order_by="desc(EntityRelationship.approved_at), desc(EntityRelationship.submitted_at)",
+    )
+    incoming_relationships = db.relationship(
+        "EntityRelationship",
+        foreign_keys="EntityRelationship.target_vendor_id",
+        back_populates="target_vendor",
+        cascade="all, delete-orphan",
+        order_by="desc(EntityRelationship.approved_at), desc(EntityRelationship.submitted_at)",
+    )
 
     __table_args__ = (
         db.Index("ix_vendor_name_lower", db.func.lower(name)),
@@ -51,6 +65,20 @@ class Product(TimestampMixin, db.Model):
         back_populates="product",
         cascade="all, delete-orphan",
         order_by="desc(EntityNote.approved_at), desc(EntityNote.submitted_at)",
+    )
+    outgoing_relationships = db.relationship(
+        "EntityRelationship",
+        foreign_keys="EntityRelationship.source_product_id",
+        back_populates="source_product",
+        cascade="all, delete-orphan",
+        order_by="desc(EntityRelationship.approved_at), desc(EntityRelationship.submitted_at)",
+    )
+    incoming_relationships = db.relationship(
+        "EntityRelationship",
+        foreign_keys="EntityRelationship.target_product_id",
+        back_populates="target_product",
+        cascade="all, delete-orphan",
+        order_by="desc(EntityRelationship.approved_at), desc(EntityRelationship.submitted_at)",
     )
 
     __table_args__ = (
@@ -123,14 +151,26 @@ class Proposal(TimestampMixin, db.Model):
     proposed_title = db.Column(db.String(255), nullable=True)
     proposed_notes = db.Column(db.Text, nullable=True)
     proposed_cpe_uri = db.Column(db.String(1024), nullable=True)
+    proposed_relationship_type = db.Column(db.String(64), nullable=True)
+    source_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
+    source_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
+    target_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
+    target_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
 
     review_comment = db.Column(db.Text, nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
-    vendor = db.relationship("Vendor")
-    product = db.relationship("Product")
-    cpe_entry = db.relationship("CPEEntry")
+    vendor = db.relationship("Vendor", foreign_keys=[vendor_id])
+    product = db.relationship("Product", foreign_keys=[product_id])
+    cpe_entry = db.relationship("CPEEntry", foreign_keys=[cpe_entry_id])
     note_entry = db.relationship("EntityNote", back_populates="proposal", uselist=False)
+    source_vendor = db.relationship("Vendor", foreign_keys=[source_vendor_id])
+    source_product = db.relationship("Product", foreign_keys=[source_product_id])
+    target_vendor = db.relationship("Vendor", foreign_keys=[target_vendor_id])
+    target_product = db.relationship("Product", foreign_keys=[target_product_id])
+    relationship_entry = db.relationship(
+        "EntityRelationship", back_populates="proposal", uselist=False
+    )
 
 
 class EntityNote(TimestampMixin, db.Model):
@@ -149,3 +189,49 @@ class EntityNote(TimestampMixin, db.Model):
     vendor = db.relationship("Vendor", back_populates="note_entries")
     product = db.relationship("Product", back_populates="note_entries")
     proposal = db.relationship("Proposal", back_populates="note_entry")
+
+
+class EntityRelationship(TimestampMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    source_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
+    source_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
+    target_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
+    target_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
+    relationship_type = db.Column(db.String(64), nullable=False, index=True)
+    proposal_id = db.Column(
+        db.Integer, db.ForeignKey("proposal.id"), nullable=True, unique=True, index=True
+    )
+    rationale = db.Column(db.Text, nullable=True)
+    submitter_name = db.Column(db.String(255), nullable=True)
+    submitter_email = db.Column(db.String(255), nullable=True)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    approved_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    source_vendor = db.relationship(
+        "Vendor", foreign_keys=[source_vendor_id], back_populates="outgoing_relationships"
+    )
+    source_product = db.relationship(
+        "Product", foreign_keys=[source_product_id], back_populates="outgoing_relationships"
+    )
+    target_vendor = db.relationship(
+        "Vendor", foreign_keys=[target_vendor_id], back_populates="incoming_relationships"
+    )
+    target_product = db.relationship(
+        "Product", foreign_keys=[target_product_id], back_populates="incoming_relationships"
+    )
+    proposal = db.relationship("Proposal", back_populates="relationship_entry")
+
+    __table_args__ = (
+        db.Index(
+            "ix_relationship_source_record",
+            "source_vendor_id",
+            "source_product_id",
+            "relationship_type",
+        ),
+        db.Index(
+            "ix_relationship_target_record",
+            "target_vendor_id",
+            "target_product_id",
+            "relationship_type",
+        ),
+    )

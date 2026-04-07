@@ -28,6 +28,28 @@
 </div>
 
 <div class="card">
+  <h2>Approved relationships</h2>
+  <ul>
+    {% for relationship in vendor_relationships %}
+      <li>
+        <p><strong>{{ relationship.relationship_type }}</strong> →
+          {% if relationship.target_vendor %}
+            <a href="{{ url_for('main.vendor_detail', vendor_uuid=relationship.target_vendor.uuid) }}">{{ relationship.target_vendor.title or relationship.target_vendor.name }}</a>
+          {% elif relationship.target_product %}
+            <a href="{{ url_for('main.product_detail', product_uuid=relationship.target_product.uuid) }}">{{ relationship.target_product.title or relationship.target_product.name }}</a>
+          {% else %}
+            Unknown target
+          {% endif %}
+        </p>
+        <p class="muted">{{ relationship_type_descriptions.get(relationship.relationship_type, "") }}</p>
+      </li>
+    {% else %}
+      <li>No approved relationships yet.</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="card">
   <h2>Products</h2>
   <ul>
     {% for product in vendor.products %}
@@ -51,6 +73,12 @@
       href="{{ url_for('main.proposal_new', proposal_type='edit_vendor_note', vendor_id=vendor.id) }}"
     >
       <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>Propose a note for this vendor
+    </a>
+    <a
+      class="button"
+      href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=vendor.id) }}"
+    >
+      <i class="fa-solid fa-link" aria-hidden="true"></i>Propose a relationship for this vendor
     </a>
   </p>
 </div>

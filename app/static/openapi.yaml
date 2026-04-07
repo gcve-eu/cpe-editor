@@ -187,6 +187,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EntityNote'
+        approved_relationships:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntityRelationship'
     Product:
       type: object
       properties:
@@ -219,10 +223,61 @@ components:
           nullable: true
         cpe_count:
           type: integer
-        approved_notes:
+        approved_relationships:
           type: array
           items:
-            $ref: '#/components/schemas/EntityNote'
+            $ref: '#/components/schemas/EntityRelationship'
+    EntityRecordRef:
+      type: object
+      nullable: true
+      properties:
+        entity_type:
+          type: string
+          enum: [vendor, product]
+        id:
+          type: integer
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+          nullable: true
+    EntityRelationship:
+      type: object
+      properties:
+        id:
+          type: integer
+        relationship_type:
+          type: string
+        relationship_type_description:
+          type: string
+          nullable: true
+        proposal_id:
+          type: integer
+          nullable: true
+        rationale:
+          type: string
+          nullable: true
+        submitter_name:
+          type: string
+          nullable: true
+        submitter_email:
+          type: string
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        source:
+          $ref: '#/components/schemas/EntityRecordRef'
+        target:
+          $ref: '#/components/schemas/EntityRecordRef'
     EntityNote:
       type: object
       properties:

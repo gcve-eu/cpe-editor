@@ -18,10 +18,19 @@ from flask import (
 )
 from sqlalchemy import func, or_, text
 
-from .models import CPEEntry, EntityNote, Product, Proposal, Vendor, db
+from .models import CPEEntry, EntityNote, EntityRelationship, Product, Proposal, Vendor, db
 from .utils import build_cpe_uri, normalize_token
 
 bp = Blueprint("main", __name__)
+RELATIONSHIP_TYPE_DESCRIPTIONS = {
+    "synonym-of": "the source record is a synonym of the target record.",
+    "canonical-of": "the source record is an alias whose canonical record is the target.",
+    "renamed-to": "the source record has been renamed to the target.",
+    "superseded-by": "the source record is obsolete and replaced operationally by the target.",
+    "equivalent-to": "both records are considered operationally equivalent for identification purposes.",
+    "vendor-merge-into": "vendor/product normalization relationship, when applicable.",
+    "derived-from": "the record was derived from another source record.",
+}
 
 
 # --- Helpers -----------------------------------------------------------------
@@ -79,6 +88,14 @@ def _serialize_vendor(vendor):
                 reverse=True,
             )
         ],
+        "approved_relationships": [
+            _serialize_entity_relationship(relationship)
+            for relationship in sorted(
+                vendor.outgoing_relationships,
+                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                reverse=True,
+            )
+        ],
     }
 
 
@@ -102,6 +119,14 @@ def _serialize_product(product):
                 reverse=True,
             )
         ],
+        "approved_relationships": [
+            _serialize_entity_relationship(relationship)
+            for relationship in sorted(
+                product.outgoing_relationships,
+                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                reverse=True,
+            )
+        ],
     }
 
 
@@ -116,6 +141,46 @@ def _serialize_entity_note(note):
         "submitter_email": note.submitter_email,
         "submitted_at": note.submitted_at.isoformat() if note.submitted_at else None,
         "approved_at": note.approved_at.isoformat() if note.approved_at else None,
+    }
+
+
+def _record_label(vendor: Vendor | None, product: Product | None):
+    if vendor:
+        return {
+            "entity_type": "vendor",
+            "id": vendor.id,
+            "uuid": vendor.uuid,
+            "name": vendor.name,
+            "title": vendor.title,
+        }
+    if product:
+        return {
+            "entity_type": "product",
+            "id": product.id,
+            "uuid": product.uuid,
+            "name": product.name,
+            "title": product.title,
+            "vendor_id": product.vendor_id,
+            "vendor_uuid": product.vendor.uuid if product.vendor else None,
+        }
+    return None
+
+
+def _serialize_entity_relationship(relationship):
+    return {
+        "id": relationship.id,
+        "relationship_type": relationship.relationship_type,
+        "relationship_type_description": RELATIONSHIP_TYPE_DESCRIPTIONS.get(
+            relationship.relationship_type
+        ),
+        "proposal_id": relationship.proposal_id,
+        "rationale": relationship.rationale,
+        "submitter_name": relationship.submitter_name,
+        "submitter_email": relationship.submitter_email,
+        "submitted_at": relationship.submitted_at.isoformat() if relationship.submitted_at else None,
+        "approved_at": relationship.approved_at.isoformat() if relationship.approved_at else None,
+        "source": _record_label(relationship.source_vendor, relationship.source_product),
+        "target": _record_label(relationship.target_vendor, relationship.target_product),
     }
 
 
@@ -337,7 +402,18 @@ def vendor_detail(vendor_uuid):
         .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc())
         .all()
     )
-    return render_template("vendor_detail.html", vendor=vendor, vendor_notes=vendor_notes)
+    vendor_relationships = (
+        EntityRelationship.query.filter_by(source_vendor_id=vendor.id)
+        .order_by(EntityRelationship.approved_at.desc(), EntityRelationship.submitted_at.desc())
+        .all()
+    )
+    return render_template(
+        "vendor_detail.html",
+        vendor=vendor,
+        vendor_notes=vendor_notes,
+        vendor_relationships=vendor_relationships,
+        relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
+    )
 
 
 @bp.route("/products/<string:product_uuid>")
@@ -348,7 +424,18 @@ def product_detail(product_uuid):
         .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc())
         .all()
     )
-    return render_template("product_detail.html", product=product, product_notes=product_notes)
+    product_relationships = (
+        EntityRelationship.query.filter_by(source_product_id=product.id)
+        .order_by(EntityRelationship.approved_at.desc(), EntityRelationship.submitted_at.desc())
+        .all()
+    )
+    return render_template(
+        "product_detail.html",
+        product=product,
+        product_notes=product_notes,
+        product_relationships=product_relationships,
+        relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
+    )
 
 
 @bp.route("/cpes/<int:cpe_id>")
@@ -482,6 +569,7 @@ def api_cpes():
 @bp.route("/proposals/new", methods=["GET", "POST"])
 def proposal_new():
     vendors = Vendor.query.order_by(Vendor.name.asc()).all()
+    products = Product.query.order_by(Product.name.asc()).all()
     preselected_vendor_id = request.args.get("vendor_id", type=int)
     preselected_product_id = request.args.get("product_id", type=int)
     preselected_proposal_type = request.args.get("proposal_type", "edit_cpe")
@@ -492,6 +580,7 @@ def proposal_new():
         "new_vendor_product",
         "edit_vendor_note",
         "edit_product_note",
+        "new_record_relationship",
     }
     if preselected_proposal_type not in allowed_types:
         preselected_proposal_type = "edit_cpe"
@@ -547,6 +636,19 @@ def proposal_new():
             proposed_other=request.form.get("proposed_other") or "*",
             proposed_title=request.form.get("proposed_title"),
             proposed_notes=request.form.get("proposed_notes"),
+            proposed_relationship_type=request.form.get("proposed_relationship_type"),
+            source_vendor_id=int(request.form.get("source_vendor_id"))
+            if request.form.get("source_vendor_id")
+            else None,
+            source_product_id=int(request.form.get("source_product_id"))
+            if request.form.get("source_product_id")
+            else None,
+            target_vendor_id=int(request.form.get("target_vendor_id"))
+            if request.form.get("target_vendor_id")
+            else None,
+            target_product_id=int(request.form.get("target_product_id"))
+            if request.form.get("target_product_id")
+            else None,
         )
 
         vendor_name = (request.form.get("proposed_vendor_name") or "").strip()
@@ -584,6 +686,25 @@ def proposal_new():
         if proposal_type in {"edit_vendor_note", "edit_product_note"} and not (proposal.proposed_notes or "").strip():
             flash("Please provide the proposed note text.", "danger")
             return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+        if proposal_type == "new_record_relationship":
+            if proposal.proposed_relationship_type not in RELATIONSHIP_TYPE_DESCRIPTIONS:
+                flash("Please choose a valid relationship type.", "danger")
+                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+            source_count = int(bool(proposal.source_vendor_id)) + int(bool(proposal.source_product_id))
+            target_count = int(bool(proposal.target_vendor_id)) + int(bool(proposal.target_product_id))
+            if source_count != 1 or target_count != 1:
+                flash("Please choose exactly one source record and one target record.", "danger")
+                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+            source_entity_type = "vendor" if proposal.source_vendor_id else "product"
+            target_entity_type = "vendor" if proposal.target_vendor_id else "product"
+            if source_entity_type != target_entity_type:
+                flash("Source and target must both be vendor records or both be product records.", "danger")
+                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+            source_id = proposal.source_vendor_id or proposal.source_product_id
+            target_id = proposal.target_vendor_id or proposal.target_product_id
+            if source_id == target_id:
+                flash("Source and target records must be different.", "danger")
+                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
 
         db.session.add(proposal)
         db.session.commit()
@@ -593,11 +714,13 @@ def proposal_new():
     return render_template(
         "proposal_form.html",
         vendors=vendors,
+        products=products,
         preselected_vendor_id=preselected_vendor_id,
         preselected_product_id=preselected_product_id,
         preselected_proposal_type=preselected_proposal_type,
         preselected_vendor=preselected_vendor,
         preselected_product=preselected_product,
+        relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
     )
 
 
@@ -808,6 +931,27 @@ def apply_proposal(proposal: Proposal):
             approved_at=proposal.reviewed_at or datetime.utcnow(),
         )
         db.session.add(note)
+        return
+
+    if proposal.proposal_type == "new_record_relationship":
+        source_count = int(bool(proposal.source_vendor_id)) + int(bool(proposal.source_product_id))
+        target_count = int(bool(proposal.target_vendor_id)) + int(bool(proposal.target_product_id))
+        if source_count != 1 or target_count != 1:
+            raise ValueError("Relationship proposals require exactly one source and one target record.")
+        relationship = EntityRelationship(
+            source_vendor_id=proposal.source_vendor_id,
+            source_product_id=proposal.source_product_id,
+            target_vendor_id=proposal.target_vendor_id,
+            target_product_id=proposal.target_product_id,
+            relationship_type=proposal.proposed_relationship_type,
+            proposal_id=proposal.id,
+            rationale=proposal.rationale,
+            submitter_name=proposal.submitter_name,
+            submitter_email=proposal.submitter_email,
+            submitted_at=proposal.created_at or datetime.utcnow(),
+            approved_at=proposal.reviewed_at or datetime.utcnow(),
+        )
+        db.session.add(relationship)
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")

@@ -19,6 +19,11 @@
     <tr><th>Product token</th><td>{{ proposal.proposed_product_name or '—' }}</td></tr>
     <tr><th>Product title</th><td>{{ proposal.proposed_product_title or '—' }}</td></tr>
     <tr><th>Generated CPE</th><td><code>{{ proposal.proposed_cpe_uri or '—' }}</code></td></tr>
+    <tr><th>Relationship type</th><td>{{ proposal.proposed_relationship_type or '—' }}</td></tr>
+    <tr><th>Source vendor ref</th><td>{{ proposal.source_vendor_id or '—' }}</td></tr>
+    <tr><th>Source product ref</th><td>{{ proposal.source_product_id or '—' }}</td></tr>
+    <tr><th>Target vendor ref</th><td>{{ proposal.target_vendor_id or '—' }}</td></tr>
+    <tr><th>Target product ref</th><td>{{ proposal.target_product_id or '—' }}</td></tr>
     <tr><th>Proposed record note</th><td>{{ proposal.proposed_notes or '—' }}</td></tr>
     <tr><th>Version</th><td>{{ proposal.proposed_version or '—' }}</td></tr>
     <tr><th>Update</th><td>{{ proposal.proposed_update or '—' }}</td></tr>

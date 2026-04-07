@@ -24,6 +24,7 @@
             <option value="new_vendor_product" {% if preselected_proposal_type == "new_vendor_product" %}selected{% endif %}>Add a new vendor and product</option>
             <option value="edit_vendor_note" {% if preselected_proposal_type == "edit_vendor_note" %}selected{% endif %}>Propose a note for an existing vendor</option>
             <option value="edit_product_note" {% if preselected_proposal_type == "edit_product_note" %}selected{% endif %}>Propose a note for an existing product</option>
+            <option value="new_record_relationship" {% if preselected_proposal_type == "new_record_relationship" %}selected{% endif %}>Propose a vendor/product relationship</option>
           </select>
         </div>
         <div>
@@ -76,6 +77,76 @@
             placeholder="e.g. Exchange Server"
             value="{% if preselected_product %}{{ preselected_product.title or preselected_product.name }}{% endif %}"
           >
+        </div>
+      </div>
+    </div>
+
+    <div id="relationship_section" class="form-section" style="display:none;">
+      <h2>Relationship proposal</h2>
+      <p class="muted">Choose source and target records. Keep source/target direction meaningful (for example: <code>renamed-to</code> old → new).</p>
+      <div class="grid grid-2">
+        <div>
+          <label for="proposed_relationship_type">Relationship type</label>
+          <select id="proposed_relationship_type" name="proposed_relationship_type">
+            <option value="">Select type</option>
+            {% for relationship_type, description in relationship_type_descriptions.items() %}
+              <option value="{{ relationship_type }}">{{ relationship_type }} — {{ description }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-2">
+        <div>
+          <label for="source_entity_kind">Source record type</label>
+          <select id="source_entity_kind">
+            <option value="vendor">Vendor</option>
+            <option value="product">Product</option>
+          </select>
+        </div>
+        <div>
+          <label for="target_entity_kind">Target record type</label>
+          <select id="target_entity_kind">
+            <option value="vendor">Vendor</option>
+            <option value="product">Product</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-2">
+        <div id="source_vendor_group">
+          <label for="source_vendor_id">Source vendor</label>
+          <select id="source_vendor_id" name="source_vendor_id">
+            <option value="">None selected</option>
+            {% for vendor in vendors %}
+              <option value="{{ vendor.id }}" {% if preselected_vendor_id and preselected_vendor_id == vendor.id %}selected{% endif %}>{{ vendor.title or vendor.name }} ({{ vendor.name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="source_product_group" style="display:none;">
+          <label for="source_product_id">Source product</label>
+          <select id="source_product_id" name="source_product_id">
+            <option value="">None selected</option>
+            {% for product in products %}
+              <option value="{{ product.id }}" {% if preselected_product_id and preselected_product_id == product.id %}selected{% endif %}>{{ product.title or product.name }} ({{ product.vendor.name }}/{{ product.name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="target_vendor_group">
+          <label for="target_vendor_id">Target vendor</label>
+          <select id="target_vendor_id" name="target_vendor_id">
+            <option value="">None selected</option>
+            {% for vendor in vendors %}
+              <option value="{{ vendor.id }}">{{ vendor.title or vendor.name }} ({{ vendor.name }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="target_product_group" style="display:none;">
+          <label for="target_product_id">Target product</label>
+          <select id="target_product_id" name="target_product_id">
+            <option value="">None selected</option>
+            {% for product in products %}
+              <option value="{{ product.id }}">{{ product.title or product.name }} ({{ product.vendor.name }}/{{ product.name }})</option>
+            {% endfor %}
+          </select>
         </div>
       </div>
     </div>
@@ -169,19 +240,60 @@
     const productIdInput = document.getElementById("product_id");
     const productNameInput = document.getElementById("proposed_product_name");
     const notesInput = document.getElementById("proposed_notes");
+    const relationshipSection = document.getElementById("relationship_section");
+    const relationshipTypeInput = document.getElementById("proposed_relationship_type");
+    const sourceEntityKind = document.getElementById("source_entity_kind");
+    const targetEntityKind = document.getElementById("target_entity_kind");
+    const sourceVendorGroup = document.getElementById("source_vendor_group");
+    const sourceProductGroup = document.getElementById("source_product_group");
+    const targetVendorGroup = document.getElementById("target_vendor_group");
+    const targetProductGroup = document.getElementById("target_product_group");
+    const sourceVendorInput = document.getElementById("source_vendor_id");
+    const sourceProductInput = document.getElementById("source_product_id");
+    const targetVendorInput = document.getElementById("target_vendor_id");
+    const targetProductInput = document.getElementById("target_product_id");
     const typesForAutoFill = new Set(["new_cpe", "new_product"]);
     const typesThatNeedProductToken = new Set(["new_cpe", "new_product", "new_vendor_product", "edit_cpe"]);
+    const isRelationshipProposal = () => proposalType.value === "new_record_relationship";
+
+    function syncRelationshipMode() {
+      relationshipSection.style.display = isRelationshipProposal() ? "" : "none";
+      relationshipTypeInput.required = isRelationshipProposal();
+
+      const sourceIsVendor = sourceEntityKind.value === "vendor";
+      sourceVendorGroup.style.display = sourceIsVendor ? "" : "none";
+      sourceProductGroup.style.display = sourceIsVendor ? "none" : "";
+      sourceVendorInput.required = isRelationshipProposal() && sourceIsVendor;
+      sourceProductInput.required = isRelationshipProposal() && !sourceIsVendor;
+      if (!sourceIsVendor) {
+        sourceVendorInput.value = "";
+      } else {
+        sourceProductInput.value = "";
+      }
+
+      const targetIsVendor = targetEntityKind.value === "vendor";
+      targetVendorGroup.style.display = targetIsVendor ? "" : "none";
+      targetProductGroup.style.display = targetIsVendor ? "none" : "";
+      targetVendorInput.required = isRelationshipProposal() && targetIsVendor;
+      targetProductInput.required = isRelationshipProposal() && !targetIsVendor;
+      if (!targetIsVendor) {
+        targetVendorInput.value = "";
+      } else {
+        targetProductInput.value = "";
+      }
+    }
 
     function syncVendorFieldMode() {
       const isNewVendorProduct = proposalType.value === "new_vendor_product";
       const isVendorNote = proposalType.value === "edit_vendor_note";
       const isProductNote = proposalType.value === "edit_product_note";
+      const isRelationship = isRelationshipProposal();
       existingVendorGroup.style.display = isNewVendorProduct ? "none" : "";
       newVendorGroup.style.display = isNewVendorProduct ? "" : "none";
-      vendorSelect.required = !isNewVendorProduct || isVendorNote || isProductNote;
+      vendorSelect.required = (!isNewVendorProduct || isVendorNote || isProductNote) && !isRelationship;
       vendorNameInput.required = isNewVendorProduct;
       notesInput.required = isVendorNote || isProductNote;
-      productNameInput.required = typesThatNeedProductToken.has(proposalType.value);
+      productNameInput.required = typesThatNeedProductToken.has(proposalType.value) && !isRelationship;
       if (isProductNote) {
         productIdInput.required = true;
       } else {
@@ -211,9 +323,13 @@
     }
 
     proposalType.addEventListener("change", syncVendorFieldMode);
+    proposalType.addEventListener("change", syncRelationshipMode);
+    sourceEntityKind.addEventListener("change", syncRelationshipMode);
+    targetEntityKind.addEventListener("change", syncRelationshipMode);
     vendorSelect.addEventListener("change", maybeAutoFillVendor);
     proposalType.addEventListener("change", maybeAutoFillVendor);
     syncVendorFieldMode();
+    syncRelationshipMode();
     maybeAutoFillVendor();
   })();
 </script>
