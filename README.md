@@ -143,7 +143,15 @@ python -m flask --app run reindex-db --no-analyze
 
 ## Important schema note
 
-Because this skeleton still uses `db.create_all()` and does not yet include Alembic migrations, if you already created an older SQLite database before these UUID/importer changes, recreate it with:
+Because this skeleton still uses `db.create_all()` and does not yet include Alembic migrations, schema updates may require either:
+
+- additive updates in-place (keeps existing rows):
+
+```bash
+python -m flask --app run init-db --alter
+```
+
+- or a full rebuild when you intentionally want a clean database:
 
 ```bash
 rm -f instance/cpe_editor.db

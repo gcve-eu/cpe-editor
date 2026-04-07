@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import click
-from sqlalchemy import text
+from sqlalchemy import inspect, schema, text
 
 from .models import CPEEntry, Product, Proposal, Vendor, db
 from .utils import parse_cpe23_uri, product_uuid_for_names, vendor_uuid_for_name
@@ -20,14 +20,81 @@ DEFAULT_NVD_CPE_MATCH_FEED = (
 APP_DATASET_VERSION = "1"
 
 
+def _render_default_literal(value):
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if value is None:
+        return "NULL"
+    escaped = str(value).replace("'", "''")
+    return f"'{escaped}'"
+
+
+def _add_missing_columns(engine):
+    """Add model columns that are missing from existing tables without dropping data."""
+    inspector = inspect(engine)
+    added = 0
+    skipped = []
+
+    for table in db.metadata.sorted_tables:
+        if not inspector.has_table(table.name):
+            continue
+
+        existing_columns = {col["name"] for col in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in existing_columns:
+                continue
+
+            if not column.nullable and column.server_default is None:
+                default = None
+                if column.default is not None and getattr(column.default, "is_scalar", False):
+                    default = _render_default_literal(column.default.arg)
+
+                if default is None:
+                    skipped.append(f"{table.name}.{column.name}")
+                    continue
+
+                column_sql = f"{column.name} {column.type.compile(dialect=engine.dialect)} DEFAULT {default} NOT NULL"
+            else:
+                column_sql = str(schema.CreateColumn(column).compile(dialect=engine.dialect)).strip()
+
+            db.session.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {column_sql}"))
+            added += 1
+
+    if added:
+        db.session.commit()
+
+    return added, skipped
+
+
 def register_cli(app):
     @app.cli.command("init-db")
     @click.option("--drop", is_flag=True, help="Drop all tables before creating them again.")
-    def init_db(drop: bool):
-        """Initialize the database schema."""
+    @click.option(
+        "--alter",
+        is_flag=True,
+        help="Add missing columns to existing tables without dropping existing data.",
+    )
+    def init_db(drop: bool, alter: bool):
+        """Initialize or evolve the database schema."""
         if drop:
             db.drop_all()
+
         db.create_all()
+
+        if alter:
+            engine = db.session.get_bind()
+            added, skipped = _add_missing_columns(engine)
+            if added:
+                click.echo(f"Added {added} missing column(s) via ALTER TABLE.")
+            if skipped:
+                click.echo(
+                    "Skipped non-null column(s) without safe default: "
+                    + ", ".join(skipped)
+                    + ". Use a migration tool for these changes."
+                )
+
         click.echo("Database initialized.")
 
     @app.cli.command("reindex-db")
