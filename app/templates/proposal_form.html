@@ -30,18 +30,17 @@
         <div>
           <div id="existing_vendor_group">
             <label for="vendor_id">Existing vendor <span class="required-marker">*</span></label>
+            <input id="vendor_search" type="search" placeholder="Type vendor name (prefix search)">
             <select id="vendor_id" name="vendor_id">
               <option value="">None selected</option>
-              {% for vendor in vendors %}
+              {% if preselected_vendor %}
                 <option
-                  value="{{ vendor.id }}"
-                  data-vendor-name="{{ vendor.name }}"
-                  data-vendor-title="{{ vendor.title or vendor.name }}"
-                  {% if preselected_vendor_id and preselected_vendor_id == vendor.id %}selected{% endif %}
-                >
-                  {{ vendor.title or vendor.name }}
-                </option>
-              {% endfor %}
+                  value="{{ preselected_vendor.id }}"
+                  data-vendor-name="{{ preselected_vendor.name }}"
+                  data-vendor-title="{{ preselected_vendor.title or preselected_vendor.name }}"
+                  selected
+                >{{ preselected_vendor.title or preselected_vendor.name }}</option>
+              {% endif %}
             </select>
             <small class="muted">This is prefilled when opened from a vendor page.</small>
           </div>
@@ -114,38 +113,36 @@
       <div class="grid grid-2">
         <div id="source_vendor_group">
           <label for="source_vendor_id">Source vendor</label>
+          <input id="source_vendor_search" type="search" placeholder="Type vendor name (prefix search)">
           <select id="source_vendor_id" name="source_vendor_id">
             <option value="">None selected</option>
-            {% for vendor in vendors %}
-              <option value="{{ vendor.id }}" {% if preselected_vendor_id and preselected_vendor_id == vendor.id %}selected{% endif %}>{{ vendor.title or vendor.name }} ({{ vendor.name }})</option>
-            {% endfor %}
+            {% if preselected_vendor %}
+              <option value="{{ preselected_vendor.id }}" selected>{{ preselected_vendor.title or preselected_vendor.name }} ({{ preselected_vendor.name }})</option>
+            {% endif %}
           </select>
         </div>
         <div id="source_product_group" style="display:none;">
           <label for="source_product_id">Source product</label>
+          <input id="source_product_search" type="search" placeholder="Type product name (prefix search)">
           <select id="source_product_id" name="source_product_id">
             <option value="">None selected</option>
-            {% for product in products %}
-              <option value="{{ product.id }}" {% if preselected_product_id and preselected_product_id == product.id %}selected{% endif %}>{{ product.title or product.name }} ({{ product.vendor.name }}/{{ product.name }})</option>
-            {% endfor %}
+            {% if preselected_product %}
+              <option value="{{ preselected_product.id }}" selected>{{ preselected_product.title or preselected_product.name }} ({{ preselected_product.vendor.name }}/{{ preselected_product.name }})</option>
+            {% endif %}
           </select>
         </div>
         <div id="target_vendor_group">
           <label for="target_vendor_id">Target vendor</label>
+          <input id="target_vendor_search" type="search" placeholder="Type vendor name (prefix search)">
           <select id="target_vendor_id" name="target_vendor_id">
             <option value="">None selected</option>
-            {% for vendor in vendors %}
-              <option value="{{ vendor.id }}">{{ vendor.title or vendor.name }} ({{ vendor.name }})</option>
-            {% endfor %}
           </select>
         </div>
         <div id="target_product_group" style="display:none;">
           <label for="target_product_id">Target product</label>
+          <input id="target_product_search" type="search" placeholder="Type product name (prefix search)">
           <select id="target_product_id" name="target_product_id">
             <option value="">None selected</option>
-            {% for product in products %}
-              <option value="{{ product.id }}">{{ product.title or product.name }} ({{ product.vendor.name }}/{{ product.name }})</option>
-            {% endfor %}
           </select>
         </div>
       </div>
@@ -233,6 +230,7 @@
   (function () {
     const proposalType = document.getElementById("proposal_type");
     const vendorSelect = document.getElementById("vendor_id");
+    const vendorSearch = document.getElementById("vendor_search");
     const existingVendorGroup = document.getElementById("existing_vendor_group");
     const newVendorGroup = document.getElementById("new_vendor_group");
     const vendorNameInput = document.getElementById("proposed_vendor_name");
@@ -252,9 +250,64 @@
     const sourceProductInput = document.getElementById("source_product_id");
     const targetVendorInput = document.getElementById("target_vendor_id");
     const targetProductInput = document.getElementById("target_product_id");
+    const sourceVendorSearch = document.getElementById("source_vendor_search");
+    const sourceProductSearch = document.getElementById("source_product_search");
+    const targetVendorSearch = document.getElementById("target_vendor_search");
+    const targetProductSearch = document.getElementById("target_product_search");
     const typesForAutoFill = new Set(["new_cpe", "new_product"]);
     const typesThatNeedProductToken = new Set(["new_cpe", "new_product", "new_vendor_product", "edit_cpe"]);
     const isRelationshipProposal = () => proposalType.value === "new_record_relationship";
+    const suggestLimit = 20;
+
+    function debounce(fn, waitMs) {
+      let timeoutId;
+      return function (...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn.apply(this, args), waitMs);
+      };
+    }
+
+    function setSelectOptions(selectEl, items, labelBuilder) {
+      const previousValue = selectEl.value;
+      const hasEmptyOption = Array.from(selectEl.options).some((opt) => opt.value === "");
+      selectEl.innerHTML = hasEmptyOption ? '<option value="">None selected</option>' : "";
+      items.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.id;
+        option.textContent = labelBuilder(item);
+        if (item.name) {
+          option.dataset.vendorName = item.name;
+        }
+        if (item.title) {
+          option.dataset.vendorTitle = item.title;
+        }
+        selectEl.appendChild(option);
+      });
+      if (previousValue && Array.from(selectEl.options).some((opt) => opt.value === previousValue)) {
+        selectEl.value = previousValue;
+      }
+    }
+
+    async function fetchSuggestions(url, q) {
+      if (!q || q.length < 1) {
+        return [];
+      }
+      const response = await fetch(`${url}?q=${encodeURIComponent(q)}&limit=${suggestLimit}`);
+      if (!response.ok) {
+        return [];
+      }
+      const payload = await response.json();
+      return payload.items || [];
+    }
+
+    function connectPrefixSearch(searchInput, selectInput, url, labelBuilder) {
+      const runSearch = debounce(async () => {
+        const q = searchInput.value.trim();
+        const items = await fetchSuggestions(url, q);
+        setSelectOptions(selectInput, items, labelBuilder);
+      }, 200);
+      searchInput.addEventListener("input", runSearch);
+    }
 
     function syncRelationshipMode() {
       relationshipSection.style.display = isRelationshipProposal() ? "" : "none";
@@ -328,6 +381,11 @@
     targetEntityKind.addEventListener("change", syncRelationshipMode);
     vendorSelect.addEventListener("change", maybeAutoFillVendor);
     proposalType.addEventListener("change", maybeAutoFillVendor);
+    connectPrefixSearch(vendorSearch, vendorSelect, "/api/vendors/suggest", (vendor) => `${vendor.title} (${vendor.name})`);
+    connectPrefixSearch(sourceVendorSearch, sourceVendorInput, "/api/vendors/suggest", (vendor) => `${vendor.title} (${vendor.name})`);
+    connectPrefixSearch(targetVendorSearch, targetVendorInput, "/api/vendors/suggest", (vendor) => `${vendor.title} (${vendor.name})`);
+    connectPrefixSearch(sourceProductSearch, sourceProductInput, "/api/products/suggest", (product) => `${product.title} (${product.vendor_name}/${product.name})`);
+    connectPrefixSearch(targetProductSearch, targetProductInput, "/api/products/suggest", (product) => `${product.title} (${product.vendor_name}/${product.name})`);
     syncVendorFieldMode();
     syncRelationshipMode();
     maybeAutoFillVendor();

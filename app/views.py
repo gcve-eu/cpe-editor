@@ -130,6 +130,29 @@ def _serialize_product(product):
     }
 
 
+def _serialize_vendor_option(vendor):
+    return {
+        "id": vendor.id,
+        "uuid": vendor.uuid,
+        "name": vendor.name,
+        "title": vendor.title or vendor.name,
+    }
+
+
+def _serialize_product_option(product):
+    vendor = product.vendor
+    return {
+        "id": product.id,
+        "uuid": product.uuid,
+        "vendor_id": product.vendor_id,
+        "vendor_uuid": vendor.uuid if vendor else None,
+        "name": product.name,
+        "title": product.title or product.name,
+        "vendor_name": vendor.name if vendor else None,
+        "vendor_title": (vendor.title or vendor.name) if vendor else None,
+    }
+
+
 def _serialize_entity_note(note):
     return {
         "id": note.id,
@@ -488,6 +511,27 @@ def api_vendors():
     )
 
 
+@bp.route("/api/vendors/suggest")
+def api_vendor_suggestions():
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 1:
+        return jsonify({"items": []})
+    limit = min(max(request.args.get("limit", default=20, type=int) or 20, 1), 50)
+    vendor_like = f"{q.lower()}%"
+    results = (
+        Vendor.query.filter(
+            or_(
+                func.lower(Vendor.name).like(vendor_like),
+                func.lower(Vendor.title).like(vendor_like),
+            )
+        )
+        .order_by(Vendor.name.asc())
+        .limit(limit)
+        .all()
+    )
+    return jsonify({"items": [_serialize_vendor_option(vendor) for vendor in results]})
+
+
 @bp.route("/api/vendors/<string:vendor_uuid>")
 def api_vendor_detail(vendor_uuid):
     vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
@@ -498,6 +542,28 @@ def api_vendor_detail(vendor_uuid):
 def api_product_detail(product_uuid):
     product = Product.query.filter_by(uuid=product_uuid).first_or_404()
     return jsonify(_serialize_product(product))
+
+
+@bp.route("/api/products/suggest")
+def api_product_suggestions():
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 1:
+        return jsonify({"items": []})
+    limit = min(max(request.args.get("limit", default=20, type=int) or 20, 1), 50)
+    product_like = f"{q.lower()}%"
+    results = (
+        Product.query.join(Vendor)
+        .filter(
+            or_(
+                func.lower(Product.name).like(product_like),
+                func.lower(Product.title).like(product_like),
+            )
+        )
+        .order_by(Product.name.asc())
+        .limit(limit)
+        .all()
+    )
+    return jsonify({"items": [_serialize_product_option(product) for product in results]})
 
 
 @bp.route("/api/cpes/<int:cpe_id>")
@@ -568,8 +634,6 @@ def api_cpes():
 
 @bp.route("/proposals/new", methods=["GET", "POST"])
 def proposal_new():
-    vendors = Vendor.query.order_by(Vendor.name.asc()).all()
-    products = Product.query.order_by(Product.name.asc()).all()
     preselected_vendor_id = request.args.get("vendor_id", type=int)
     preselected_product_id = request.args.get("product_id", type=int)
     preselected_proposal_type = request.args.get("proposal_type", "edit_cpe")
@@ -713,8 +777,6 @@ def proposal_new():
 
     return render_template(
         "proposal_form.html",
-        vendors=vendors,
-        products=products,
         preselected_vendor_id=preselected_vendor_id,
         preselected_product_id=preselected_product_id,
         preselected_proposal_type=preselected_proposal_type,
