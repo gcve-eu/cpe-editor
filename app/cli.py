@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 from sqlalchemy import inspect, schema, text
 
-from .models import CPEEntry, Product, Proposal, Vendor, db
+from .models import CPEEntry, EntityRelationship, Product, Proposal, Vendor, db
 from .utils import parse_cpe23_uri, product_uuid_for_names, vendor_uuid_for_name
 
 DEFAULT_NVD_CPE_FEED = "https://nvd.nist.gov/feeds/json/cpe/2.0/nvdcpe-2.0.tar.gz"
@@ -431,7 +431,8 @@ def register_cli(app):
         click.echo(
             f"Exported dataset to {output_path} "
             f"(vendors={len(dataset['vendors'])}, products={len(dataset['products'])}, "
-            f"cpes={len(dataset['cpes'])}, proposals={len(dataset['proposals'])})"
+            f"cpes={len(dataset['cpes'])}, relationships={len(dataset['relationships'])}, "
+            f"proposals={len(dataset['proposals'])})"
         )
 
     @app.cli.command("import-app-dataset")
@@ -467,6 +468,7 @@ def register_cli(app):
         if replace:
             click.echo("Deleting existing proposal, CPE, product and vendor rows...")
             Proposal.query.delete()
+            EntityRelationship.query.delete()
             CPEEntry.query.delete()
             Product.query.delete()
             Vendor.query.delete()
@@ -477,16 +479,24 @@ def register_cli(app):
 
         vendor_id_by_uuid: dict[str, int] = {}
         product_id_by_uuid: dict[str, int] = {}
+        relationship_count = 0
         proposal_count = 0
 
         vendor_rows = dataset.get("vendors") or []
         product_rows = dataset.get("products") or []
         cpe_rows = dataset.get("cpes") or []
+        relationship_rows = dataset.get("relationships") or []
         proposal_rows = dataset.get("proposals") or []
 
         imported_vendors = upsert_vendors(vendor_rows, vendor_id_by_uuid)
         imported_products = upsert_products(product_rows, vendor_id_by_uuid, product_id_by_uuid)
         imported_cpes = upsert_cpes(cpe_rows, vendor_id_by_uuid, product_id_by_uuid, batch_size)
+        relationship_count = upsert_relationships(
+            relationship_rows,
+            vendor_id_by_uuid,
+            product_id_by_uuid,
+            batch_size,
+        )
 
         if include_proposals and proposal_rows:
             proposal_count = upsert_proposals(
@@ -501,7 +511,7 @@ def register_cli(app):
         click.echo(
             f"Imported dataset from {source} "
             f"(vendors={imported_vendors}, products={imported_products}, cpes={imported_cpes}, "
-            f"proposals={proposal_count})"
+            f"relationships={relationship_count}, proposals={proposal_count})"
         )
 
 
@@ -654,6 +664,23 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
         }
         for cpe in CPEEntry.query.order_by(CPEEntry.id.asc()).all()
     ]
+    relationships = [
+        {
+            "relationship_type": relationship.relationship_type,
+            "source_vendor_uuid": relationship.source_vendor.uuid if relationship.source_vendor else None,
+            "source_product_uuid": relationship.source_product.uuid if relationship.source_product else None,
+            "target_vendor_uuid": relationship.target_vendor.uuid if relationship.target_vendor else None,
+            "target_product_uuid": relationship.target_product.uuid if relationship.target_product else None,
+            "rationale": relationship.rationale,
+            "submitter_name": relationship.submitter_name,
+            "submitter_email": relationship.submitter_email,
+            "submitted_at": isoformat_or_none(relationship.submitted_at),
+            "approved_at": isoformat_or_none(relationship.approved_at),
+            "created_at": isoformat_or_none(relationship.created_at),
+            "updated_at": isoformat_or_none(relationship.updated_at),
+        }
+        for relationship in EntityRelationship.query.order_by(EntityRelationship.id.asc()).all()
+    ]
 
     proposals = []
     if include_proposals:
@@ -699,11 +726,13 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
             "vendors": len(vendors),
             "products": len(products),
             "cpes": len(cpes),
+            "relationships": len(relationships),
             "proposals": len(proposals),
         },
         "vendors": vendors,
         "products": products,
         "cpes": cpes,
+        "relationships": relationships,
         "proposals": proposals,
     }
 
@@ -745,6 +774,23 @@ def validate_app_dataset(dataset: dict):
         raise click.ClickException(
             f"Unsupported dataset version {dataset.get('version')!r}. Expected {APP_DATASET_VERSION}."
         )
+
+
+def _resolve_record_ids(
+    row: dict,
+    prefix: str,
+    vendor_id_by_uuid: dict[str, int],
+    product_id_by_uuid: dict[str, int],
+) -> tuple[int | None, int | None]:
+    vendor_uuid = row.get(f"{prefix}_vendor_uuid")
+    product_uuid = row.get(f"{prefix}_product_uuid")
+    vendor_id = vendor_id_by_uuid.get(vendor_uuid) if vendor_uuid else None
+    product_id = product_id_by_uuid.get(product_uuid) if product_uuid else None
+    if vendor_id is None and product_id is None:
+        raise click.ClickException(
+            f"Dataset relationship is missing a valid {prefix} record reference."
+        )
+    return vendor_id, product_id
 
 
 def upsert_vendors(vendor_rows: list[dict], vendor_id_by_uuid: dict[str, int]) -> int:
@@ -848,6 +894,57 @@ def upsert_cpes(
         cpe.from_proposal = bool(row.get("from_proposal", False))
         cpe.created_at = parse_datetime_or_none(row.get("created_at")) or cpe.created_at
         cpe.updated_at = parse_datetime_or_none(row.get("updated_at")) or cpe.updated_at
+        count += 1
+        if count % batch_size == 0:
+            db.session.commit()
+    db.session.commit()
+    return count
+
+
+def upsert_relationships(
+    relationship_rows: list[dict],
+    vendor_id_by_uuid: dict[str, int],
+    product_id_by_uuid: dict[str, int],
+    batch_size: int,
+) -> int:
+    count = 0
+    for row in relationship_rows:
+        source_vendor_id, source_product_id = _resolve_record_ids(
+            row, "source", vendor_id_by_uuid, product_id_by_uuid
+        )
+        target_vendor_id, target_product_id = _resolve_record_ids(
+            row, "target", vendor_id_by_uuid, product_id_by_uuid
+        )
+
+        relationship = EntityRelationship.query.filter_by(
+            source_vendor_id=source_vendor_id,
+            source_product_id=source_product_id,
+            target_vendor_id=target_vendor_id,
+            target_product_id=target_product_id,
+            relationship_type=row["relationship_type"],
+        ).first()
+        if relationship is None:
+            relationship = EntityRelationship(
+                source_vendor_id=source_vendor_id,
+                source_product_id=source_product_id,
+                target_vendor_id=target_vendor_id,
+                target_product_id=target_product_id,
+                relationship_type=row["relationship_type"],
+            )
+            db.session.add(relationship)
+
+        relationship.rationale = row.get("rationale")
+        relationship.submitter_name = row.get("submitter_name")
+        relationship.submitter_email = row.get("submitter_email")
+        relationship.submitted_at = parse_datetime_or_none(row.get("submitted_at"))
+        relationship.approved_at = parse_datetime_or_none(row.get("approved_at"))
+        relationship.created_at = (
+            parse_datetime_or_none(row.get("created_at")) or relationship.created_at
+        )
+        relationship.updated_at = (
+            parse_datetime_or_none(row.get("updated_at")) or relationship.updated_at
+        )
+
         count += 1
         if count % batch_size == 0:
             db.session.commit()

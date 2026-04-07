@@ -174,7 +174,7 @@ python -m flask --app run init-db --drop
 
 You can export the full curated dataset from this app and let someone else bootstrap a new instance from that archive instead of re-importing the original NVD feed.
 
-Export vendors, products, and CPE entries:
+Export vendors, products, relationships, and CPE entries:
 
 ```bash
 python -m flask --app run export-app-dataset
@@ -196,6 +196,7 @@ What gets exported:
 
 - vendors with UUIDs
 - products with UUIDs and vendor linkage
+- approved relationships with source/target record UUID linkage
 - CPE entries with all parsed CPE fields and metadata
 - optional proposal records
 - export metadata and counts
@@ -224,6 +225,7 @@ Import behavior:
 
 - vendors are matched by UUID first, then by name
 - products are matched by UUID first, then by `(vendor, name)`
+- relationships are matched by `(source, target, relationship_type)`
 - CPE entries are matched by `cpe_uri`, then by `cpeNameId` when available
 - the imported dataset keeps vendor/product UUIDs stable across instances
 
