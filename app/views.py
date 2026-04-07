@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from hmac import compare_digest
 import secrets
@@ -117,6 +117,26 @@ def _serialize_entity_note(note):
         "submitted_at": note.submitted_at.isoformat() if note.submitted_at else None,
         "approved_at": note.approved_at.isoformat() if note.approved_at else None,
     }
+
+
+def _get_request_ip():
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def _is_rate_limited_for_ip(ip_address: str):
+    limit = current_app.config.get("PROPOSAL_RATE_LIMIT_PER_HOUR", 10)
+    if limit is None or limit <= 0:
+        return False
+
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent_count = Proposal.query.filter(
+        Proposal.submitter_ip == ip_address,
+        Proposal.created_at >= one_hour_ago,
+    ).count()
+    return recent_count >= limit
 
 
 def _serialize_cpe(cpe):
@@ -493,11 +513,21 @@ def proposal_new():
         vendor_id = request.form.get("vendor_id") or None
         product_id = request.form.get("product_id") or None
         cpe_entry_id = request.form.get("cpe_entry_id") or None
+        submitter_ip = _get_request_ip()
+
+        if _is_rate_limited_for_ip(submitter_ip):
+            limit = current_app.config.get("PROPOSAL_RATE_LIMIT_PER_HOUR", 10)
+            flash(
+                f"Rate limit reached for your IP address. Please wait before submitting more proposals (limit: {limit} per hour).",
+                "danger",
+            )
+            return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
 
         proposal = Proposal(
             proposal_type=proposal_type,
             submitter_name=request.form.get("submitter_name"),
             submitter_email=request.form.get("submitter_email"),
+            submitter_ip=submitter_ip,
             rationale=request.form.get("rationale"),
             vendor_id=int(vendor_id) if vendor_id else None,
             product_id=int(product_id) if product_id else None,

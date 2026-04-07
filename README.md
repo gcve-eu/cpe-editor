@@ -53,6 +53,7 @@ Admin defaults are read from environment variables:
 
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
+- `PROPOSAL_RATE_LIMIT_PER_HOUR` (default: `10`; set to `0` or a negative value to disable rate limiting)
 
 ## OpenAPI interface
 

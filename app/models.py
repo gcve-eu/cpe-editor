@@ -99,6 +99,7 @@ class Proposal(TimestampMixin, db.Model):
 
     submitter_name = db.Column(db.String(255), nullable=True)
     submitter_email = db.Column(db.String(255), nullable=True)
+    submitter_ip = db.Column(db.String(64), nullable=True, index=True)
     rationale = db.Column(db.Text, nullable=True)
 
     vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True)
