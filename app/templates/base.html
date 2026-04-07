@@ -53,6 +53,15 @@
       color: #0f172a;
       margin-right: .5rem;
       font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    nav .brand-logo {
+      width: 6.4rem;
+      height: 6.4rem;
+      object-fit: contain;
+      border-radius: 4px;
     }
     .card {
       background: var(--card-bg);
@@ -143,7 +152,11 @@
 <body>
 <header>
   <nav>
-    <a class="brand" href="{{ url_for('main.index') }}"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><strong>CPE Editor</strong></a>
+    <a class="brand" href="{{ url_for('main.index') }}">
+      <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+      <strong>CPE Editor</strong>
+      <img class="brand-logo" src="https://gcve.eu/logos/gcve.png" alt="GCVE logo">
+    </a>
     <a href="{{ url_for('main.vendors') }}"><i class="fa-solid fa-building" aria-hidden="true"></i>Browse vendors</a>
     <a href="{{ url_for('main.statistics') }}"><i class="fa-solid fa-chart-column" aria-hidden="true"></i>Statistics</a>
     <a href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</a>
