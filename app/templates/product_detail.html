@@ -34,13 +34,32 @@
   <ul>
     {% for relationship in product_relationships %}
       <li>
-        <p><strong>{{ relationship.relationship_type }}</strong> →
-          {% if relationship.target_product %}
-            <a href="{{ url_for('main.product_detail', product_uuid=relationship.target_product.uuid) }}">{{ relationship.target_product.title or relationship.target_product.name }}</a>
-          {% elif relationship.target_vendor %}
-            <a href="{{ url_for('main.vendor_detail', vendor_uuid=relationship.target_vendor.uuid) }}">{{ relationship.target_vendor.title or relationship.target_vendor.name }}</a>
+        <p><strong>{{ relationship.relationship_type }}</strong>
+          {% if relationship.source_product_id == product.id %}
+            →
+            {% if relationship.target_product %}
+              <a href="{{ url_for('main.product_detail', product_uuid=relationship.target_product.uuid) }}">{{ relationship.target_product.title or relationship.target_product.name }}</a>
+            {% elif relationship.target_vendor %}
+              <a href="{{ url_for('main.vendor_detail', vendor_uuid=relationship.target_vendor.uuid) }}">{{ relationship.target_vendor.title or relationship.target_vendor.name }}</a>
+            {% else %}
+              Unknown target
+            {% endif %}
           {% else %}
-            Unknown target
+            ←
+            {% if relationship.source_product %}
+              <a href="{{ url_for('main.product_detail', product_uuid=relationship.source_product.uuid) }}">{{ relationship.source_product.title or relationship.source_product.name }}</a>
+            {% elif relationship.source_vendor %}
+              <a href="{{ url_for('main.vendor_detail', vendor_uuid=relationship.source_vendor.uuid) }}">{{ relationship.source_vendor.title or relationship.source_vendor.name }}</a>
+            {% else %}
+              Unknown source
+            {% endif %}
+          {% endif %}
+        </p>
+        <p class="muted">
+          {% if relationship.source_product_id == product.id %}
+            Outgoing relationship from this product.
+          {% else %}
+            Incoming relationship to this product.
           {% endif %}
         </p>
         <p class="muted">{{ relationship_type_descriptions.get(relationship.relationship_type, "") }}</p>

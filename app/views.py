@@ -426,7 +426,12 @@ def vendor_detail(vendor_uuid):
         .all()
     )
     vendor_relationships = (
-        EntityRelationship.query.filter_by(source_vendor_id=vendor.id)
+        EntityRelationship.query.filter(
+            or_(
+                EntityRelationship.source_vendor_id == vendor.id,
+                EntityRelationship.target_vendor_id == vendor.id,
+            )
+        )
         .order_by(EntityRelationship.approved_at.desc(), EntityRelationship.submitted_at.desc())
         .all()
     )
@@ -448,7 +453,12 @@ def product_detail(product_uuid):
         .all()
     )
     product_relationships = (
-        EntityRelationship.query.filter_by(source_product_id=product.id)
+        EntityRelationship.query.filter(
+            or_(
+                EntityRelationship.source_product_id == product.id,
+                EntityRelationship.target_product_id == product.id,
+            )
+        )
         .order_by(EntityRelationship.approved_at.desc(), EntityRelationship.submitted_at.desc())
         .all()
     )
