@@ -75,7 +75,8 @@
   {% if combined_view_products|length > 1 %}
     <p class="muted">
       Showing CPE entries combined across products connected through:
-      <code>{{ combined_view_relationship_types|join(", ") }}</code>.
+      <code>{{ combined_view_relationship_types|join(", ") }}</code>
+      product relationships, and same-token products under related vendors.
     </p>
     <ul>
       {% for related_product in combined_view_products %}
@@ -112,7 +113,7 @@
     </table>
   {% else %}
     <p class="muted">
-      This product does not currently have synonym/equivalent relationships to other products.
+      This product does not currently have eligible product/vendor synonym or equivalent links.
     </p>
   {% endif %}
 </div>

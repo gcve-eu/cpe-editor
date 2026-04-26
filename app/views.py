@@ -261,8 +261,47 @@ def _serialize_cpe(cpe):
 
 
 def _collect_related_products_for_combined_view(product: Product):
+    related_vendor_ids = {product.vendor_id}
+    vendor_queue = [product.vendor_id]
+    while vendor_queue:
+        current_vendor_id = vendor_queue.pop(0)
+        vendor_relationships = (
+            EntityRelationship.query.filter(
+                EntityRelationship.relationship_type.in_(
+                    PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+                ),
+                or_(
+                    EntityRelationship.source_vendor_id == current_vendor_id,
+                    EntityRelationship.target_vendor_id == current_vendor_id,
+                ),
+            ).all()
+        )
+        for relationship in vendor_relationships:
+            vendor_neighbor_ids = [
+                relationship.source_vendor_id,
+                relationship.target_vendor_id,
+            ]
+            for vendor_neighbor_id in vendor_neighbor_ids:
+                if not vendor_neighbor_id or vendor_neighbor_id in related_vendor_ids:
+                    continue
+                related_vendor_ids.add(vendor_neighbor_id)
+                vendor_queue.append(vendor_neighbor_id)
+
     related_product_ids = {product.id}
     queue = [product.id]
+
+    if related_vendor_ids:
+        vendor_related_products = (
+            Product.query.filter(
+                Product.vendor_id.in_(related_vendor_ids),
+                func.lower(Product.name) == product.name.lower(),
+            ).all()
+        )
+        for vendor_related_product in vendor_related_products:
+            if vendor_related_product.id in related_product_ids:
+                continue
+            related_product_ids.add(vendor_related_product.id)
+            queue.append(vendor_related_product.id)
 
     while queue:
         current_product_id = queue.pop(0)
