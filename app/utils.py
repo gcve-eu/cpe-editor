@@ -3,8 +3,10 @@ from __future__ import annotations
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 
-VENDOR_UUID_NAMESPACE = uuid5(NAMESPACE_URL, "https://example.local/cpe-editor/vendor")
-PRODUCT_UUID_NAMESPACE = uuid5(NAMESPACE_URL, "https://example.local/cpe-editor/product")
+GCVE_ROOT_NAMESPACE_URL = "GCVE-BCP-10"
+GCVE_ROOT_NAMESPACE = uuid5(NAMESPACE_URL, GCVE_ROOT_NAMESPACE_URL)
+VENDOR_UUID_NAMESPACE = uuid5(GCVE_ROOT_NAMESPACE, "vendor")
+PRODUCT_UUID_NAMESPACE = uuid5(GCVE_ROOT_NAMESPACE, "product")
 
 
 def normalize_token(value: str) -> str:
@@ -96,6 +98,8 @@ def vendor_uuid_for_name(name: str) -> str:
 
 
 def product_uuid_for_names(vendor_name: str, product_name: str) -> str:
+    # Keep product UUIDs vendor-scoped to avoid collisions where multiple vendors
+    # legitimately ship products with the same product token.
     return str(
         uuid5(
             PRODUCT_UUID_NAMESPACE,

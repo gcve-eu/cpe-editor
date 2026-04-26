@@ -180,10 +180,13 @@ def register_cli(app):
             vendor_name = parsed["vendor"]
             product_name = parsed["product"]
 
+            vendor_uuid = vendor_uuid_for_name(vendor_name)
+            product_uuid = product_uuid_for_names(vendor_name, product_name)
+
             vendor = vendor_cache.get(vendor_name)
             if not vendor:
                 vendor = Vendor(
-                    uuid=vendor_uuid_for_name(vendor_name),
+                    uuid=vendor_uuid,
                     name=vendor_name,
                     title=titleize_token(vendor_name),
                 )
@@ -191,14 +194,14 @@ def register_cli(app):
                 db.session.flush()
                 vendor_cache[vendor_name] = vendor
                 created_vendors += 1
-            elif not vendor.uuid:
-                vendor.uuid = vendor_uuid_for_name(vendor_name)
+            elif vendor.uuid != vendor_uuid:
+                vendor.uuid = vendor_uuid
 
             product_key = (vendor.id, product_name)
             product = product_cache.get(product_key)
             if not product:
                 product = Product(
-                    uuid=product_uuid_for_names(vendor_name, product_name),
+                    uuid=product_uuid,
                     vendor_id=vendor.id,
                     name=product_name,
                     title=titleize_token(product_name),
@@ -207,11 +210,8 @@ def register_cli(app):
                 db.session.flush()
                 product_cache[product_key] = product
                 created_products += 1
-            elif not product.uuid:
-                product.uuid = product_uuid_for_names(vendor_name, product_name)
-            else:
-                skipped += 1
-                continue
+            elif product.uuid != product_uuid:
+                product.uuid = product_uuid
 
             titles = cpe_data.get("titles") or []
             title = pick_english_title(titles) or titleize_token(product_name)
@@ -337,10 +337,13 @@ def register_cli(app):
                 vendor_name = parsed["vendor"]
                 product_name = parsed["product"]
 
+                vendor_uuid = vendor_uuid_for_name(vendor_name)
+                product_uuid = product_uuid_for_names(vendor_name, product_name)
+
                 vendor = vendor_cache.get(vendor_name)
                 if not vendor:
                     vendor = Vendor(
-                        uuid=vendor_uuid_for_name(vendor_name),
+                        uuid=vendor_uuid,
                         name=vendor_name,
                         title=titleize_token(vendor_name),
                     )
@@ -348,14 +351,14 @@ def register_cli(app):
                     db.session.flush()
                     vendor_cache[vendor_name] = vendor
                     created_vendors += 1
-                elif not vendor.uuid:
-                    vendor.uuid = vendor_uuid_for_name(vendor_name)
+                elif vendor.uuid != vendor_uuid:
+                    vendor.uuid = vendor_uuid
 
                 product_key = (vendor.id, product_name)
                 product = product_cache.get(product_key)
                 if not product:
                     product = Product(
-                        uuid=product_uuid_for_names(vendor_name, product_name),
+                        uuid=product_uuid,
                         vendor_id=vendor.id,
                         name=product_name,
                         title=titleize_token(product_name),
@@ -364,8 +367,8 @@ def register_cli(app):
                     db.session.flush()
                     product_cache[product_key] = product
                     created_products += 1
-                elif not product.uuid:
-                    product.uuid = product_uuid_for_names(vendor_name, product_name)
+                elif product.uuid != product_uuid:
+                    product.uuid = product_uuid
 
                 db.session.add(
                     CPEEntry(
@@ -592,12 +595,16 @@ def titleize_token(value: str) -> str:
 
 
 def backfill_missing_uuids():
-    for vendor in Vendor.query.filter((Vendor.uuid.is_(None)) | (Vendor.uuid == "")).all():
-        vendor.uuid = vendor_uuid_for_name(vendor.name)
+    for vendor in Vendor.query.all():
+        expected_uuid = vendor_uuid_for_name(vendor.name)
+        if vendor.uuid != expected_uuid:
+            vendor.uuid = expected_uuid
     db.session.flush()
 
-    for product in Product.query.filter((Product.uuid.is_(None)) | (Product.uuid == "")).all():
-        product.uuid = product_uuid_for_names(product.vendor.name, product.name)
+    for product in Product.query.all():
+        expected_uuid = product_uuid_for_names(product.vendor.name, product.name)
+        if product.uuid != expected_uuid:
+            product.uuid = expected_uuid
     db.session.flush()
 
 

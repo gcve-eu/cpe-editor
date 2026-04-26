@@ -104,7 +104,7 @@ What the importer does:
 - assigns deterministic UUIDs to vendors and products
 - imports or updates CPE entries by `cpe_uri`
 - stores `cpeNameId`, `deprecated`, and `deprecatedBy` when present
-- backfills missing UUIDs on already-existing vendors/products
+- reconciles existing vendor/product UUIDs to deterministic UUIDv5 values
 
 ## Import the NVD CPE Match feed
 
@@ -123,8 +123,8 @@ python -m flask --app run import-nvd-cpematches --source /path/to/nvdcpematch-2.
 
 ## Notes about UUIDs
 
-- `Vendor.uuid` is generated deterministically from the normalized vendor name
-- `Product.uuid` is generated deterministically from `vendor + product`
+- `Vendor.uuid` is generated with UUIDv5 using a vendor-specific namespace and normalized vendor name
+- `Product.uuid` is generated with UUIDv5 using a product-specific namespace and normalized `vendor + product`
 - this makes repeated imports idempotent for vendor/product identity inside this app
 
 ## Rebuild indexes / refresh query stats
