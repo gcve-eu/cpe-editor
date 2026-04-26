@@ -129,7 +129,25 @@
     .button.secondary, button.secondary { background: #4b5563; }
     .button.warning, button.warning { background: #a36a00; }
     .button.danger, button.danger { background: #b3261e; }
-    .action-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: .9rem;
+    }
+    .page-header h1 { margin: 0; }
+    .action-row {
+      display: flex;
+      gap: .6rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .action-row.end {
+      justify-content: flex-end;
+      margin-top: .9rem;
+    }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: .75rem; border-bottom: 1px solid #e6e9ef; vertical-align: top; }
     .flash { padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1rem; background: #eef4ff; border: 1px solid #cbdcfb; }

@@ -2,7 +2,12 @@
 {% block title %}{{ cpe.cpe_uri }}{% endblock %}
 {% block content %}
 <div class="card">
-  <h1>{{ cpe.title or "CPE entry" }}</h1>
+  <div class="page-header">
+    <h1>{{ cpe.title or "CPE entry" }}</h1>
+    <div class="action-row">
+      <a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Submit a proposal</a>
+    </div>
+  </div>
   <p><code>{{ cpe.cpe_uri }}</code></p>
   <p>
     <span class="pill">part: {{ cpe.part }}</span>
@@ -24,7 +29,6 @@
 
 <div class="card">
   <h2>Contribute</h2>
-  <p>You can submit an edit proposal for this CPE entry or suggest a related product/vendor addition.</p>
-  <a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Submit a proposal</a>
+  <p>You can submit an edit proposal for this CPE entry or suggest a related product/vendor addition using the action button above.</p>
 </div>
 {% endblock %}

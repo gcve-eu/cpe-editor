@@ -2,7 +2,12 @@
 {% block title %}Submit proposal{% endblock %}
 {% block content %}
 <div class="card">
-  <h1>Submit a proposal</h1>
+  <div class="page-header">
+    <h1>Submit a proposal</h1>
+    <div class="action-row">
+      <button type="submit" form="proposal-form"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</button>
+    </div>
+  </div>
   <p class="muted">Anonymous contributions are allowed. An admin must accept them before publication.</p>
   <style>
     .form-section { border: 1px solid #dce3f0; border-radius: 10px; padding: 1rem; margin: 1rem 0; background: #fafcff; }
@@ -10,7 +15,7 @@
     .form-section.required { border-color: #0b57d0; background: #f3f7ff; }
     .required-marker { color: #b3261e; font-weight: 700; }
   </style>
-  <form method="post">
+  <form method="post" id="proposal-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="form-section required">
       <h2>Required for "Add a product to an existing vendor"</h2>
@@ -223,7 +228,6 @@
       <textarea id="rationale" name="rationale" placeholder="Optional: source, justification, references, etc."></textarea>
     </div>
 
-    <p><button type="submit"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</button></p>
   </form>
 </div>
 <script>

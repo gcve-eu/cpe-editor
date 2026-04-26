@@ -2,7 +2,23 @@
 {% block title %}Approved Changes{% endblock %}
 {% block content %}
 <div class="card">
-  <h1>Publicly approved changes</h1>
+  <div class="page-header">
+    <h1>Publicly approved changes</h1>
+    {% if changes %}
+      <div class="action-row">
+        {% if has_prev %}
+          <a class="button" href="{{ url_for('main.approved_changes', page=page - 1) }}">
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous page
+          </a>
+        {% endif %}
+        {% if has_next %}
+          <a class="button" href="{{ url_for('main.approved_changes', page=page + 1) }}">
+            Next page<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          </a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
   <p class="muted">Most recent approvals first.</p>
   {% if changes %}
     <p class="muted">Showing page {{ page }} of {{ total_pages }} ({{ total_changes }} approved changes).</p>
@@ -43,18 +59,6 @@
         {% endfor %}
       </tbody>
     </table>
-    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: .9rem;">
-      {% if has_prev %}
-        <a class="button" href="{{ url_for('main.approved_changes', page=page - 1) }}">
-          <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous page
-        </a>
-      {% endif %}
-      {% if has_next %}
-        <a class="button" href="{{ url_for('main.approved_changes', page=page + 1) }}">
-          Next page<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-        </a>
-      {% endif %}
-    </div>
   {% else %}
     <p>No approved changes are public yet.</p>
   {% endif %}
