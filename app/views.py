@@ -334,6 +334,40 @@ def _collect_related_products_for_combined_view(product: Product):
     )
 
 
+def _collect_related_vendors_for_combined_view(vendor: Vendor):
+    related_vendor_ids = {vendor.id}
+    vendor_queue = [vendor.id]
+    while vendor_queue:
+        current_vendor_id = vendor_queue.pop(0)
+        vendor_relationships = (
+            EntityRelationship.query.filter(
+                EntityRelationship.relationship_type.in_(
+                    PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+                ),
+                or_(
+                    EntityRelationship.source_vendor_id == current_vendor_id,
+                    EntityRelationship.target_vendor_id == current_vendor_id,
+                ),
+            ).all()
+        )
+        for relationship in vendor_relationships:
+            vendor_neighbor_ids = [
+                relationship.source_vendor_id,
+                relationship.target_vendor_id,
+            ]
+            for vendor_neighbor_id in vendor_neighbor_ids:
+                if not vendor_neighbor_id or vendor_neighbor_id in related_vendor_ids:
+                    continue
+                related_vendor_ids.add(vendor_neighbor_id)
+                vendor_queue.append(vendor_neighbor_id)
+
+    return (
+        Vendor.query.filter(Vendor.id.in_(related_vendor_ids))
+        .order_by(Vendor.name.asc(), Vendor.id.asc())
+        .all()
+    )
+
+
 # --- Public views -------------------------------------------------------------
 @bp.route("/")
 def index():
@@ -514,11 +548,20 @@ def vendor_detail(vendor_uuid):
         .order_by(EntityRelationship.approved_at.desc(), EntityRelationship.submitted_at.desc())
         .all()
     )
+    combined_view_vendors = _collect_related_vendors_for_combined_view(vendor)
+    combined_view_products = (
+        Product.query.filter(Product.vendor_id.in_([related_vendor.id for related_vendor in combined_view_vendors]))
+        .order_by(Product.name.asc(), Product.id.asc())
+        .all()
+    )
     return render_template(
         "vendor_detail.html",
         vendor=vendor,
         vendor_notes=vendor_notes,
         vendor_relationships=vendor_relationships,
+        combined_view_vendors=combined_view_vendors,
+        combined_view_products=combined_view_products,
+        combined_view_relationship_types=sorted(PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES),
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
     )
 
