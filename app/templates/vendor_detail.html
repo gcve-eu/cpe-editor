@@ -101,4 +101,35 @@
     </a>
   </p>
 </div>
+
+<div class="card">
+  <h2>Combined products view</h2>
+  {% if combined_view_vendors|length > 1 %}
+    <p class="muted">
+      Showing products combined across vendor relationships connected through:
+      <code>{{ combined_view_relationship_types|join(", ") }}</code>.
+    </p>
+    <ul>
+      {% for combined_product in combined_view_products %}
+        <li>
+          {% if combined_product.vendor_id == vendor.id %}
+            <strong>{{ combined_product.title or combined_product.name }}</strong>
+            <span class="muted">— this vendor</span>
+          {% else %}
+            <a href="{{ url_for('main.product_detail', product_uuid=combined_product.uuid) }}">{{ combined_product.title or combined_product.name }}</a>
+            <span class="muted">
+              — <a href="{{ url_for('main.vendor_detail', vendor_uuid=combined_product.vendor.uuid) }}">{{ combined_product.vendor.title or combined_product.vendor.name }}</a>
+            </span>
+          {% endif %}
+        </li>
+      {% else %}
+        <li>No products found across related vendors.</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">
+      This vendor does not currently have eligible synonym/equivalent vendor links for combined products.
+    </p>
+  {% endif %}
+</div>
 {% endblock %}
