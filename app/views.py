@@ -21,7 +21,16 @@ from flask import (
 )
 from sqlalchemy import func, or_, text
 
-from .models import CPEEntry, EntityNote, EntityRelationship, Product, Proposal, Vendor, db
+from .models import (
+    CPEEntry,
+    EntityMetadata,
+    EntityNote,
+    EntityRelationship,
+    Product,
+    Proposal,
+    Vendor,
+    db,
+)
 from .utils import build_cpe_uri, normalize_token
 
 bp = Blueprint("main", __name__)
@@ -39,6 +48,7 @@ PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES = {
     "canonical-of",
     "equivalent-to",
 }
+ALLOWED_METADATA_KEYS = {"gcve:description", "gcve:url"}
 
 
 # --- Helpers -----------------------------------------------------------------
@@ -96,6 +106,14 @@ def _serialize_vendor(vendor):
                 reverse=True,
             )
         ],
+        "approved_metadata": [
+            _serialize_entity_metadata(metadata)
+            for metadata in sorted(
+                vendor.metadata_entries,
+                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                reverse=True,
+            )
+        ],
         "approved_relationships": [
             _serialize_entity_relationship(relationship)
             for relationship in sorted(
@@ -123,6 +141,14 @@ def _serialize_product(product):
             _serialize_entity_note(note)
             for note in sorted(
                 product.note_entries,
+                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                reverse=True,
+            )
+        ],
+        "approved_metadata": [
+            _serialize_entity_metadata(metadata)
+            for metadata in sorted(
+                product.metadata_entries,
                 key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
                 reverse=True,
             )
@@ -172,6 +198,21 @@ def _serialize_entity_note(note):
         "submitter_email": note.submitter_email,
         "submitted_at": note.submitted_at.isoformat() if note.submitted_at else None,
         "approved_at": note.approved_at.isoformat() if note.approved_at else None,
+    }
+
+
+def _serialize_entity_metadata(metadata):
+    return {
+        "id": metadata.id,
+        "vendor_id": metadata.vendor_id,
+        "product_id": metadata.product_id,
+        "proposal_id": metadata.proposal_id,
+        "metadata_key": metadata.metadata_key,
+        "metadata_value": metadata.metadata_value,
+        "submitter_name": metadata.submitter_name,
+        "submitter_email": metadata.submitter_email,
+        "submitted_at": metadata.submitted_at.isoformat() if metadata.submitted_at else None,
+        "approved_at": metadata.approved_at.isoformat() if metadata.approved_at else None,
     }
 
 
@@ -318,6 +359,10 @@ def _proposal_summary(proposal: Proposal):
         return "Approved a vendor note update."
     if proposal.proposal_type == "edit_product_note":
         return "Approved a product note update."
+    if proposal.proposal_type == "edit_vendor_metadata":
+        return "Approved a vendor metadata update."
+    if proposal.proposal_type == "edit_product_metadata":
+        return "Approved a product metadata update."
     if proposal.proposal_type == "new_record_relationship":
         relationship_label = proposal.proposed_relationship_type or "relationship"
         return f"Approved a {relationship_label} relationship."
@@ -626,6 +671,11 @@ def vendor_detail(vendor_uuid):
         .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc())
         .all()
     )
+    vendor_metadata = (
+        EntityMetadata.query.filter_by(vendor_id=vendor.id)
+        .order_by(EntityMetadata.approved_at.desc(), EntityMetadata.submitted_at.desc())
+        .all()
+    )
     vendor_relationships = (
         EntityRelationship.query.filter(
             or_(
@@ -646,6 +696,7 @@ def vendor_detail(vendor_uuid):
         "vendor_detail.html",
         vendor=vendor,
         vendor_notes=vendor_notes,
+        vendor_metadata=vendor_metadata,
         vendor_relationships=vendor_relationships,
         combined_view_vendors=combined_view_vendors,
         combined_view_products=combined_view_products,
@@ -660,6 +711,11 @@ def product_detail(product_uuid):
     product_notes = (
         EntityNote.query.filter_by(product_id=product.id)
         .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc())
+        .all()
+    )
+    product_metadata = (
+        EntityMetadata.query.filter_by(product_id=product.id)
+        .order_by(EntityMetadata.approved_at.desc(), EntityMetadata.submitted_at.desc())
         .all()
     )
     product_relationships = (
@@ -684,6 +740,7 @@ def product_detail(product_uuid):
         "product_detail.html",
         product=product,
         product_notes=product_notes,
+        product_metadata=product_metadata,
         product_relationships=product_relationships,
         combined_view_products=combined_view_products,
         combined_view_cpes=combined_view_cpes,
@@ -1078,6 +1135,86 @@ def note_proposal_new():
     )
 
 
+@bp.route("/proposals/metadata/new", methods=["GET", "POST"])
+def metadata_proposal_new():
+    preselected_vendor_id = request.args.get("vendor_id", type=int)
+    preselected_product_id = request.args.get("product_id", type=int)
+
+    preselected_vendor = Vendor.query.get(preselected_vendor_id) if preselected_vendor_id else None
+    preselected_product = Product.query.get(preselected_product_id) if preselected_product_id else None
+    if preselected_vendor_id and not preselected_vendor:
+        preselected_vendor_id = None
+    if preselected_product_id and not preselected_product:
+        preselected_product_id = None
+
+    if preselected_vendor_id and preselected_product_id:
+        preselected_vendor_id = None
+        preselected_product_id = None
+        preselected_vendor = None
+        preselected_product = None
+
+    if request.method == "POST":
+        submitter_ip = _get_request_ip()
+        if _is_rate_limited_for_ip(submitter_ip):
+            limit = current_app.config.get("PROPOSAL_RATE_LIMIT_PER_HOUR", 10)
+            flash(
+                f"Rate limit reached for your IP address. Please wait before submitting more proposals (limit: {limit} per hour).",
+                "danger",
+            )
+            return redirect(
+                url_for(
+                    "main.metadata_proposal_new",
+                    vendor_id=request.form.get("vendor_id", type=int),
+                    product_id=request.form.get("product_id", type=int),
+                )
+            )
+
+        vendor_id = request.form.get("vendor_id", type=int)
+        product_id = request.form.get("product_id", type=int)
+        metadata_key = (request.form.get("metadata_key") or "").strip()
+        metadata_value = (request.form.get("metadata_value") or "").strip()
+
+        if bool(vendor_id) == bool(product_id):
+            flash("Please submit metadata for exactly one record (vendor or product).", "danger")
+            return redirect(url_for("main.metadata_proposal_new"))
+
+        if metadata_key not in ALLOWED_METADATA_KEYS:
+            flash("Please choose a valid metadata key.", "danger")
+            return redirect(
+                url_for("main.metadata_proposal_new", vendor_id=vendor_id, product_id=product_id)
+            )
+
+        if not metadata_value:
+            flash("Please provide a metadata value.", "danger")
+            return redirect(
+                url_for("main.metadata_proposal_new", vendor_id=vendor_id, product_id=product_id)
+            )
+
+        proposal = Proposal(
+            proposal_type="edit_vendor_metadata" if vendor_id else "edit_product_metadata",
+            submitter_name=request.form.get("submitter_name"),
+            submitter_email=request.form.get("submitter_email"),
+            submitter_ip=submitter_ip,
+            rationale=request.form.get("rationale"),
+            vendor_id=vendor_id,
+            product_id=product_id,
+            proposed_metadata_key=metadata_key,
+            proposed_metadata_value=metadata_value,
+        )
+
+        db.session.add(proposal)
+        db.session.commit()
+        flash("Metadata proposal submitted. An admin will review it.", "success")
+        return redirect(url_for("main.index"))
+
+    return render_template(
+        "metadata_proposal_form.html",
+        preselected_vendor=preselected_vendor,
+        preselected_product=preselected_product,
+        allowed_metadata_keys=sorted(ALLOWED_METADATA_KEYS),
+    )
+
+
 @bp.route("/changes")
 def approved_changes():
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
@@ -1421,6 +1558,42 @@ def apply_proposal(proposal: Proposal):
             approved_at=proposal.reviewed_at or datetime.utcnow(),
         )
         db.session.add(note)
+        return
+
+    if proposal.proposal_type == "edit_vendor_metadata":
+        if not vendor:
+            raise ValueError("A target vendor is required for a vendor metadata proposal.")
+        if proposal.proposed_metadata_key not in ALLOWED_METADATA_KEYS:
+            raise ValueError("Unsupported metadata key for vendor metadata proposal.")
+        metadata_entry = EntityMetadata(
+            vendor_id=vendor.id,
+            proposal_id=proposal.id,
+            metadata_key=proposal.proposed_metadata_key,
+            metadata_value=proposal.proposed_metadata_value,
+            submitter_name=proposal.submitter_name,
+            submitter_email=proposal.submitter_email,
+            submitted_at=proposal.created_at or datetime.utcnow(),
+            approved_at=proposal.reviewed_at or datetime.utcnow(),
+        )
+        db.session.add(metadata_entry)
+        return
+
+    if proposal.proposal_type == "edit_product_metadata":
+        if not product:
+            raise ValueError("A target product is required for a product metadata proposal.")
+        if proposal.proposed_metadata_key not in ALLOWED_METADATA_KEYS:
+            raise ValueError("Unsupported metadata key for product metadata proposal.")
+        metadata_entry = EntityMetadata(
+            product_id=product.id,
+            proposal_id=proposal.id,
+            metadata_key=proposal.proposed_metadata_key,
+            metadata_value=proposal.proposed_metadata_value,
+            submitter_name=proposal.submitter_name,
+            submitter_email=proposal.submitter_email,
+            submitted_at=proposal.created_at or datetime.utcnow(),
+            approved_at=proposal.reviewed_at or datetime.utcnow(),
+        )
+        db.session.add(metadata_entry)
         return
 
     if proposal.proposal_type == "new_record_relationship":

@@ -19,6 +19,12 @@
       </a>
       <a
         class="button"
+        href="{{ url_for('main.metadata_proposal_new', vendor_id=vendor.id) }}"
+      >
+        <i class="fa-solid fa-tags" aria-hidden="true"></i>Propose metadata
+      </a>
+      <a
+        class="button"
         href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=vendor.id) }}"
       >
         <i class="fa-solid fa-link" aria-hidden="true"></i>Propose a relationship
@@ -28,6 +34,19 @@
   <p class="muted">Vendor token: <code>{{ vendor.name }}</code></p>
   <p class="muted">Vendor UUID: <code>{{ vendor.uuid }}</code></p>
   <p>{{ vendor.notes or "No vendor notes yet." }}</p>
+</div>
+
+<div class="card">
+  <h2>Approved metadata</h2>
+  <ul class="js-collapsible-list" data-collapse-limit="5">
+    {% for metadata in vendor_metadata %}
+      <li>
+        <p><strong>{{ metadata.metadata_key }}</strong>: {{ metadata.metadata_value }}</p>
+      </li>
+    {% else %}
+      <li>No approved metadata yet.</li>
+    {% endfor %}
+  </ul>
 </div>
 
 <div class="card">
