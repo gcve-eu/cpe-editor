@@ -41,7 +41,18 @@
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for metadata in vendor_metadata %}
       <li>
-        <p><strong>{{ metadata.metadata_key }}</strong>: {{ metadata.metadata_value }}</p>
+        <p>
+          <strong>{{ metadata.metadata_key }}</strong>:
+          {% if metadata.metadata_key == "gcve:url" %}
+            {% set metadata_url = metadata.metadata_value.strip() %}
+            {% if metadata_url and '://' not in metadata_url %}
+              {% set metadata_url = 'https://' ~ metadata_url %}
+            {% endif %}
+            <a href="{{ metadata_url }}" target="_blank" rel="noopener noreferrer">{{ metadata.metadata_value }}</a>
+          {% else %}
+            {{ metadata.metadata_value }}
+          {% endif %}
+        </p>
       </li>
     {% else %}
       <li>No approved metadata yet.</li>
