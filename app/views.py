@@ -31,6 +31,11 @@ RELATIONSHIP_TYPE_DESCRIPTIONS = {
     "vendor-merge-into": "vendor/product normalization relationship, when applicable.",
     "derived-from": "the record was derived from another source record.",
 }
+PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES = {
+    "synonym-of",
+    "canonical-of",
+    "equivalent-to",
+}
 
 
 # --- Helpers -----------------------------------------------------------------
@@ -255,6 +260,41 @@ def _serialize_cpe(cpe):
     }
 
 
+def _collect_related_products_for_combined_view(product: Product):
+    related_product_ids = {product.id}
+    queue = [product.id]
+
+    while queue:
+        current_product_id = queue.pop(0)
+        relationships = (
+            EntityRelationship.query.filter(
+                EntityRelationship.relationship_type.in_(
+                    PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+                ),
+                or_(
+                    EntityRelationship.source_product_id == current_product_id,
+                    EntityRelationship.target_product_id == current_product_id,
+                ),
+            ).all()
+        )
+        for relationship in relationships:
+            neighbor_ids = [
+                relationship.source_product_id,
+                relationship.target_product_id,
+            ]
+            for neighbor_id in neighbor_ids:
+                if not neighbor_id or neighbor_id in related_product_ids:
+                    continue
+                related_product_ids.add(neighbor_id)
+                queue.append(neighbor_id)
+
+    return (
+        Product.query.filter(Product.id.in_(related_product_ids))
+        .order_by(Product.name.asc(), Product.id.asc())
+        .all()
+    )
+
+
 # --- Public views -------------------------------------------------------------
 @bp.route("/")
 def index():
@@ -462,11 +502,22 @@ def product_detail(product_uuid):
         .order_by(EntityRelationship.approved_at.desc(), EntityRelationship.submitted_at.desc())
         .all()
     )
+    combined_view_products = _collect_related_products_for_combined_view(product)
+    combined_view_cpes = (
+        CPEEntry.query.filter(
+            CPEEntry.product_id.in_([related_product.id for related_product in combined_view_products])
+        )
+        .order_by(CPEEntry.cpe_uri.asc())
+        .all()
+    )
     return render_template(
         "product_detail.html",
         product=product,
         product_notes=product_notes,
         product_relationships=product_relationships,
+        combined_view_products=combined_view_products,
+        combined_view_cpes=combined_view_cpes,
+        combined_view_relationship_types=sorted(PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES),
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
     )
 
