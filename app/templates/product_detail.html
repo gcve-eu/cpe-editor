@@ -28,7 +28,7 @@
 
 <div class="card">
   <h2>Approved notes</h2>
-  <ul>
+  <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for note in product_notes %}
       <li>
         <p>{{ note.note_text }}</p>
@@ -47,7 +47,7 @@
 
 <div class="card">
   <h2>Approved relationships</h2>
-  <ul>
+  <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for relationship in product_relationships %}
       <li>
         <p><strong>{{ relationship.relationship_type }}</strong>
@@ -94,7 +94,7 @@
       <code>{{ combined_view_relationship_types|join(", ") }}</code>
       product relationships, and same-token products under related vendors.
     </p>
-    <ul>
+    <ul class="js-collapsible-list" data-collapse-limit="5">
       {% for related_product in combined_view_products %}
         <li>
           {% if related_product.id == product.id %}
@@ -108,7 +108,7 @@
     </ul>
     <table>
       <thead><tr><th>CPE URI</th><th>Product</th><th>Version</th><th>Part</th></tr></thead>
-      <tbody>
+      <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
       {% for cpe in combined_view_cpes %}
         <tr>
           <td><a href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}"><code>{{ cpe.cpe_uri }}</code></a></td>
@@ -138,7 +138,7 @@
   <h2>CPE entries</h2>
   <table>
     <thead><tr><th>CPE URI</th><th>Version</th><th>Part</th></tr></thead>
-    <tbody>
+    <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
     {% for cpe in product.cpes %}
       <tr>
         <td><a href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}"><code>{{ cpe.cpe_uri }}</code></a></td>

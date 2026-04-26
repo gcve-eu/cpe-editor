@@ -32,7 +32,7 @@
 
 <div class="card">
   <h2>Approved notes</h2>
-  <ul>
+  <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for note in vendor_notes %}
       <li>
         <p>{{ note.note_text }}</p>
@@ -51,7 +51,7 @@
 
 <div class="card">
   <h2>Approved relationships</h2>
-  <ul>
+  <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for relationship in vendor_relationships %}
       <li>
         <p><strong>{{ relationship.relationship_type }}</strong>
@@ -92,7 +92,7 @@
 
 <div class="card">
   <h2>Products</h2>
-  <ul>
+  <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for product in vendor.products %}
       <li>
         <a href="{{ url_for('main.product_detail', product_uuid=product.uuid) }}">{{ product.title or product.name }}</a>
@@ -111,7 +111,7 @@
       Showing products combined across vendor relationships connected through:
       <code>{{ combined_view_relationship_types|join(", ") }}</code>.
     </p>
-    <ul>
+    <ul class="js-collapsible-list" data-collapse-limit="5">
       {% for combined_product in combined_view_products %}
         <li>
           {% if combined_product.vendor_id == vendor.id %}

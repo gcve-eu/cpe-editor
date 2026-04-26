@@ -25,7 +25,7 @@
       </div>
     </div>
   {% endif %}
-  <ul>
+  <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for vendor in vendors %}
       <li><a href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a></li>
     {% else %}
