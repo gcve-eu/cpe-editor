@@ -29,6 +29,12 @@ class Vendor(TimestampMixin, db.Model):
         cascade="all, delete-orphan",
         order_by="desc(EntityNote.approved_at), desc(EntityNote.submitted_at)",
     )
+    metadata_entries = db.relationship(
+        "EntityMetadata",
+        back_populates="vendor",
+        cascade="all, delete-orphan",
+        order_by="desc(EntityMetadata.approved_at), desc(EntityMetadata.submitted_at)",
+    )
     outgoing_relationships = db.relationship(
         "EntityRelationship",
         foreign_keys="EntityRelationship.source_vendor_id",
@@ -65,6 +71,12 @@ class Product(TimestampMixin, db.Model):
         back_populates="product",
         cascade="all, delete-orphan",
         order_by="desc(EntityNote.approved_at), desc(EntityNote.submitted_at)",
+    )
+    metadata_entries = db.relationship(
+        "EntityMetadata",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="desc(EntityMetadata.approved_at), desc(EntityMetadata.submitted_at)",
     )
     outgoing_relationships = db.relationship(
         "EntityRelationship",
@@ -152,6 +164,8 @@ class Proposal(TimestampMixin, db.Model):
     proposed_notes = db.Column(db.Text, nullable=True)
     proposed_cpe_uri = db.Column(db.String(1024), nullable=True)
     proposed_relationship_type = db.Column(db.String(64), nullable=True)
+    proposed_metadata_key = db.Column(db.String(128), nullable=True)
+    proposed_metadata_value = db.Column(db.Text, nullable=True)
     source_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
     source_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
     target_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
@@ -171,6 +185,7 @@ class Proposal(TimestampMixin, db.Model):
     relationship_entry = db.relationship(
         "EntityRelationship", back_populates="proposal", uselist=False
     )
+    metadata_entry = db.relationship("EntityMetadata", back_populates="proposal", uselist=False)
 
 
 class EntityNote(TimestampMixin, db.Model):
@@ -234,4 +249,28 @@ class EntityRelationship(TimestampMixin, db.Model):
             "target_product_id",
             "relationship_type",
         ),
+    )
+
+
+class EntityMetadata(TimestampMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
+    proposal_id = db.Column(
+        db.Integer, db.ForeignKey("proposal.id"), nullable=True, unique=True, index=True
+    )
+    metadata_key = db.Column(db.String(128), nullable=False, index=True)
+    metadata_value = db.Column(db.Text, nullable=False)
+    submitter_name = db.Column(db.String(255), nullable=True)
+    submitter_email = db.Column(db.String(255), nullable=True)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    approved_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    vendor = db.relationship("Vendor", back_populates="metadata_entries")
+    product = db.relationship("Product", back_populates="metadata_entries")
+    proposal = db.relationship("Proposal", back_populates="metadata_entry")
+
+    __table_args__ = (
+        db.Index("ix_metadata_vendor_key", "vendor_id", "metadata_key"),
+        db.Index("ix_metadata_product_key", "product_id", "metadata_key"),
     )

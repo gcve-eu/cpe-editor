@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 from sqlalchemy import inspect, schema, text
 
-from .models import CPEEntry, EntityRelationship, Product, Proposal, Vendor, db
+from .models import CPEEntry, EntityMetadata, EntityRelationship, Product, Proposal, Vendor, db
 from .utils import parse_cpe23_uri, product_uuid_for_names, vendor_uuid_for_name
 
 DEFAULT_NVD_CPE_FEED = "https://nvd.nist.gov/feeds/json/cpe/2.0/nvdcpe-2.0.tar.gz"
@@ -434,7 +434,7 @@ def register_cli(app):
         click.echo(
             f"Exported dataset to {output_path} "
             f"(vendors={len(dataset['vendors'])}, products={len(dataset['products'])}, "
-            f"cpes={len(dataset['cpes'])}, relationships={len(dataset['relationships'])}, "
+            f"cpes={len(dataset['cpes'])}, metadata={len(dataset['metadata'])}, relationships={len(dataset['relationships'])}, "
             f"proposals={len(dataset['proposals'])})"
         )
 
@@ -470,6 +470,7 @@ def register_cli(app):
 
         if replace:
             click.echo("Deleting existing proposal, CPE, product and vendor rows...")
+            EntityMetadata.query.delete()
             Proposal.query.delete()
             EntityRelationship.query.delete()
             CPEEntry.query.delete()
@@ -489,11 +490,18 @@ def register_cli(app):
         product_rows = dataset.get("products") or []
         cpe_rows = dataset.get("cpes") or []
         relationship_rows = dataset.get("relationships") or []
+        metadata_rows = dataset.get("metadata") or []
         proposal_rows = dataset.get("proposals") or []
 
         imported_vendors = upsert_vendors(vendor_rows, vendor_id_by_uuid)
         imported_products = upsert_products(product_rows, vendor_id_by_uuid, product_id_by_uuid)
         imported_cpes = upsert_cpes(cpe_rows, vendor_id_by_uuid, product_id_by_uuid, batch_size)
+        metadata_count = upsert_metadata(
+            metadata_rows,
+            vendor_id_by_uuid,
+            product_id_by_uuid,
+            batch_size,
+        )
         relationship_count = upsert_relationships(
             relationship_rows,
             vendor_id_by_uuid,
@@ -513,7 +521,7 @@ def register_cli(app):
         db.session.commit()
         click.echo(
             f"Imported dataset from {source} "
-            f"(vendors={imported_vendors}, products={imported_products}, cpes={imported_cpes}, "
+            f"(vendors={imported_vendors}, products={imported_products}, cpes={imported_cpes}, metadata={metadata_count}, "
             f"relationships={relationship_count}, proposals={proposal_count})"
         )
 
@@ -688,6 +696,21 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
         }
         for relationship in EntityRelationship.query.order_by(EntityRelationship.id.asc()).all()
     ]
+    metadata = [
+        {
+            "record_uuid": metadata_entry.vendor.uuid if metadata_entry.vendor else metadata_entry.product.uuid,
+            "record_type": "vendor" if metadata_entry.vendor_id else "product",
+            "metadata_key": metadata_entry.metadata_key,
+            "metadata_value": metadata_entry.metadata_value,
+            "submitter_name": metadata_entry.submitter_name,
+            "submitter_email": metadata_entry.submitter_email,
+            "submitted_at": isoformat_or_none(metadata_entry.submitted_at),
+            "approved_at": isoformat_or_none(metadata_entry.approved_at),
+            "created_at": isoformat_or_none(metadata_entry.created_at),
+            "updated_at": isoformat_or_none(metadata_entry.updated_at),
+        }
+        for metadata_entry in EntityMetadata.query.order_by(EntityMetadata.id.asc()).all()
+    ]
 
     proposals = []
     if include_proposals:
@@ -717,6 +740,8 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
                 "proposed_title": proposal.proposed_title,
                 "proposed_notes": proposal.proposed_notes,
                 "proposed_cpe_uri": proposal.proposed_cpe_uri,
+                "proposed_metadata_key": proposal.proposed_metadata_key,
+                "proposed_metadata_value": proposal.proposed_metadata_value,
                 "review_comment": proposal.review_comment,
                 "reviewed_at": isoformat_or_none(proposal.reviewed_at),
                 "created_at": isoformat_or_none(proposal.created_at),
@@ -733,12 +758,14 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
             "vendors": len(vendors),
             "products": len(products),
             "cpes": len(cpes),
+            "metadata": len(metadata),
             "relationships": len(relationships),
             "proposals": len(proposals),
         },
         "vendors": vendors,
         "products": products,
         "cpes": cpes,
+        "metadata": metadata,
         "relationships": relationships,
         "proposals": proposals,
     }
@@ -959,6 +986,50 @@ def upsert_relationships(
     return count
 
 
+def upsert_metadata(
+    metadata_rows: list[dict],
+    vendor_id_by_uuid: dict[str, int],
+    product_id_by_uuid: dict[str, int],
+    batch_size: int,
+) -> int:
+    count = 0
+    for row in metadata_rows:
+        record_uuid = row.get("record_uuid")
+        record_type = row.get("record_type")
+        if record_type == "vendor":
+            vendor_id = vendor_id_by_uuid.get(record_uuid)
+            product_id = None
+        elif record_type == "product":
+            vendor_id = None
+            product_id = product_id_by_uuid.get(record_uuid)
+        else:
+            raise click.ClickException(f"Unsupported metadata record_type {record_type!r}.")
+
+        if vendor_id is None and product_id is None:
+            raise click.ClickException(
+                f"Dataset metadata entry references unknown record_uuid {record_uuid!r}."
+            )
+
+        metadata_entry = EntityMetadata(
+            vendor_id=vendor_id,
+            product_id=product_id,
+            metadata_key=row["metadata_key"],
+            metadata_value=row.get("metadata_value") or "",
+            submitter_name=row.get("submitter_name"),
+            submitter_email=row.get("submitter_email"),
+            submitted_at=parse_datetime_or_none(row.get("submitted_at")) or datetime.utcnow(),
+            approved_at=parse_datetime_or_none(row.get("approved_at")),
+            created_at=parse_datetime_or_none(row.get("created_at")),
+            updated_at=parse_datetime_or_none(row.get("updated_at")),
+        )
+        db.session.add(metadata_entry)
+        count += 1
+        if count % batch_size == 0:
+            db.session.commit()
+    db.session.commit()
+    return count
+
+
 def upsert_proposals(
     proposal_rows: list[dict],
     vendor_id_by_uuid: dict[str, int],
@@ -993,6 +1064,8 @@ def upsert_proposals(
             proposed_title=row.get("proposed_title"),
             proposed_notes=row.get("proposed_notes"),
             proposed_cpe_uri=row.get("proposed_cpe_uri"),
+            proposed_metadata_key=row.get("proposed_metadata_key"),
+            proposed_metadata_value=row.get("proposed_metadata_value"),
             review_comment=row.get("review_comment"),
             reviewed_at=parse_datetime_or_none(row.get("reviewed_at")),
             created_at=parse_datetime_or_none(row.get("created_at")),

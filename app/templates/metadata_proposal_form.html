@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Submit metadata proposal{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="page-header">
+    <h1>Submit a metadata proposal</h1>
+    <div class="action-row">
+      <button type="submit" form="metadata-proposal-form"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit metadata</button>
+    </div>
+  </div>
+  <p class="muted">This form supports scoped metadata proposals for one vendor or product record.</p>
+
+  <form method="post" id="metadata-proposal-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if preselected_vendor %}
+      <input type="hidden" name="vendor_id" value="{{ preselected_vendor.id }}">
+    {% endif %}
+    {% if preselected_product %}
+      <input type="hidden" name="product_id" value="{{ preselected_product.id }}">
+    {% endif %}
+
+    <div class="form-section required">
+      <h2>Target record</h2>
+      {% if preselected_vendor %}
+        <p>
+          Vendor: <strong>{{ preselected_vendor.title or preselected_vendor.name }}</strong>
+          <span class="muted">(<code>{{ preselected_vendor.name }}</code>)</span>
+        </p>
+      {% elif preselected_product %}
+        <p>
+          Product: <strong>{{ preselected_product.title or preselected_product.name }}</strong>
+          <span class="muted">({{ preselected_product.vendor.title or preselected_product.vendor.name }}/<code>{{ preselected_product.name }}</code>)</span>
+        </p>
+      {% else %}
+        <p class="muted">Open this form from a vendor or product page to preselect the metadata target.</p>
+      {% endif %}
+
+      <label for="metadata_key">Metadata key <span class="required-marker">*</span></label>
+      <select id="metadata_key" name="metadata_key" required>
+        {% for key in allowed_metadata_keys %}
+          <option value="{{ key }}">{{ key }}</option>
+        {% endfor %}
+      </select>
+
+      <label for="metadata_value">Metadata value <span class="required-marker">*</span></label>
+      <textarea id="metadata_value" name="metadata_value" required></textarea>
+    </div>
+
+    <div class="form-section">
+      <h2>Optional details</h2>
+      <div class="grid grid-2">
+        <div>
+          <label for="submitter_name">Your name (optional)</label>
+          <input id="submitter_name" name="submitter_name" placeholder="Optional">
+        </div>
+        <div>
+          <label for="submitter_email">Your email (optional)</label>
+          <input id="submitter_email" name="submitter_email" type="email" placeholder="Optional">
+        </div>
+      </div>
+
+      <label for="rationale">Why should this metadata be added or updated? (optional)</label>
+      <textarea id="rationale" name="rationale" placeholder="Optional context for reviewers"></textarea>
+    </div>
+  </form>
+</div>
+{% endblock %}
