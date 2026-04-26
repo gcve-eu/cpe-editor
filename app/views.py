@@ -1,9 +1,12 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 from functools import wraps
 from hmac import compare_digest
 import secrets
+from xml.sax.saxutils import escape
 
 from flask import (
+    Response,
     abort,
     Blueprint,
     current_app,
@@ -319,6 +322,30 @@ def _proposal_summary(proposal: Proposal):
         relationship_label = proposal.proposed_relationship_type or "relationship"
         return f"Approved a {relationship_label} relationship."
     return "Approved proposal."
+
+
+def _proposal_feed_timestamp(proposal: Proposal):
+    timestamp = proposal.reviewed_at or proposal.created_at or datetime.utcnow()
+    return timestamp if timestamp.tzinfo else timestamp.replace(tzinfo=timezone.utc)
+
+
+def _build_change_feed_entries(changes: list[Proposal]):
+    entries = []
+    for proposal in changes:
+        change_url = url_for("main.approved_change_detail", proposal_id=proposal.id, _external=True)
+        published = _proposal_feed_timestamp(proposal)
+        entries.append(
+            {
+                "id": proposal.id,
+                "title": f"Approved change #{proposal.id}",
+                "summary": _proposal_summary(proposal),
+                "url": change_url,
+                "published": published,
+                "published_rfc822": format_datetime(published),
+                "published_rfc3339": published.isoformat().replace("+00:00", "Z"),
+            }
+        )
+    return entries
 
 
 def _collect_related_products_for_combined_view(product: Product):
@@ -1017,6 +1044,90 @@ def approved_changes():
         proposal_summary=_proposal_summary,
         proposal_focus_links=_proposal_focus_links,
     )
+
+
+@bp.route("/changes.rss")
+def approved_changes_rss():
+    changes = (
+        Proposal.query.filter_by(status="accepted")
+        .order_by(Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc())
+        .limit(20)
+        .all()
+    )
+    entries = _build_change_feed_entries(changes)
+    feed_url = url_for("main.approved_changes_rss", _external=True)
+    site_url = url_for("main.approved_changes", _external=True)
+    updated_at = entries[0]["published_rfc822"] if entries else format_datetime(datetime.now(timezone.utc))
+
+    items = "".join(
+        (
+            "<item>"
+            f"<title>{escape(entry['title'])}</title>"
+            f"<description>{escape(entry['summary'])}</description>"
+            f"<link>{escape(entry['url'])}</link>"
+            f"<guid>{escape(entry['url'])}</guid>"
+            f"<pubDate>{entry['published_rfc822']}</pubDate>"
+            "</item>"
+        )
+        for entry in entries
+    )
+    rss = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<rss version=\"2.0\">"
+        "<channel>"
+        "<title>CPE Editor Approved Changes</title>"
+        "<description>Recent approved changes in the CPE Editor catalog.</description>"
+        f"<link>{escape(site_url)}</link>"
+        f"<lastBuildDate>{updated_at}</lastBuildDate>"
+        f"<atom:link href=\"{escape(feed_url)}\" rel=\"self\" type=\"application/rss+xml\" xmlns:atom=\"http://www.w3.org/2005/Atom\" />"
+        f"{items}"
+        "</channel>"
+        "</rss>"
+    )
+    return Response(rss, mimetype="application/rss+xml")
+
+
+@bp.route("/changes.atom")
+def approved_changes_atom():
+    changes = (
+        Proposal.query.filter_by(status="accepted")
+        .order_by(Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc())
+        .limit(20)
+        .all()
+    )
+    entries = _build_change_feed_entries(changes)
+    feed_url = url_for("main.approved_changes_atom", _external=True)
+    site_url = url_for("main.approved_changes", _external=True)
+    updated_at = (
+        entries[0]["published_rfc3339"]
+        if entries
+        else datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    )
+
+    items = "".join(
+        (
+            "<entry>"
+            f"<id>{escape(entry['url'])}</id>"
+            f"<title>{escape(entry['title'])}</title>"
+            f"<link href=\"{escape(entry['url'])}\" />"
+            f"<updated>{entry['published_rfc3339']}</updated>"
+            f"<summary>{escape(entry['summary'])}</summary>"
+            "</entry>"
+        )
+        for entry in entries
+    )
+    atom = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<feed xmlns=\"http://www.w3.org/2005/Atom\">"
+        "<title>CPE Editor Approved Changes</title>"
+        f"<id>{escape(site_url)}</id>"
+        f"<link href=\"{escape(site_url)}\" />"
+        f"<link href=\"{escape(feed_url)}\" rel=\"self\" />"
+        f"<updated>{updated_at}</updated>"
+        f"{items}"
+        "</feed>"
+    )
+    return Response(atom, mimetype="application/atom+xml")
 
 
 @bp.route("/changes/<int:proposal_id>")

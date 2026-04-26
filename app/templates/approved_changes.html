@@ -20,6 +20,12 @@
     {% endif %}
   </div>
   <p class="muted">Most recent approvals first.</p>
+  <p class="muted">
+    Feeds:
+    <a href="{{ url_for('main.approved_changes_rss') }}">RSS</a>
+    ·
+    <a href="{{ url_for('main.approved_changes_atom') }}">Atom</a>
+  </p>
   {% if changes %}
     <p class="muted">Showing page {{ page }} of {{ total_pages }} ({{ total_changes }} approved changes).</p>
     <table>
