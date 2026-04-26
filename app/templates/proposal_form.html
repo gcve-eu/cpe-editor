@@ -27,8 +27,6 @@
             <option value="new_cpe" {% if preselected_proposal_type == "new_cpe" %}selected{% endif %}>Add a CPE to an existing vendor/product</option>
             <option value="new_product" {% if preselected_proposal_type == "new_product" %}selected{% endif %}>Add a product to an existing vendor</option>
             <option value="new_vendor_product" {% if preselected_proposal_type == "new_vendor_product" %}selected{% endif %}>Add a new vendor and product</option>
-            <option value="edit_vendor_note" {% if preselected_proposal_type == "edit_vendor_note" %}selected{% endif %}>Propose a note for an existing vendor</option>
-            <option value="edit_product_note" {% if preselected_proposal_type == "edit_product_note" %}selected{% endif %}>Propose a note for an existing product</option>
             <option value="new_record_relationship" {% if preselected_proposal_type == "new_record_relationship" %}selected{% endif %}>Propose a vendor/product relationship</option>
           </select>
         </div>
@@ -221,7 +219,7 @@
         <div><label for="proposed_other">Other</label><input id="proposed_other" name="proposed_other" value="*"></div>
       </div>
 
-      <label for="proposed_notes">Notes (optional for most types, required for note proposals)</label>
+      <label for="proposed_notes">Notes (optional)</label>
       <textarea id="proposed_notes" name="proposed_notes"></textarea>
 
       <label for="rationale">Why should this be changed? (optional)</label>
@@ -342,20 +340,14 @@
 
     function syncVendorFieldMode() {
       const isNewVendorProduct = proposalType.value === "new_vendor_product";
-      const isVendorNote = proposalType.value === "edit_vendor_note";
-      const isProductNote = proposalType.value === "edit_product_note";
       const isRelationship = isRelationshipProposal();
       existingVendorGroup.style.display = isNewVendorProduct ? "none" : "";
       newVendorGroup.style.display = isNewVendorProduct ? "" : "none";
-      vendorSelect.required = (!isNewVendorProduct || isVendorNote || isProductNote) && !isRelationship;
+      vendorSelect.required = !isNewVendorProduct && !isRelationship;
       vendorNameInput.required = isNewVendorProduct;
-      notesInput.required = isVendorNote || isProductNote;
+      notesInput.required = false;
       productNameInput.required = typesThatNeedProductToken.has(proposalType.value) && !isRelationship;
-      if (isProductNote) {
-        productIdInput.required = true;
-      } else {
-        productIdInput.required = false;
-      }
+      productIdInput.required = false;
       if (isNewVendorProduct) {
         vendorSelect.value = "";
         vendorNameInput.value = "";

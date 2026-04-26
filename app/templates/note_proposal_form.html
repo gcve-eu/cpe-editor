@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Submit note proposal{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="page-header">
+    <h1>Submit a note proposal</h1>
+    <div class="action-row">
+      <button type="submit" form="note-proposal-form"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit note</button>
+    </div>
+  </div>
+  <p class="muted">This form is only for proposing notes. Use the main proposal form for CPE, product, vendor, and relationship changes.</p>
+
+  <form method="post" id="note-proposal-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if preselected_vendor %}
+      <input type="hidden" name="vendor_id" value="{{ preselected_vendor.id }}">
+    {% endif %}
+    {% if preselected_product %}
+      <input type="hidden" name="product_id" value="{{ preselected_product.id }}">
+    {% endif %}
+
+    <div class="form-section required">
+      <h2>Target record</h2>
+      {% if preselected_vendor %}
+        <p>
+          Vendor: <strong>{{ preselected_vendor.title or preselected_vendor.name }}</strong>
+          <span class="muted">(<code>{{ preselected_vendor.name }}</code>)</span>
+        </p>
+      {% elif preselected_product %}
+        <p>
+          Product: <strong>{{ preselected_product.title or preselected_product.name }}</strong>
+          <span class="muted">({{ preselected_product.vendor.title or preselected_product.vendor.name }}/<code>{{ preselected_product.name }}</code>)</span>
+        </p>
+      {% else %}
+        <p class="muted">Open this form from a vendor or product page to preselect the note target.</p>
+      {% endif %}
+
+      <label for="proposed_notes">Proposed note <span class="required-marker">*</span></label>
+      <textarea id="proposed_notes" name="proposed_notes" required></textarea>
+    </div>
+
+    <div class="form-section">
+      <h2>Optional details</h2>
+      <div class="grid grid-2">
+        <div>
+          <label for="submitter_name">Your name (optional)</label>
+          <input id="submitter_name" name="submitter_name" placeholder="Optional">
+        </div>
+        <div>
+          <label for="submitter_email">Your email (optional)</label>
+          <input id="submitter_email" name="submitter_email" type="email" placeholder="Optional">
+        </div>
+      </div>
+
+      <label for="rationale">Why should this note be added or updated? (optional)</label>
+      <textarea id="rationale" name="rationale" placeholder="Optional context for reviewers"></textarea>
+    </div>
+  </form>
+</div>
+{% endblock %}

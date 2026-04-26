@@ -7,7 +7,7 @@
     <div class="action-row">
       <a
         class="button"
-        href="{{ url_for('main.proposal_new', proposal_type='edit_product_note', vendor_id=product.vendor_id, product_id=product.id) }}"
+        href="{{ url_for('main.note_proposal_new', product_id=product.id) }}"
       >
         <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>Propose a note
       </a>

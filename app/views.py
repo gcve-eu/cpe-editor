@@ -873,8 +873,6 @@ def proposal_new():
         "new_cpe",
         "new_product",
         "new_vendor_product",
-        "edit_vendor_note",
-        "edit_product_note",
         "new_record_relationship",
     }
     if preselected_proposal_type not in allowed_types:
@@ -894,6 +892,9 @@ def proposal_new():
 
     if request.method == "POST":
         proposal_type = request.form.get("proposal_type", "edit_cpe")
+        if proposal_type not in allowed_types:
+            flash("Please choose a valid proposal type.", "danger")
+            return redirect(url_for("main.proposal_new"))
         vendor_id = request.form.get("vendor_id") or None
         product_id = request.form.get("product_id") or None
         cpe_entry_id = request.form.get("cpe_entry_id") or None
@@ -970,17 +971,6 @@ def proposal_new():
                 proposal.proposed_other,
             )
 
-        if proposal_type == "edit_vendor_note" and not proposal.vendor_id:
-            flash("Please select an existing vendor for a vendor note proposal.", "danger")
-            return redirect(url_for("main.proposal_new", proposal_type="edit_vendor_note"))
-
-        if proposal_type == "edit_product_note" and not proposal.product_id:
-            flash("Please select an existing product for a product note proposal.", "danger")
-            return redirect(url_for("main.proposal_new", proposal_type="edit_product_note"))
-
-        if proposal_type in {"edit_vendor_note", "edit_product_note"} and not (proposal.proposed_notes or "").strip():
-            flash("Please provide the proposed note text.", "danger")
-            return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
         if proposal_type == "new_record_relationship":
             if proposal.proposed_relationship_type not in RELATIONSHIP_TYPE_DESCRIPTIONS:
                 flash("Please choose a valid relationship type.", "danger")
@@ -1014,6 +1004,77 @@ def proposal_new():
         preselected_vendor=preselected_vendor,
         preselected_product=preselected_product,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
+    )
+
+
+@bp.route("/proposals/note/new", methods=["GET", "POST"])
+def note_proposal_new():
+    preselected_vendor_id = request.args.get("vendor_id", type=int)
+    preselected_product_id = request.args.get("product_id", type=int)
+
+    preselected_vendor = Vendor.query.get(preselected_vendor_id) if preselected_vendor_id else None
+    preselected_product = Product.query.get(preselected_product_id) if preselected_product_id else None
+    if preselected_vendor_id and not preselected_vendor:
+        preselected_vendor_id = None
+    if preselected_product_id and not preselected_product:
+        preselected_product_id = None
+
+    if preselected_vendor_id and preselected_product_id:
+        preselected_vendor_id = None
+        preselected_product_id = None
+        preselected_vendor = None
+        preselected_product = None
+
+    if request.method == "POST":
+        submitter_ip = _get_request_ip()
+        if _is_rate_limited_for_ip(submitter_ip):
+            limit = current_app.config.get("PROPOSAL_RATE_LIMIT_PER_HOUR", 10)
+            flash(
+                f"Rate limit reached for your IP address. Please wait before submitting more proposals (limit: {limit} per hour).",
+                "danger",
+            )
+            return redirect(
+                url_for(
+                    "main.note_proposal_new",
+                    vendor_id=request.form.get("vendor_id", type=int),
+                    product_id=request.form.get("product_id", type=int),
+                )
+            )
+
+        vendor_id = request.form.get("vendor_id", type=int)
+        product_id = request.form.get("product_id", type=int)
+        note_text = (request.form.get("proposed_notes") or "").strip()
+
+        if bool(vendor_id) == bool(product_id):
+            flash("Please submit a note for exactly one record (vendor or product).", "danger")
+            return redirect(url_for("main.note_proposal_new"))
+
+        if not note_text:
+            flash("Please provide the proposed note text.", "danger")
+            return redirect(
+                url_for("main.note_proposal_new", vendor_id=vendor_id, product_id=product_id)
+            )
+
+        proposal = Proposal(
+            proposal_type="edit_vendor_note" if vendor_id else "edit_product_note",
+            submitter_name=request.form.get("submitter_name"),
+            submitter_email=request.form.get("submitter_email"),
+            submitter_ip=submitter_ip,
+            rationale=request.form.get("rationale"),
+            vendor_id=vendor_id,
+            product_id=product_id,
+            proposed_notes=note_text,
+        )
+
+        db.session.add(proposal)
+        db.session.commit()
+        flash("Note proposal submitted. An admin will review it.", "success")
+        return redirect(url_for("main.index"))
+
+    return render_template(
+        "note_proposal_form.html",
+        preselected_vendor=preselected_vendor,
+        preselected_product=preselected_product,
     )
 
 
