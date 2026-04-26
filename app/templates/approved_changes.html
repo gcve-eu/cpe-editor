@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Approved Changes{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Publicly approved changes</h1>
+  <p class="muted">Most recent approvals first.</p>
+  {% if changes %}
+    <p class="muted">Showing page {{ page }} of {{ total_pages }} ({{ total_changes }} approved changes).</p>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Approved</th>
+          <th>Type</th>
+          <th>Summary</th>
+          <th>Navigate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for proposal in changes %}
+          {% set approved_timestamp = proposal.reviewed_at or proposal.created_at %}
+          <tr>
+            <td>#{{ proposal.id }}</td>
+            <td>{{ approved_timestamp.strftime("%Y-%m-%d %H:%M UTC") if approved_timestamp else "Unknown" }}</td>
+            <td>{{ proposal.proposal_type }}</td>
+            <td>
+              {{ proposal_summary(proposal) }}
+              {% set links = proposal_focus_links(proposal) %}
+              {% if links %}
+                <div class="muted" style="margin-top: .35rem;">
+                  {% for link in links %}
+                    <a href="{{ url_for(link.endpoint, **link.kwargs) }}">{{ link.label }}</a>{% if not loop.last %} · {% endif %}
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </td>
+            <td>
+              <a class="button" href="{{ url_for('main.approved_change_detail', proposal_id=proposal.id) }}">
+                <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>Open
+              </a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: .9rem;">
+      {% if has_prev %}
+        <a class="button" href="{{ url_for('main.approved_changes', page=page - 1) }}">
+          <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous page
+        </a>
+      {% endif %}
+      {% if has_next %}
+        <a class="button" href="{{ url_for('main.approved_changes', page=page + 1) }}">
+          Next page<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+        </a>
+      {% endif %}
+    </div>
+  {% else %}
+    <p>No approved changes are public yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

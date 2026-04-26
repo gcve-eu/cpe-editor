@@ -260,6 +260,67 @@ def _serialize_cpe(cpe):
     }
 
 
+def _proposal_focus_links(proposal: Proposal):
+    links = []
+    seen = set()
+
+    def add_entity_link(label: str, endpoint: str, **kwargs):
+        key = (endpoint, tuple(sorted(kwargs.items())))
+        if key in seen:
+            return
+        seen.add(key)
+        links.append({"label": label, "endpoint": endpoint, "kwargs": kwargs})
+
+    vendor_refs = [proposal.vendor, proposal.source_vendor, proposal.target_vendor]
+    for vendor in vendor_refs:
+        if vendor:
+            add_entity_link(
+                f"Vendor: {vendor.title or vendor.name}",
+                "main.vendor_detail",
+                vendor_uuid=vendor.uuid,
+            )
+
+    product_refs = [proposal.product, proposal.source_product, proposal.target_product]
+    for product in product_refs:
+        if product:
+            add_entity_link(
+                f"Product: {product.title or product.name}",
+                "main.product_detail",
+                product_uuid=product.uuid,
+            )
+
+    if proposal.cpe_entry:
+        add_entity_link(
+            f"CPE #{proposal.cpe_entry.id}",
+            "main.cpe_detail",
+            cpe_id=proposal.cpe_entry.id,
+        )
+
+    return links
+
+
+def _proposal_summary(proposal: Proposal):
+    if proposal.proposal_type == "new_vendor_product":
+        return (
+            f"Added vendor '{proposal.proposed_vendor_title or proposal.proposed_vendor_name}' "
+            f"and product '{proposal.proposed_product_title or proposal.proposed_product_name}'."
+        )
+    if proposal.proposal_type == "new_product":
+        return f"Added product '{proposal.proposed_product_title or proposal.proposed_product_name}'."
+    if proposal.proposal_type == "new_cpe":
+        return f"Added CPE candidate {proposal.proposed_cpe_uri or 'for an existing record'}."
+    if proposal.proposal_type == "edit_cpe":
+        return f"Approved CPE edit to {proposal.proposed_cpe_uri or 'an existing CPE entry'}."
+    if proposal.proposal_type == "edit_vendor_note":
+        return "Approved a vendor note update."
+    if proposal.proposal_type == "edit_product_note":
+        return "Approved a product note update."
+    if proposal.proposal_type == "new_record_relationship":
+        relationship_label = proposal.proposed_relationship_type or "relationship"
+        return f"Approved a {relationship_label} relationship."
+    return "Approved proposal."
+
+
 def _collect_related_products_for_combined_view(product: Product):
     related_vendor_ids = {product.vendor_id}
     vendor_queue = [product.vendor_id]
@@ -926,6 +987,58 @@ def proposal_new():
         preselected_vendor=preselected_vendor,
         preselected_product=preselected_product,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
+    )
+
+
+@bp.route("/changes")
+def approved_changes():
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = 20
+
+    ordered_query = Proposal.query.filter_by(status="accepted").order_by(
+        Proposal.reviewed_at.desc(),
+        Proposal.created_at.desc(),
+        Proposal.id.desc(),
+    )
+    total_changes = ordered_query.count()
+    total_pages = max((total_changes + per_page - 1) // per_page, 1)
+    if page > total_pages:
+        page = total_pages
+    changes = ordered_query.offset((page - 1) * per_page).limit(per_page).all()
+
+    return render_template(
+        "approved_changes.html",
+        changes=changes,
+        page=page,
+        total_pages=total_pages,
+        has_prev=page > 1,
+        has_next=page < total_pages,
+        total_changes=total_changes,
+        proposal_summary=_proposal_summary,
+        proposal_focus_links=_proposal_focus_links,
+    )
+
+
+@bp.route("/changes/<int:proposal_id>")
+def approved_change_detail(proposal_id):
+    proposal = Proposal.query.filter_by(id=proposal_id, status="accepted").first_or_404()
+    ordered_ids = [
+        row.id
+        for row in Proposal.query.filter_by(status="accepted")
+        .order_by(Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc())
+        .all()
+    ]
+    current_index = ordered_ids.index(proposal.id)
+    previous_change_id = ordered_ids[current_index - 1] if current_index > 0 else None
+    next_change_id = ordered_ids[current_index + 1] if current_index < len(ordered_ids) - 1 else None
+
+    return render_template(
+        "approved_change_detail.html",
+        proposal=proposal,
+        previous_change_id=previous_change_id,
+        next_change_id=next_change_id,
+        proposal_summary=_proposal_summary,
+        proposal_focus_links=_proposal_focus_links,
     )
 
 
