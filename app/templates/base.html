@@ -129,6 +129,15 @@
     .button.secondary, button.secondary { background: #4b5563; }
     .button.warning, button.warning { background: #a36a00; }
     .button.danger, button.danger { background: #b3261e; }
+    .collapse-toggle {
+      margin-top: .65rem;
+      background: #eef2ff;
+      color: #1e3a8a;
+      border: 1px solid #c7d2fe;
+      font-weight: 600;
+      padding: .45rem .75rem;
+    }
+    .collapse-toggle:hover { background: #e0e7ff; }
     .page-header {
       display: flex;
       justify-content: space-between;
@@ -218,5 +227,46 @@
 <footer>
   <p class="muted">An interface for moderated CPE editing by the <a href="https://gcve.eu" target="_blank" rel="noopener noreferrer">GCVE initiative</a> and open source at <a href="https://github.com/adulau/cpe-editor" target="_blank" rel="noopener noreferrer">GitHub: adulau/cpe-editor</a>.</p>
 </footer>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const collapseLists = document.querySelectorAll(".js-collapsible-list");
+
+    collapseLists.forEach((listEl, index) => {
+      const itemSelector = listEl.dataset.itemSelector || ":scope > li";
+      const items = listEl.querySelectorAll(itemSelector);
+      const limit = Number(listEl.dataset.collapseLimit || 5);
+
+      if (items.length <= limit) {
+        return;
+      }
+
+      const hiddenItems = Array.from(items).slice(limit);
+      hiddenItems.forEach((item) => {
+        item.hidden = true;
+      });
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "collapse-toggle";
+      button.setAttribute("aria-expanded", "false");
+      button.setAttribute("aria-controls", `collapsible-list-${index}`);
+      button.textContent = `Show ${items.length - limit} more`;
+      listEl.id = `collapsible-list-${index}`;
+
+      button.addEventListener("click", () => {
+        const isExpanded = button.getAttribute("aria-expanded") === "true";
+
+        hiddenItems.forEach((item) => {
+          item.hidden = isExpanded;
+        });
+
+        button.setAttribute("aria-expanded", String(!isExpanded));
+        button.textContent = isExpanded ? `Show ${items.length - limit} more` : "Show less";
+      });
+
+      listEl.insertAdjacentElement("afterend", button);
+    });
+  });
+</script>
 </body>
 </html>

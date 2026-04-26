@@ -51,7 +51,7 @@
       <thead>
         <tr><th>CPE</th><th>Vendor / Product</th><th>Version</th></tr>
       </thead>
-      <tbody>
+      <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
       {% for cpe in results %}
         <tr>
           <td><a href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}"><code>{{ cpe.cpe_uri }}</code></a></td>
