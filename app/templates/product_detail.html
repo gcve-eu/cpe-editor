@@ -2,7 +2,23 @@
 {% block title %}Product {{ product.title or product.name }}{% endblock %}
 {% block content %}
 <div class="card">
-  <h1>{{ product.title or product.name }}</h1>
+  <div class="page-header">
+    <h1>{{ product.title or product.name }}</h1>
+    <div class="action-row">
+      <a
+        class="button"
+        href="{{ url_for('main.proposal_new', proposal_type='edit_product_note', vendor_id=product.vendor_id, product_id=product.id) }}"
+      >
+        <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>Propose a note
+      </a>
+      <a
+        class="button"
+        href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=product.vendor_id, product_id=product.id) }}"
+      >
+        <i class="fa-solid fa-link" aria-hidden="true"></i>Propose a relationship
+      </a>
+    </div>
+  </div>
   <p class="muted">Vendor: <a href="{{ url_for('main.vendor_detail', vendor_uuid=product.vendor.uuid) }}">{{ product.vendor.title or product.vendor.name }}</a></p>
   <p class="muted">Vendor UUID: <code>{{ product.vendor.uuid }}</code></p>
   <p class="muted">Product token: <code>{{ product.name }}</code></p>
@@ -120,20 +136,6 @@
 
 <div class="card">
   <h2>CPE entries</h2>
-  <p>
-    <a
-      class="button"
-      href="{{ url_for('main.proposal_new', proposal_type='edit_product_note', vendor_id=product.vendor_id, product_id=product.id) }}"
-    >
-      <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>Propose a note for this product
-    </a>
-    <a
-      class="button"
-      href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=product.vendor_id, product_id=product.id) }}"
-    >
-      <i class="fa-solid fa-link" aria-hidden="true"></i>Propose a relationship for this product
-    </a>
-  </p>
   <table>
     <thead><tr><th>CPE URI</th><th>Version</th><th>Part</th></tr></thead>
     <tbody>

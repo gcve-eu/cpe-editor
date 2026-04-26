@@ -2,7 +2,13 @@
 {% block title %}Review proposal #{{ proposal.id }}{% endblock %}
 {% block content %}
 <div class="card">
-  <h1>Review proposal #{{ proposal.id }}</h1>
+  <div class="page-header">
+    <h1>Review proposal #{{ proposal.id }}</h1>
+    <div class="action-row">
+      <button type="submit" name="action" value="accept" form="review-form"><i class="fa-solid fa-check" aria-hidden="true"></i>Accept</button>
+      <button class="button danger" type="submit" name="action" value="reject" form="review-form"><i class="fa-solid fa-xmark" aria-hidden="true"></i>Reject</button>
+    </div>
+  </div>
   <p>
     <span class="pill">{{ proposal.proposal_type }}</span>
     <span class="pill">{{ proposal.status }}</span>
@@ -34,14 +40,10 @@
 </div>
 
 <div class="card">
-  <form method="post">
+  <form method="post" id="review-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="review_comment">Review comment</label>
     <textarea id="review_comment" name="review_comment">{{ proposal.review_comment or '' }}</textarea>
-    <p>
-      <button type="submit" name="action" value="accept"><i class="fa-solid fa-check" aria-hidden="true"></i>Accept</button>
-      <button class="button danger" type="submit" name="action" value="reject"><i class="fa-solid fa-xmark" aria-hidden="true"></i>Reject</button>
-    </p>
   </form>
 </div>
 {% endblock %}

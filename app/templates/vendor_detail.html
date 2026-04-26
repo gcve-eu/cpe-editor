@@ -2,7 +2,29 @@
 {% block title %}Vendor {{ vendor.title or vendor.name }}{% endblock %}
 {% block content %}
 <div class="card">
-  <h1>{{ vendor.title or vendor.name }}</h1>
+  <div class="page-header">
+    <h1>{{ vendor.title or vendor.name }}</h1>
+    <div class="action-row">
+      <a
+        class="button"
+        href="{{ url_for('main.proposal_new', proposal_type='new_product', vendor_id=vendor.id) }}"
+      >
+        <i class="fa-solid fa-box-open" aria-hidden="true"></i>Propose a product
+      </a>
+      <a
+        class="button"
+        href="{{ url_for('main.proposal_new', proposal_type='edit_vendor_note', vendor_id=vendor.id) }}"
+      >
+        <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>Propose a note
+      </a>
+      <a
+        class="button"
+        href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=vendor.id) }}"
+      >
+        <i class="fa-solid fa-link" aria-hidden="true"></i>Propose a relationship
+      </a>
+    </div>
+  </div>
   <p class="muted">Vendor token: <code>{{ vendor.name }}</code></p>
   <p class="muted">Vendor UUID: <code>{{ vendor.uuid }}</code></p>
   <p>{{ vendor.notes or "No vendor notes yet." }}</p>
@@ -80,26 +102,6 @@
       <li>No products yet.</li>
     {% endfor %}
   </ul>
-  <p>
-    <a
-      class="button"
-      href="{{ url_for('main.proposal_new', proposal_type='new_product', vendor_id=vendor.id) }}"
-    >
-      <i class="fa-solid fa-box-open" aria-hidden="true"></i>Propose a product for this vendor
-    </a>
-    <a
-      class="button"
-      href="{{ url_for('main.proposal_new', proposal_type='edit_vendor_note', vendor_id=vendor.id) }}"
-    >
-      <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>Propose a note for this vendor
-    </a>
-    <a
-      class="button"
-      href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=vendor.id) }}"
-    >
-      <i class="fa-solid fa-link" aria-hidden="true"></i>Propose a relationship for this vendor
-    </a>
-  </p>
 </div>
 
 <div class="card">

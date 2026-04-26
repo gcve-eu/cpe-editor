@@ -3,7 +3,24 @@
 {% block content %}
 <div class="card">
   {% set approved_timestamp = proposal.reviewed_at or proposal.created_at %}
-  <h1>Approved change #{{ proposal.id }}</h1>
+  <div class="page-header">
+    <h1>Approved change #{{ proposal.id }}</h1>
+    <div class="action-row">
+      <a class="button secondary" href="{{ url_for('main.approved_changes') }}">
+        <i class="fa-solid fa-list" aria-hidden="true"></i>Back to list
+      </a>
+      {% if previous_change_id %}
+        <a class="button" href="{{ url_for('main.approved_change_detail', proposal_id=previous_change_id) }}">
+          <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Newer change
+        </a>
+      {% endif %}
+      {% if next_change_id %}
+        <a class="button" href="{{ url_for('main.approved_change_detail', proposal_id=next_change_id) }}">
+          Older change<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+        </a>
+      {% endif %}
+    </div>
+  </div>
   <p class="muted">
     {{ proposal.proposal_type }} · Approved on {{ approved_timestamp.strftime("%Y-%m-%d %H:%M UTC") if approved_timestamp else "Unknown date" }}
   </p>
@@ -23,21 +40,5 @@
     <h2>Moderator comment</h2>
     <p>{{ proposal.review_comment }}</p>
   {% endif %}
-
-  <div style="display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .9rem;">
-    <a class="button secondary" href="{{ url_for('main.approved_changes') }}">
-      <i class="fa-solid fa-list" aria-hidden="true"></i>Back to list
-    </a>
-    {% if previous_change_id %}
-      <a class="button" href="{{ url_for('main.approved_change_detail', proposal_id=previous_change_id) }}">
-        <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Newer change
-      </a>
-    {% endif %}
-    {% if next_change_id %}
-      <a class="button" href="{{ url_for('main.approved_change_detail', proposal_id=next_change_id) }}">
-        Older change<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-      </a>
-    {% endif %}
-  </div>
 </div>
 {% endblock %}
