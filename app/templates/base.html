@@ -6,7 +6,23 @@
   <title>GCVE - {% block title %}CPE Editor{% endblock %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
   <style>
+    @font-face {
+      font-family: "Inter";
+      src: url('{{ url_for("static", filename="fonts/InterVariable.woff2") }}') format("woff2");
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Inter";
+      src: url('{{ url_for("static", filename="fonts/InterVariable-Italic.woff2") }}') format("woff2");
+      font-style: italic;
+      font-weight: 100 900;
+      font-display: swap;
+    }
     :root {
+      --font-sans: "Inter", "Inter var", "Avenir Next", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --bg: #f2f5fb;
       --card-bg: #ffffff;
       --text: #1f2937;
@@ -18,7 +34,7 @@
     }
     * { box-sizing: border-box; }
     body {
-      font-family: Inter, "Segoe UI", Roboto, system-ui, sans-serif;
+      font-family: var(--font-sans);
       margin: 0;
       background: radial-gradient(circle at top, #eef4ff 0%, var(--bg) 45%);
       color: var(--text);
@@ -186,7 +202,11 @@
     }
     .info-box h2, .info-box h3 { margin: 0 0 .25rem; font-size: 1.05rem; }
     .info-box p { margin: 0; }
-    code { white-space: pre-wrap; word-break: break-word; }
+    code {
+      font-family: var(--font-mono);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     footer { padding-top: .25rem; }
   </style>
 </head>
