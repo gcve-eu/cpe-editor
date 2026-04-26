@@ -1,41 +1,47 @@
-# CPE Editor 
+# CPE Editor
 
-A small Flask for a moderated CPE editor:
+A modern Flask application for browsing, curating, and publishing CPE (Common Platform Enumeration) data with a built-in moderation workflow, API access, and dataset portability.
 
-- anyone can search vendors, products, and CPE entries
-- anyone can submit anonymous proposals
-- an admin can review, accept, or reject proposals
-- accepted proposals are applied to the main data tables
-- a CLI importer can populate the database from the NVD CPE 2.0 feed
+## Highlights
 
-## What this skeleton includes
+- **Fast catalog browsing** for vendors, products, and CPE entries.
+- **Powerful search** across names, titles, versions, and full CPE URIs.
+- **Structured proposals** for edits, additions, and relationship changes.
+- **Moderation dashboard** for reviewing and approving submitted changes.
+- **Approved change feed** with dedicated pages plus RSS/Atom endpoints.
+- **Read-only OpenAPI interface** with interactive Swagger docs.
+- **NVD feed ingestion** for both CPE and CPE Match archives.
+- **Portable dataset export/import** to migrate curated data between instances.
+- **Stable deterministic UUIDs** for vendor and product identity consistency.
 
-- SQLite storage with SQLAlchemy models
-- vendor / product / CPE browse pages
-- simple search over vendor, product, title, version, and CPE URI
-- dedicated vendor/product prefix filters optimized for faster lookup
-- proposal workflow for:
-  - editing an existing CPE
-  - adding a CPE to an existing vendor/product
-  - adding a product to an existing vendor
-  - adding a new vendor and product
-- minimal admin login using environment variables
-- CLI command to import the official NVD CPE 2.0 feed
-- UUID columns on vendors and products
+## Core capabilities
 
-## What this skeleton does **not** yet include
+### Public experience
 
-This is intentionally a skeleton. Before production use, you should add:
+- Browse vendors, products, and CPE records.
+- Drill into vendor/product detail pages and linked relationships.
+- Submit anonymous proposals to:
+  - edit an existing CPE
+  - add a CPE to an existing vendor/product
+  - add a product to an existing vendor
+  - add a new vendor and product
+  - attach note proposals to entities
+- Explore the approved change history and detail pages.
 
-- real authentication and authorization
-- CSRF protection
-- rate limiting / spam protection / CAPTCHA for anonymous submissions
-- CPE format validation and normalization against your own rules
-- a searchable product picker instead of raw `product_id` / `cpe_entry_id` fields
-- duplicate detection and merge suggestions
-- audit log / moderation history
-- pagination and richer filters
-- unit tests and migrations
+### Moderation and operations
+
+- Admin login and protected review workflows.
+- Accept/reject proposal queue with server-side application of accepted updates.
+- Optional request rate limiting for anonymous submissions.
+- Built-in CSRF token handling for form submissions.
+- SQLite optimization defaults (WAL mode, busy timeout, reindex support).
+
+### API and integrations
+
+- OpenAPI spec endpoint and Swagger UI.
+- Search and pagination for API list endpoints.
+- Vendor/product suggestion endpoints for picker-style UIs.
+- Import/export commands for offline transfer and environment bootstrapping.
 
 ## Quick start
 
@@ -49,25 +55,43 @@ python run.py
 
 Then open the local URL printed by Flask.
 
-Admin defaults are read from environment variables:
+### Configuration (environment variables)
 
+- `DATABASE_URL`
+- `SECRET_KEY`
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
-- `PROPOSAL_RATE_LIMIT_PER_HOUR` (default: `10`; set to `0` or a negative value to disable rate limiting)
+- `PROPOSAL_RATE_LIMIT_PER_HOUR` (default `10`; set `0` or negative to disable)
+- `SQLITE_BUSY_TIMEOUT_SECONDS` (default `30`)
+
+## Web routes
+
+- Home: `GET /`
+- Vendors: `GET /vendors`
+- Vendor detail: `GET /vendors/{vendor_uuid}`
+- Product detail: `GET /products/{product_uuid}`
+- CPE detail: `GET /cpes/{cpe_id}`
+- Statistics: `GET /statistics`
+- Proposal form: `GET|POST /proposals/new`
+- Note proposal form: `GET|POST /proposals/note/new`
+- Approved changes: `GET /changes`
+- Approved change detail: `GET /changes/{proposal_id}`
+- RSS feed: `GET /changes.rss`
+- Atom feed: `GET /changes.atom`
 
 ## OpenAPI interface
 
-This project now includes a read-only OpenAPI interface for browsing core records.
-
 - Swagger UI: `GET /api/docs`
-- OpenAPI spec file: `GET /api/openapi.yaml`
+- OpenAPI spec: `GET /api/openapi.yaml`
 
-Currently documented API endpoints:
+Documented endpoints include:
 
-- `GET /api/vendors` (search and pagination)
+- `GET /api/vendors`
 - `GET /api/vendors/{vendor_uuid}`
+- `GET /api/vendors/suggest`
 - `GET /api/products/{product_uuid}`
-- `GET /api/cpes` (search and pagination)
+- `GET /api/products/suggest`
+- `GET /api/cpes`
 - `GET /api/cpes/{cpe_id}`
 
 ### Quick API examples
@@ -77,102 +101,71 @@ curl "http://127.0.0.1:5000/api/vendors?page=1&per_page=5"
 curl "http://127.0.0.1:5000/api/cpes?vendor_q=microsoft&part=a&per_page=10"
 ```
 
-## Import the NVD CPE feed
+## CLI commands
 
-The importer accepts either a URL or a local tarball path.
+### Database lifecycle
 
-```bash
-python -m flask --app run import-nvd-cpes
-```
-
-Or from a file you already downloaded:
+Initialize schema:
 
 ```bash
-python -m flask --app run import-nvd-cpes --source /path/to/nvdcpe-2.0.tar.gz
+python -m flask --app run init-db
 ```
 
-To replace existing vendor/product/CPE data first:
+Reset schema/data:
 
 ```bash
-python -m flask --app run import-nvd-cpes --replace
+python -m flask --app run init-db --drop
 ```
 
-What the importer does:
-
-- reads the NVD CPE 2.0 tar.gz feed
-- creates vendors and products as needed
-- assigns deterministic UUIDs to vendors and products
-- imports or updates CPE entries by `cpe_uri`
-- stores `cpeNameId`, `deprecated`, and `deprecatedBy` when present
-- reconciles existing vendor/product UUIDs to deterministic UUIDv5 values
-
-## Import the NVD CPE Match feed
-
-The CPE Match importer reads concrete `cpeName` values from each `matchString.matches[]`
-entry and imports only records that do not already exist by `cpe_uri`.
-
-```bash
-python -m flask --app run import-nvd-cpematches
-```
-
-Or from a local archive:
-
-```bash
-python -m flask --app run import-nvd-cpematches --source /path/to/nvdcpematch-2.0.tar.gz
-```
-
-## Notes about UUIDs
-
-- `Vendor.uuid` is generated with UUIDv5 using a vendor-specific namespace and normalized vendor name
-- `Product.uuid` is generated with UUIDv5 using a product-specific namespace and normalized `vendor + product`
-- this makes repeated imports idempotent for vendor/product identity inside this app
-
-## Rebuild indexes / refresh query stats
-
-Use the CLI command below after large imports or bulk edits:
-
-```bash
-python -m flask --app run reindex-db
-```
-
-By default it also refreshes planner statistics (`ANALYZE`). To skip that:
-
-```bash
-python -m flask --app run reindex-db --no-analyze
-```
-
-## Important schema note
-
-Because this skeleton still uses `db.create_all()` and does not yet include Alembic migrations, schema updates may require either:
-
-- additive updates in-place (keeps existing rows):
+Add missing columns without dropping existing rows:
 
 ```bash
 python -m flask --app run init-db --alter
 ```
 
-- or a full rebuild when you intentionally want a clean database:
+Rebuild indexes (and planner stats by default):
 
 ```bash
-rm -f instance/cpe_editor.db
-python -m flask --app run init-db --drop
+python -m flask --app run reindex-db
 ```
 
-## Suggested next improvements
+Skip `ANALYZE` during reindex:
 
-1. Replace the admin login with Flask-Login and hashed passwords.
-2. Add Alembic migrations.
-3. Add WTForms or another form layer with validation.
-4. Add autocomplete endpoints for vendor and product lookup.
-5. Validate imported and proposed CPE names more strictly.
-6. Track diffs when editing existing CPE entries.
-7. Add email notifications for new pending proposals.
-8. Export accepted records as JSON for downstream tooling.
+```bash
+python -m flask --app run reindex-db --no-analyze
+```
 
+### Import NVD CPE feed
 
-## Export a dataset from this app
+```bash
+python -m flask --app run import-nvd-cpes
+```
 
-You can export the full curated dataset from this app and let someone else bootstrap a new instance from that archive instead of re-importing the original NVD feed.
+From a local archive:
+
+```bash
+python -m flask --app run import-nvd-cpes --source /path/to/nvdcpe-2.0.tar.gz
+```
+
+Replace existing vendor/product/CPE data first:
+
+```bash
+python -m flask --app run import-nvd-cpes --replace
+```
+
+### Import NVD CPE Match feed
+
+```bash
+python -m flask --app run import-nvd-cpematches
+```
+
+From a local archive:
+
+```bash
+python -m flask --app run import-nvd-cpematches --source /path/to/nvdcpematch-2.0.tar.gz
+```
+
+### Export dataset
 
 Export vendors, products, relationships, and CPE entries:
 
@@ -180,60 +173,47 @@ Export vendors, products, relationships, and CPE entries:
 python -m flask --app run export-app-dataset
 ```
 
-Choose another output file:
+Custom output path:
 
 ```bash
 python -m flask --app run export-app-dataset --output /path/to/cpe-editor-dataset.tar.gz
 ```
 
-Optionally include moderation proposals too:
+Include proposals:
 
 ```bash
 python -m flask --app run export-app-dataset --include-proposals
 ```
 
-What gets exported:
-
-- vendors with UUIDs
-- products with UUIDs and vendor linkage
-- approved relationships with source/target record UUID linkage
-- CPE entries with all parsed CPE fields and metadata
-- optional proposal records
-- export metadata and counts
-
-## Import a dataset exported by this app
-
-To bootstrap another instance from an archive created by `export-app-dataset`:
+### Import exported dataset
 
 ```bash
 python -m flask --app run import-app-dataset --source /path/to/cpe-editor-dataset.tar.gz
 ```
 
-To replace the existing local dataset first:
+Replace existing data first:
 
 ```bash
 python -m flask --app run import-app-dataset --source /path/to/cpe-editor-dataset.tar.gz --replace
 ```
 
-To skip proposal history while importing:
+Skip proposal history while importing:
 
 ```bash
 python -m flask --app run import-app-dataset --source /path/to/cpe-editor-dataset.tar.gz --replace --no-proposals
 ```
 
-Import behavior:
+## Data model notes
 
-- vendors are matched by UUID first, then by name
-- products are matched by UUID first, then by `(vendor, name)`
-- relationships are matched by `(source, target, relationship_type)`
-- CPE entries are matched by `cpe_uri`, then by `cpeNameId` when available
-- the imported dataset keeps vendor/product UUIDs stable across instances
+- Vendor UUIDs are deterministic UUIDv5 values based on normalized vendor names.
+- Product UUIDs are deterministic UUIDv5 values based on normalized vendor+product names.
+- Repeated imports keep identity stable across compatible instances.
 
-## Suggested git ignore behavior
+## Development notes
 
-A `.gitignore` is included and ignores:
+A `.gitignore` is included to exclude common local artifacts like:
 
-- local SQLite databases under `instance/`
+- SQLite files under `instance/`
 - virtual environments
 - Python cache files
-- local export/import archives and environment files
+- local import/export archives and `.env` files
