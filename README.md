@@ -2,6 +2,8 @@
 
 A modern Flask application for browsing, curating, and publishing CPE (Common Platform Enumeration) data with a built-in moderation workflow, API access, and dataset portability.
 
+<img width="1020" height="1459" alt="CPE Editor Screenshot" src="https://github.com/user-attachments/assets/76e27a2f-a92c-43c9-8d80-05ed87f38448" />
+
 ## Highlights
 
 - **Fast catalog browsing** for vendors, products, and CPE entries.
