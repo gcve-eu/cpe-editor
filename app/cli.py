@@ -154,9 +154,17 @@ def register_cli(app):
 
         vendor_cache = {v.name: v for v in Vendor.query.all()}
         product_cache = {(p.vendor_id, p.name): p for p in Product.query.all()}
+        vendor_uuid_to_id = {v.uuid: v.id for v in vendor_cache.values() if v.uuid}
+        product_uuid_to_id = {p.uuid: p.id for p in product_cache.values() if p.uuid}
+        cpe_name_id_to_id = {
+            c.cpe_name_id: c.id
+            for c in CPEEntry.query.filter(CPEEntry.cpe_name_id.isnot(None)).all()
+            if c.cpe_name_id
+        }
 
         imported = 0
         skipped = 0
+        skipped_uuid_conflicts = 0
         created_vendors = 0
         created_products = 0
         updated = 0
@@ -185,6 +193,11 @@ def register_cli(app):
 
             vendor = vendor_cache.get(vendor_name)
             if not vendor:
+                existing_vendor_id = vendor_uuid_to_id.get(vendor_uuid)
+                if existing_vendor_id is not None:
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
+                    continue
                 vendor = Vendor(
                     uuid=vendor_uuid,
                     name=vendor_name,
@@ -193,13 +206,27 @@ def register_cli(app):
                 db.session.add(vendor)
                 db.session.flush()
                 vendor_cache[vendor_name] = vendor
+                vendor_uuid_to_id[vendor.uuid] = vendor.id
                 created_vendors += 1
             elif vendor.uuid != vendor_uuid:
-                vendor.uuid = vendor_uuid
+                existing_vendor_id = vendor_uuid_to_id.get(vendor_uuid)
+                if existing_vendor_id is None or existing_vendor_id == vendor.id:
+                    vendor_uuid_to_id.pop(vendor.uuid, None)
+                    vendor.uuid = vendor_uuid
+                    vendor_uuid_to_id[vendor.uuid] = vendor.id
+                else:
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
+                    continue
 
             product_key = (vendor.id, product_name)
             product = product_cache.get(product_key)
             if not product:
+                existing_product_id = product_uuid_to_id.get(product_uuid)
+                if existing_product_id is not None:
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
+                    continue
                 product = Product(
                     uuid=product_uuid,
                     vendor_id=vendor.id,
@@ -209,9 +236,18 @@ def register_cli(app):
                 db.session.add(product)
                 db.session.flush()
                 product_cache[product_key] = product
+                product_uuid_to_id[product.uuid] = product.id
                 created_products += 1
             elif product.uuid != product_uuid:
-                product.uuid = product_uuid
+                existing_product_id = product_uuid_to_id.get(product_uuid)
+                if existing_product_id is None or existing_product_id == product.id:
+                    product_uuid_to_id.pop(product.uuid, None)
+                    product.uuid = product_uuid
+                    product_uuid_to_id[product.uuid] = product.id
+                else:
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
+                    continue
 
             titles = cpe_data.get("titles") or []
             title = pick_english_title(titles) or titleize_token(product_name)
@@ -226,9 +262,19 @@ def register_cli(app):
 
             existing = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
             if existing:
+                incoming_cpe_name_id = cpe_data.get("cpeNameId")
+                if incoming_cpe_name_id:
+                    existing_cpe_row_id = cpe_name_id_to_id.get(incoming_cpe_name_id)
+                    if existing_cpe_row_id is not None and existing_cpe_row_id != existing.id:
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
                 existing.vendor_id = vendor.id
                 existing.product_id = product.id
-                existing.cpe_name_id = cpe_data.get("cpeNameId") or existing.cpe_name_id
+                if incoming_cpe_name_id:
+                    cpe_name_id_to_id.pop(existing.cpe_name_id, None)
+                    existing.cpe_name_id = incoming_cpe_name_id
+                    cpe_name_id_to_id[existing.cpe_name_id] = existing.id
                 existing.deprecated = bool(cpe_data.get("deprecated", False))
                 existing.deprecated_by = deprecated_by
                 existing.part = parsed["part"]
@@ -243,27 +289,34 @@ def register_cli(app):
                 existing.title = title
                 updated += 1
             else:
-                db.session.add(
-                    CPEEntry(
-                        vendor_id=vendor.id,
-                        product_id=product.id,
-                        cpe_uri=cpe_uri,
-                        cpe_name_id=cpe_data.get("cpeNameId"),
-                        deprecated=bool(cpe_data.get("deprecated", False)),
-                        deprecated_by=deprecated_by,
-                        part=parsed["part"],
-                        version=parsed["version"],
-                        update=parsed["update"],
-                        edition=parsed["edition"],
-                        language=parsed["language"],
-                        sw_edition=parsed["sw_edition"],
-                        target_sw=parsed["target_sw"],
-                        target_hw=parsed["target_hw"],
-                        other=parsed["other"],
-                        title=title,
-                        notes="Imported from NVD CPE 2.0 feed",
-                    )
+                incoming_cpe_name_id = cpe_data.get("cpeNameId")
+                if incoming_cpe_name_id and cpe_name_id_to_id.get(incoming_cpe_name_id) is not None:
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
+                    continue
+                cpe_entry = CPEEntry(
+                    vendor_id=vendor.id,
+                    product_id=product.id,
+                    cpe_uri=cpe_uri,
+                    cpe_name_id=cpe_data.get("cpeNameId"),
+                    deprecated=bool(cpe_data.get("deprecated", False)),
+                    deprecated_by=deprecated_by,
+                    part=parsed["part"],
+                    version=parsed["version"],
+                    update=parsed["update"],
+                    edition=parsed["edition"],
+                    language=parsed["language"],
+                    sw_edition=parsed["sw_edition"],
+                    target_sw=parsed["target_sw"],
+                    target_hw=parsed["target_hw"],
+                    other=parsed["other"],
+                    title=title,
+                    notes="Imported from NVD CPE 2.0 feed",
                 )
+                db.session.add(cpe_entry)
+                if incoming_cpe_name_id:
+                    db.session.flush()
+                    cpe_name_id_to_id[incoming_cpe_name_id] = cpe_entry.id
                 imported += 1
 
             total_processed = imported + updated + skipped
@@ -278,7 +331,8 @@ def register_cli(app):
         db.session.commit()
         click.echo(
             f"Done. new CPEs={imported}, updated={updated}, vendors={created_vendors}, "
-            f"products={created_products}, skipped={skipped}"
+            f"products={created_products}, skipped={skipped} "
+            f"(uuid-conflicts={skipped_uuid_conflicts})"
         )
 
     @app.cli.command("import-nvd-cpematches")
@@ -301,9 +355,17 @@ def register_cli(app):
 
         vendor_cache = {v.name: v for v in Vendor.query.all()}
         product_cache = {(p.vendor_id, p.name): p for p in Product.query.all()}
+        vendor_uuid_to_id = {v.uuid: v.id for v in vendor_cache.values() if v.uuid}
+        product_uuid_to_id = {p.uuid: p.id for p in product_cache.values() if p.uuid}
+        cpe_name_id_to_id = {
+            c.cpe_name_id: c.id
+            for c in CPEEntry.query.filter(CPEEntry.cpe_name_id.isnot(None)).all()
+            if c.cpe_name_id
+        }
 
         imported = 0
         skipped = 0
+        skipped_uuid_conflicts = 0
         created_vendors = 0
         created_products = 0
 
@@ -322,6 +384,11 @@ def register_cli(app):
                 cpe_uri = entry.get("cpeName")
                 if not cpe_uri:
                     skipped += 1
+                    continue
+                cpe_name_id = entry.get("cpeNameId")
+                if cpe_name_id and cpe_name_id_to_id.get(cpe_name_id) is not None:
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
                     continue
 
                 existing = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
@@ -342,6 +409,11 @@ def register_cli(app):
 
                 vendor = vendor_cache.get(vendor_name)
                 if not vendor:
+                    existing_vendor_id = vendor_uuid_to_id.get(vendor_uuid)
+                    if existing_vendor_id is not None:
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
                     vendor = Vendor(
                         uuid=vendor_uuid,
                         name=vendor_name,
@@ -350,13 +422,27 @@ def register_cli(app):
                     db.session.add(vendor)
                     db.session.flush()
                     vendor_cache[vendor_name] = vendor
+                    vendor_uuid_to_id[vendor.uuid] = vendor.id
                     created_vendors += 1
                 elif vendor.uuid != vendor_uuid:
-                    vendor.uuid = vendor_uuid
+                    existing_vendor_id = vendor_uuid_to_id.get(vendor_uuid)
+                    if existing_vendor_id is None or existing_vendor_id == vendor.id:
+                        vendor_uuid_to_id.pop(vendor.uuid, None)
+                        vendor.uuid = vendor_uuid
+                        vendor_uuid_to_id[vendor.uuid] = vendor.id
+                    else:
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
 
                 product_key = (vendor.id, product_name)
                 product = product_cache.get(product_key)
                 if not product:
+                    existing_product_id = product_uuid_to_id.get(product_uuid)
+                    if existing_product_id is not None:
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
                     product = Product(
                         uuid=product_uuid,
                         vendor_id=vendor.id,
@@ -366,31 +452,42 @@ def register_cli(app):
                     db.session.add(product)
                     db.session.flush()
                     product_cache[product_key] = product
+                    product_uuid_to_id[product.uuid] = product.id
                     created_products += 1
                 elif product.uuid != product_uuid:
-                    product.uuid = product_uuid
+                    existing_product_id = product_uuid_to_id.get(product_uuid)
+                    if existing_product_id is None or existing_product_id == product.id:
+                        product_uuid_to_id.pop(product.uuid, None)
+                        product.uuid = product_uuid
+                        product_uuid_to_id[product.uuid] = product.id
+                    else:
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
 
-                db.session.add(
-                    CPEEntry(
-                        vendor_id=vendor.id,
-                        product_id=product.id,
-                        cpe_uri=cpe_uri,
-                        cpe_name_id=entry.get("cpeNameId"),
-                        deprecated=False,
-                        deprecated_by=None,
-                        part=parsed["part"],
-                        version=parsed["version"],
-                        update=parsed["update"],
-                        edition=parsed["edition"],
-                        language=parsed["language"],
-                        sw_edition=parsed["sw_edition"],
-                        target_sw=parsed["target_sw"],
-                        target_hw=parsed["target_hw"],
-                        other=parsed["other"],
-                        title=titleize_token(product_name),
-                        notes="Imported from NVD CPE Match 2.0 feed",
-                    )
+                cpe_entry = CPEEntry(
+                    vendor_id=vendor.id,
+                    product_id=product.id,
+                    cpe_uri=cpe_uri,
+                    cpe_name_id=cpe_name_id,
+                    deprecated=False,
+                    deprecated_by=None,
+                    part=parsed["part"],
+                    version=parsed["version"],
+                    update=parsed["update"],
+                    edition=parsed["edition"],
+                    language=parsed["language"],
+                    sw_edition=parsed["sw_edition"],
+                    target_sw=parsed["target_sw"],
+                    target_hw=parsed["target_hw"],
+                    other=parsed["other"],
+                    title=titleize_token(product_name),
+                    notes="Imported from NVD CPE Match 2.0 feed",
                 )
+                db.session.add(cpe_entry)
+                if cpe_name_id:
+                    db.session.flush()
+                    cpe_name_id_to_id[cpe_name_id] = cpe_entry.id
                 imported += 1
 
                 total_processed = imported + skipped
@@ -405,7 +502,8 @@ def register_cli(app):
         db.session.commit()
         click.echo(
             f"Done. new CPEs={imported}, vendors={created_vendors}, "
-            f"products={created_products}, skipped={skipped}"
+            f"products={created_products}, skipped={skipped} "
+            f"(uuid-conflicts={skipped_uuid_conflicts})"
         )
 
     @app.cli.command("export-app-dataset")
