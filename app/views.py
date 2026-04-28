@@ -1037,11 +1037,6 @@ def proposal_new():
             if source_count != 1 or target_count != 1:
                 flash("Please choose exactly one source record and one target record.", "danger")
                 return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
-            source_entity_type = "vendor" if proposal.source_vendor_id else "product"
-            target_entity_type = "vendor" if proposal.target_vendor_id else "product"
-            if source_entity_type != target_entity_type:
-                flash("Source and target must both be vendor records or both be product records.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
             source_id = proposal.source_vendor_id or proposal.source_product_id
             target_id = proposal.target_vendor_id or proposal.target_product_id
             if source_id == target_id:
