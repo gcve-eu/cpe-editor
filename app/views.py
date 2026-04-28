@@ -1029,6 +1029,19 @@ def proposal_new():
             )
 
         if proposal_type == "new_record_relationship":
+            source_kind = (request.form.get("source_entity_kind") or "").strip().lower()
+            target_kind = (request.form.get("target_entity_kind") or "").strip().lower()
+            if source_kind not in {"vendor", "product"} or target_kind not in {"vendor", "product"}:
+                flash("Please choose valid source and target record types.", "danger")
+                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+            if source_kind == "vendor":
+                proposal.source_product_id = None
+            else:
+                proposal.source_vendor_id = None
+            if target_kind == "vendor":
+                proposal.target_product_id = None
+            else:
+                proposal.target_vendor_id = None
             if proposal.proposed_relationship_type not in RELATIONSHIP_TYPE_DESCRIPTIONS:
                 flash("Please choose a valid relationship type.", "danger")
                 return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
@@ -1037,9 +1050,21 @@ def proposal_new():
             if source_count != 1 or target_count != 1:
                 flash("Please choose exactly one source record and one target record.", "danger")
                 return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
-            source_id = proposal.source_vendor_id or proposal.source_product_id
-            target_id = proposal.target_vendor_id or proposal.target_product_id
-            if source_id == target_id:
+            source_ref = (
+                "vendor",
+                proposal.source_vendor_id,
+            ) if proposal.source_vendor_id else (
+                "product",
+                proposal.source_product_id,
+            )
+            target_ref = (
+                "vendor",
+                proposal.target_vendor_id,
+            ) if proposal.target_vendor_id else (
+                "product",
+                proposal.target_product_id,
+            )
+            if source_ref == target_ref:
                 flash("Source and target records must be different.", "danger")
                 return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
 
