@@ -54,6 +54,9 @@
           {% endif %}
         </p>
         {% if session.get("is_admin") %}
+          <a class="button secondary" href="{{ url_for('main.admin_edit_metadata', metadata_id=metadata.id) }}" style="margin-top:.35rem;">
+            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Edit metadata
+          </a>
           <form method="post" action="{{ url_for('main.admin_delete_metadata', metadata_id=metadata.id) }}" onsubmit="return confirm('Delete this metadata entry?');" style="display:inline-block; margin-top:.35rem;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="danger"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete metadata</button>

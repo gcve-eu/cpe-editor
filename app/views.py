@@ -1506,6 +1506,42 @@ def admin_delete_metadata(metadata_id):
     return redirect(redirect_target)
 
 
+@bp.route("/admin/metadata/<int:metadata_id>/edit", methods=["GET", "POST"])
+@admin_required
+def admin_edit_metadata(metadata_id):
+    metadata = EntityMetadata.query.get_or_404(metadata_id)
+    redirect_target = url_for("main.index")
+    if metadata.product:
+        redirect_target = url_for("main.product_detail", product_uuid=metadata.product.uuid)
+    elif metadata.vendor:
+        redirect_target = url_for("main.vendor_detail", vendor_uuid=metadata.vendor.uuid)
+
+    if request.method == "POST":
+        metadata_key = (request.form.get("metadata_key") or "").strip()
+        metadata_value = (request.form.get("metadata_value") or "").strip()
+
+        if metadata_key not in ALLOWED_METADATA_KEYS:
+            flash("Please choose a valid metadata key.", "danger")
+            return redirect(url_for("main.admin_edit_metadata", metadata_id=metadata.id))
+
+        if not metadata_value:
+            flash("Please provide a metadata value.", "danger")
+            return redirect(url_for("main.admin_edit_metadata", metadata_id=metadata.id))
+
+        metadata.metadata_key = metadata_key
+        metadata.metadata_value = metadata_value
+        db.session.commit()
+        flash("Metadata updated.", "success")
+        return redirect(redirect_target)
+
+    return render_template(
+        "admin/edit_metadata.html",
+        metadata=metadata,
+        allowed_metadata_keys=sorted(ALLOWED_METADATA_KEYS),
+        redirect_target=redirect_target,
+    )
+
+
 @bp.route("/admin/relationships/<int:relationship_id>/delete", methods=["POST"])
 @admin_required
 def admin_delete_relationship(relationship_id):
