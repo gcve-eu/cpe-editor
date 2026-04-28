@@ -106,6 +106,18 @@ curl "http://127.0.0.1:5000/api/vendors?page=1&per_page=5"
 curl "http://127.0.0.1:5000/api/cpes?vendor_q=microsoft&part=a&per_page=10"
 ```
 
+## Running API tests
+
+A focused API regression suite is included under `tests/` and uses a very small CPE fixture (`tests/fixtures/cpe_subset.json`) representing a tiny subset of real-world CPE-style records (vendors, products, CPE URIs, and vulnerability links).
+
+Run locally:
+
+```bash
+pytest -q
+```
+
+CI runs this same suite via `.github/workflows/api-tests.yml`.
+
 ## CLI commands
 
 ### Database lifecycle
