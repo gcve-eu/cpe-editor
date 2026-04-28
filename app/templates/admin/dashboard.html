@@ -14,6 +14,23 @@
 </div>
 
 <div class="card">
+  <h2>Ingest single JSON object</h2>
+  <p>Paste one JSON object for a <code>vendor</code>, <code>product</code>, <code>cpe</code>, <code>metadata</code>, or <code>relationship</code>.</p>
+  <p>Use <code>type</code> to force object type detection. This is helpful when restoring a small subset after a database recovery.</p>
+  <form method="post" action="{{ url_for('main.admin_ingest_json') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <textarea
+      name="json_payload"
+      rows="14"
+      placeholder='{"type":"vendor","vendor_name":"microsoft","title":"Microsoft"}'
+      required
+      style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;"
+    ></textarea>
+    <button type="submit"><i class="fa-solid fa-file-import" aria-hidden="true"></i>Ingest JSON</button>
+  </form>
+</div>
+
+<div class="card">
   <h2>Pending proposals</h2>
   <table>
     <thead><tr><th>ID</th><th>Type</th><th>Submitted by</th><th>Created</th><th></th></tr></thead>

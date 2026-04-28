@@ -36,7 +36,7 @@ from .models import (
     Vendor,
     db,
 )
-from .utils import build_cpe_uri, normalize_token
+from .utils import build_cpe_uri, normalize_token, parse_cpe23_uri
 
 bp = Blueprint("main", __name__)
 RELATIONSHIP_TYPE_DESCRIPTIONS = {
@@ -64,6 +64,27 @@ ALLOWED_CPE_APPLICABILITY_STATUSES = {
 
 
 # --- Helpers -----------------------------------------------------------------
+def _coerce_datetime(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate:
+        return None
+    if candidate.endswith("Z"):
+        candidate = f"{candidate[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError:
+        return None
+    if parsed.tzinfo:
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
 def _fetch_gcve_vulnerability(reference):
     vulnerability_id = (reference.vulnerability_id or "").strip()
     if not vulnerability_id:
@@ -1678,6 +1699,313 @@ def admin_dashboard():
     pending = Proposal.query.filter_by(status="pending").order_by(Proposal.created_at.asc()).all()
     recent = Proposal.query.order_by(Proposal.created_at.desc()).limit(20).all()
     return render_template("admin/dashboard.html", pending=pending, recent=recent)
+
+
+def _resolve_vendor_for_ingest(payload):
+    vendor_uuid = (payload.get("vendor_uuid") or payload.get("uuid") or "").strip()
+    vendor_name = (payload.get("vendor_name") or payload.get("name") or "").strip()
+    vendor = None
+    if vendor_uuid:
+        vendor = Vendor.query.filter_by(uuid=vendor_uuid).first()
+    if vendor is None and vendor_name:
+        vendor = Vendor.query.filter_by(name=normalize_token(vendor_name)).first()
+    if vendor is None and vendor_name:
+        vendor = Vendor(name=normalize_token(vendor_name), title=payload.get("title") or vendor_name)
+        db.session.add(vendor)
+        db.session.flush()
+    return vendor
+
+
+def _resolve_product_for_ingest(payload):
+    product_uuid = (payload.get("product_uuid") or payload.get("uuid") or "").strip()
+    product_name = (payload.get("product_name") or payload.get("name") or "").strip()
+    product = None
+    if product_uuid:
+        product = Product.query.filter_by(uuid=product_uuid).first()
+    if product is not None:
+        return product
+
+    vendor_payload = {
+        "vendor_uuid": payload.get("vendor_uuid"),
+        "vendor_name": payload.get("vendor_name"),
+    }
+    vendor = _resolve_vendor_for_ingest(vendor_payload)
+    if vendor is None:
+        return None
+
+    if product_name:
+        product = Product.query.filter_by(vendor_id=vendor.id, name=normalize_token(product_name)).first()
+    if product is None and product_name:
+        product = Product(
+            vendor_id=vendor.id,
+            name=normalize_token(product_name),
+            title=payload.get("title") or product_name,
+        )
+        db.session.add(product)
+        db.session.flush()
+    return product
+
+
+@bp.route("/admin/ingest-json", methods=["POST"])
+@admin_required
+def admin_ingest_json():
+    raw_payload = (request.form.get("json_payload") or "").strip()
+    if not raw_payload:
+        flash("Please paste a JSON object to ingest.", "danger")
+        return redirect(url_for("main.admin_dashboard"))
+
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError as exc:
+        flash(f"Invalid JSON payload: {exc.msg}.", "danger")
+        return redirect(url_for("main.admin_dashboard"))
+
+    if not isinstance(payload, dict):
+        flash("The payload must be a single JSON object.", "danger")
+        return redirect(url_for("main.admin_dashboard"))
+
+    object_type = (payload.get("type") or payload.get("entity_type") or "").strip().lower()
+    if not object_type:
+        if "relationship_type" in payload:
+            object_type = "relationship"
+        elif "metadata_key" in payload:
+            object_type = "metadata"
+        elif "cpe_uri" in payload:
+            object_type = "cpe"
+        elif "product_name" in payload:
+            object_type = "product"
+        elif "vendor_name" in payload or "name" in payload:
+            object_type = "vendor"
+
+    try:
+        if object_type == "vendor":
+            vendor = _resolve_vendor_for_ingest(payload)
+            if vendor is None:
+                raise ValueError("vendor_name (or name) is required for vendor ingest.")
+            if payload.get("title") is not None:
+                vendor.title = payload.get("title")
+            if payload.get("notes") is not None:
+                vendor.notes = payload.get("notes")
+            flash(f"Vendor upserted: {vendor.name}.", "success")
+        elif object_type == "product":
+            product = _resolve_product_for_ingest(payload)
+            if product is None:
+                raise ValueError(
+                    "product_name (or name) plus vendor_uuid/vendor_name is required for product ingest."
+                )
+            if payload.get("title") is not None:
+                product.title = payload.get("title")
+            if payload.get("notes") is not None:
+                product.notes = payload.get("notes")
+            flash(f"Product upserted: {product.name}.", "success")
+        elif object_type == "cpe":
+            cpe_uri = (payload.get("cpe_uri") or "").strip()
+            if not cpe_uri:
+                raise ValueError("cpe_uri is required for CPE ingest.")
+            parsed = parse_cpe23_uri(cpe_uri)
+            if not parsed:
+                raise ValueError("cpe_uri must be a valid CPE 2.3 URI.")
+
+            vendor = _resolve_vendor_for_ingest(
+                {
+                    "vendor_uuid": payload.get("vendor_uuid"),
+                    "vendor_name": payload.get("vendor_name") or parsed["vendor"],
+                }
+            )
+            if vendor is None:
+                raise ValueError("Unable to resolve vendor for CPE ingest.")
+
+            product = _resolve_product_for_ingest(
+                {
+                    "product_uuid": payload.get("product_uuid"),
+                    "product_name": payload.get("product_name") or parsed["product"],
+                    "vendor_uuid": vendor.uuid,
+                    "vendor_name": vendor.name,
+                }
+            )
+            if product is None:
+                raise ValueError("Unable to resolve product for CPE ingest.")
+
+            cpe = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
+            if cpe is None and payload.get("cpe_name_id"):
+                cpe = CPEEntry.query.filter_by(cpe_name_id=payload.get("cpe_name_id")).first()
+            if cpe is None:
+                cpe = CPEEntry(cpe_uri=cpe_uri, vendor_id=vendor.id, product_id=product.id, part=parsed["part"])
+                db.session.add(cpe)
+
+            cpe.vendor_id = vendor.id
+            cpe.product_id = product.id
+            cpe.cpe_uri = cpe_uri
+            cpe.cpe_name_id = payload.get("cpe_name_id")
+            cpe.deprecated = bool(payload.get("deprecated", False))
+            cpe.deprecated_by = payload.get("deprecated_by")
+            cpe.part = payload.get("part") or parsed["part"] or "a"
+            cpe.version = payload.get("version") or parsed["version"] or "*"
+            cpe.update = payload.get("update") or parsed["update"] or "*"
+            cpe.edition = payload.get("edition") or parsed["edition"] or "*"
+            cpe.language = payload.get("language") or parsed["language"] or "*"
+            cpe.sw_edition = payload.get("sw_edition") or parsed["sw_edition"] or "*"
+            cpe.target_sw = payload.get("target_sw") or parsed["target_sw"] or "*"
+            cpe.target_hw = payload.get("target_hw") or parsed["target_hw"] or "*"
+            cpe.other = payload.get("other") or parsed["other"] or "*"
+            cpe.title = payload.get("title")
+            cpe.notes = payload.get("notes")
+            cpe.from_proposal = bool(payload.get("from_proposal", False))
+            flash(f"CPE upserted: {cpe.cpe_uri}.", "success")
+        elif object_type == "metadata":
+            record_type = (payload.get("record_type") or "").strip().lower()
+            if record_type not in {"vendor", "product"}:
+                raise ValueError("metadata ingest requires record_type of 'vendor' or 'product'.")
+            if payload.get("metadata_key") not in ALLOWED_METADATA_KEYS:
+                raise ValueError(
+                    f"metadata_key must be one of: {', '.join(sorted(ALLOWED_METADATA_KEYS))}."
+                )
+            if record_type == "vendor":
+                vendor = _resolve_vendor_for_ingest(
+                    {
+                        "vendor_uuid": payload.get("record_uuid") or payload.get("vendor_uuid"),
+                        "vendor_name": payload.get("vendor_name"),
+                        "title": payload.get("vendor_title"),
+                    }
+                )
+                if vendor is None:
+                    raise ValueError("Unable to resolve vendor for metadata ingest.")
+                metadata_entry = EntityMetadata(
+                    vendor_id=vendor.id,
+                    metadata_key=payload["metadata_key"],
+                    metadata_value=payload.get("metadata_value") or "",
+                    submitter_name=payload.get("submitter_name"),
+                    submitter_email=payload.get("submitter_email"),
+                    submitted_at=_coerce_datetime(payload.get("submitted_at")) or datetime.utcnow(),
+                    approved_at=_coerce_datetime(payload.get("approved_at")),
+                )
+            else:
+                product = _resolve_product_for_ingest(
+                    {
+                        "product_uuid": payload.get("record_uuid") or payload.get("product_uuid"),
+                        "product_name": payload.get("product_name"),
+                        "vendor_uuid": payload.get("vendor_uuid"),
+                        "vendor_name": payload.get("vendor_name"),
+                        "title": payload.get("product_title"),
+                    }
+                )
+                if product is None:
+                    raise ValueError("Unable to resolve product for metadata ingest.")
+                metadata_entry = EntityMetadata(
+                    product_id=product.id,
+                    metadata_key=payload["metadata_key"],
+                    metadata_value=payload.get("metadata_value") or "",
+                    submitter_name=payload.get("submitter_name"),
+                    submitter_email=payload.get("submitter_email"),
+                    submitted_at=_coerce_datetime(payload.get("submitted_at")) or datetime.utcnow(),
+                    approved_at=_coerce_datetime(payload.get("approved_at")),
+                )
+            db.session.add(metadata_entry)
+            flash("Metadata entry ingested.", "success")
+        elif object_type == "relationship":
+            relationship_type = (payload.get("relationship_type") or "").strip()
+            if not relationship_type:
+                raise ValueError("relationship_type is required for relationship ingest.")
+
+            source_vendor_id = None
+            source_product_id = None
+            target_vendor_id = None
+            target_product_id = None
+
+            source_kind = (payload.get("source_type") or "").strip().lower()
+            target_kind = (payload.get("target_type") or "").strip().lower()
+            if not source_kind:
+                source_kind = (
+                    "product"
+                    if payload.get("source_product_uuid") or payload.get("source_product_name")
+                    else "vendor"
+                )
+            if not target_kind:
+                target_kind = (
+                    "product"
+                    if payload.get("target_product_uuid") or payload.get("target_product_name")
+                    else "vendor"
+                )
+            if source_kind == "product":
+                source_product = _resolve_product_for_ingest(
+                    {
+                        "product_uuid": payload.get("source_product_uuid"),
+                        "product_name": payload.get("source_product_name"),
+                        "vendor_uuid": payload.get("source_vendor_uuid"),
+                        "vendor_name": payload.get("source_vendor_name"),
+                    }
+                )
+                source_product_id = source_product.id if source_product else None
+            else:
+                source_vendor = _resolve_vendor_for_ingest(
+                    {
+                        "vendor_uuid": payload.get("source_vendor_uuid"),
+                        "vendor_name": payload.get("source_vendor_name"),
+                    }
+                )
+                source_vendor_id = source_vendor.id if source_vendor else None
+
+            if target_kind == "product":
+                target_product = _resolve_product_for_ingest(
+                    {
+                        "product_uuid": payload.get("target_product_uuid"),
+                        "product_name": payload.get("target_product_name"),
+                        "vendor_uuid": payload.get("target_vendor_uuid"),
+                        "vendor_name": payload.get("target_vendor_name"),
+                    }
+                )
+                target_product_id = target_product.id if target_product else None
+            else:
+                target_vendor = _resolve_vendor_for_ingest(
+                    {
+                        "vendor_uuid": payload.get("target_vendor_uuid"),
+                        "vendor_name": payload.get("target_vendor_name"),
+                    }
+                )
+                target_vendor_id = target_vendor.id if target_vendor else None
+
+            if (int(bool(source_vendor_id)) + int(bool(source_product_id))) != 1:
+                raise ValueError("Source reference is invalid; specify exactly one source record.")
+            if (int(bool(target_vendor_id)) + int(bool(target_product_id))) != 1:
+                raise ValueError("Target reference is invalid; specify exactly one target record.")
+
+            relationship = EntityRelationship.query.filter_by(
+                source_vendor_id=source_vendor_id,
+                source_product_id=source_product_id,
+                target_vendor_id=target_vendor_id,
+                target_product_id=target_product_id,
+                relationship_type=relationship_type,
+            ).first()
+            if relationship is None:
+                relationship = EntityRelationship(
+                    source_vendor_id=source_vendor_id,
+                    source_product_id=source_product_id,
+                    target_vendor_id=target_vendor_id,
+                    target_product_id=target_product_id,
+                    relationship_type=relationship_type,
+                )
+                db.session.add(relationship)
+            relationship.rationale = payload.get("rationale")
+            relationship.submitter_name = payload.get("submitter_name")
+            relationship.submitter_email = payload.get("submitter_email")
+            relationship.submitted_at = _coerce_datetime(payload.get("submitted_at"))
+            relationship.approved_at = _coerce_datetime(payload.get("approved_at"))
+            flash("Relationship ingested.", "success")
+        else:
+            raise ValueError(
+                "Unable to infer payload type. Set 'type' to one of vendor, product, cpe, metadata, relationship."
+            )
+
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "danger")
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Admin JSON ingest failed")
+        flash("Ingest failed due to an internal error.", "danger")
+
+    return redirect(url_for("main.admin_dashboard"))
 
 
 @bp.route("/admin/reindex", methods=["POST"])
