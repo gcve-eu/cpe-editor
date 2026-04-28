@@ -5,6 +5,16 @@
   <div class="page-header">
     <h1>{{ cpe.title or "CPE entry" }}</h1>
     <div class="action-row">
+      <button
+        type="button"
+        class="button secondary icon-button js-export-json"
+        data-export-url="{{ url_for('main.api_cpe_detail', cpe_id=cpe.id) }}"
+        data-export-filename="cpe-{{ cpe.id }}.json"
+        aria-label="Export CPE JSON"
+        title="Export CPE JSON"
+      >
+        <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+      </button>
       <a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Submit a proposal</a>
       <a class="button secondary" href="{{ url_for('main.proposal_new', proposal_type='new_cpe_vulnerability_reference', cpe_entry_id=cpe.id, product_id=cpe.product_id, vendor_id=cpe.vendor_id) }}"><i class="fa-solid fa-link" aria-hidden="true"></i>Propose CVE/GCVE/GHSA reference</a>
     </div>

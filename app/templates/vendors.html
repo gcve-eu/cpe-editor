@@ -27,7 +27,19 @@
   {% endif %}
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for vendor in vendors %}
-      <li><a href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a></li>
+      <li>
+        <a href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a>
+        <button
+          type="button"
+          class="button secondary icon-button js-export-json"
+          data-export-url="{{ url_for('main.api_vendor_detail', vendor_uuid=vendor.uuid) }}"
+          data-export-filename="vendor-{{ vendor.uuid }}.json"
+          aria-label="Export vendor {{ vendor.uuid }} JSON"
+          title="Export this vendor JSON"
+        >
+          <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+        </button>
+      </li>
     {% else %}
       <li>No vendors yet.</li>
     {% endfor %}

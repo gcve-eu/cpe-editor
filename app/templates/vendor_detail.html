@@ -5,6 +5,16 @@
   <div class="page-header">
     <h1>{{ vendor.title or vendor.name }}</h1>
     <div class="action-row">
+      <button
+        type="button"
+        class="button secondary icon-button js-export-json"
+        data-export-url="{{ url_for('main.api_vendor_detail', vendor_uuid=vendor.uuid) }}"
+        data-export-filename="vendor-{{ vendor.uuid }}.json"
+        aria-label="Export vendor JSON"
+        title="Export vendor JSON"
+      >
+        <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+      </button>
       <a
         class="button"
         href="{{ url_for('main.proposal_new', proposal_type='new_product', vendor_id=vendor.id) }}"
@@ -120,6 +130,16 @@
             {% endif %}
           {% endif %}
         </p>
+        <button
+          type="button"
+          class="button secondary icon-button js-export-json"
+          data-export-url="{{ url_for('main.api_relationship_detail', relationship_id=relationship.id) }}"
+          data-export-filename="relationship-{{ relationship.id }}.json"
+          aria-label="Export relationship {{ relationship.id }} JSON"
+          title="Export this relationship JSON"
+        >
+          <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+        </button>
         <p class="muted">
           {% if relationship.source_vendor_id == vendor.id %}
             Outgoing relationship from this vendor.
@@ -148,6 +168,16 @@
       <li>
         <a href="{{ url_for('main.product_detail', product_uuid=product.uuid) }}">{{ product.title or product.name }}</a>
         <span class="muted">(<code>{{ product.uuid }}</code>)</span>
+        <button
+          type="button"
+          class="button secondary icon-button js-export-json"
+          data-export-url="{{ url_for('main.api_product_detail', product_uuid=product.uuid) }}"
+          data-export-filename="product-{{ product.uuid }}.json"
+          aria-label="Export product {{ product.uuid }} JSON"
+          title="Export this product JSON"
+        >
+          <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+        </button>
       </li>
     {% else %}
       <li>No products yet.</li>

@@ -1039,6 +1039,12 @@ def api_product_detail(product_uuid):
     return jsonify(_serialize_product(product))
 
 
+@bp.route("/api/relationships/<int:relationship_id>")
+def api_relationship_detail(relationship_id):
+    relationship = EntityRelationship.query.get_or_404(relationship_id)
+    return jsonify(_serialize_entity_relationship(relationship))
+
+
 @bp.route("/api/products/suggest")
 def api_product_suggestions():
     q = (request.args.get("q") or "").strip()

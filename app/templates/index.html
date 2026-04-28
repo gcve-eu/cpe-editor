@@ -52,7 +52,7 @@
   {% if results %}
     <table>
       <thead>
-        <tr><th>CPE</th><th>Vendor / Product</th><th>Version</th></tr>
+        <tr><th>CPE</th><th>Vendor / Product</th><th>Version</th><th>Export</th></tr>
       </thead>
       <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
       {% for cpe in results %}
@@ -64,6 +64,18 @@
             <a href="{{ url_for('main.product_detail', product_uuid=cpe.product.uuid) }}">{{ cpe.product.title or cpe.product.name }}</a>
           </td>
           <td>{{ cpe.version }}</td>
+          <td>
+            <button
+              type="button"
+              class="button secondary icon-button js-export-json"
+              data-export-url="{{ url_for('main.api_cpe_detail', cpe_id=cpe.id) }}"
+              data-export-filename="cpe-{{ cpe.id }}.json"
+              aria-label="Export CPE {{ cpe.id }} JSON"
+              title="Export this CPE JSON"
+            >
+              <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+            </button>
+          </td>
         </tr>
       {% endfor %}
       </tbody>
