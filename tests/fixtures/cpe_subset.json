@@ -1,0 +1,69 @@
+{
+  "vendors": [
+    {
+      "name": "microsoft",
+      "title": "Microsoft",
+      "notes": "Subset fixture vendor",
+      "products": [
+        {
+          "name": "windows_11",
+          "title": "Windows 11",
+          "cpes": [
+            {
+              "cpe_uri": "cpe:2.3:o:microsoft:windows_11:23h2:*:*:*:*:*:*:*",
+              "part": "o",
+              "version": "23h2",
+              "title": "Microsoft Windows 11 23H2"
+            }
+          ]
+        },
+        {
+          "name": "office",
+          "title": "Microsoft Office",
+          "cpes": [
+            {
+              "cpe_uri": "cpe:2.3:a:microsoft:office:2021:*:*:*:*:*:*:*",
+              "part": "a",
+              "version": "2021",
+              "title": "Microsoft Office 2021"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "apache",
+      "title": "Apache Software Foundation",
+      "products": [
+        {
+          "name": "http_server",
+          "title": "Apache HTTP Server",
+          "cpes": [
+            {
+              "cpe_uri": "cpe:2.3:a:apache:http_server:2.4.58:*:*:*:*:*:*:*",
+              "part": "a",
+              "version": "2.4.58",
+              "title": "Apache HTTP Server 2.4.58"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "vulnerability_references": [
+    {
+      "cpe_uri": "cpe:2.3:a:apache:http_server:2.4.58:*:*:*:*:*:*:*",
+      "vulnerability_source": "CVE",
+      "vulnerability_id": "CVE-2024-12345",
+      "cpe_applicability": "vulnerable",
+      "rationale": "Known vulnerable build in fixture"
+    },
+    {
+      "cpe_uri": "cpe:2.3:o:microsoft:windows_11:23h2:*:*:*:*:*:*:*",
+      "vulnerability_source": "GHSA",
+      "vulnerability_id": "GHSA-xxxx-yyyy-zzzz",
+      "cpe_applicability": "under_investigation",
+      "rationale": "Example advisory link"
+    }
+  ]
+}
