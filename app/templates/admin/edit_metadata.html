@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Edit metadata{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="page-header">
+    <h1>Edit metadata</h1>
+    <a class="button secondary" href="{{ redirect_target }}">
+      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back
+    </a>
+  </div>
+
+  <p class="muted">
+    {% if metadata.product %}
+      Editing metadata for product
+      <strong>{{ metadata.product.title or metadata.product.name }}</strong>.
+    {% elif metadata.vendor %}
+      Editing metadata for vendor
+      <strong>{{ metadata.vendor.title or metadata.vendor.name }}</strong>.
+    {% else %}
+      Editing metadata record #{{ metadata.id }}.
+    {% endif %}
+  </p>
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label for="metadata_key">Metadata key <span class="required-marker">*</span></label>
+    <select id="metadata_key" name="metadata_key" required>
+      {% for key in allowed_metadata_keys %}
+        <option value="{{ key }}" {% if metadata.metadata_key == key %}selected{% endif %}>{{ key }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="metadata_value">Metadata value <span class="required-marker">*</span></label>
+    <textarea id="metadata_value" name="metadata_value" required>{{ metadata.metadata_value }}</textarea>
+
+    <div class="action-row end">
+      <button type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Save metadata</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
