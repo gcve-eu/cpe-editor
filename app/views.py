@@ -1425,6 +1425,79 @@ def admin_proposal_review(proposal_id):
     return render_template("admin/review_proposal.html", proposal=proposal)
 
 
+@bp.route("/admin/notes/<int:note_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_note(note_id):
+    note = EntityNote.query.get_or_404(note_id)
+    vendor = note.vendor
+    product = note.product
+
+    redirect_target = url_for("main.index")
+    if product:
+        redirect_target = url_for("main.product_detail", product_uuid=product.uuid)
+    elif vendor:
+        redirect_target = url_for("main.vendor_detail", vendor_uuid=vendor.uuid)
+
+    db.session.delete(note)
+    db.session.flush()
+
+    if product:
+        latest_note = (
+            EntityNote.query.filter_by(product_id=product.id)
+            .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc(), EntityNote.id.desc())
+            .first()
+        )
+        product.notes = latest_note.note_text if latest_note else None
+    elif vendor:
+        latest_note = (
+            EntityNote.query.filter_by(vendor_id=vendor.id)
+            .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc(), EntityNote.id.desc())
+            .first()
+        )
+        vendor.notes = latest_note.note_text if latest_note else None
+
+    db.session.commit()
+    flash("Note deleted.", "success")
+    return redirect(redirect_target)
+
+
+@bp.route("/admin/metadata/<int:metadata_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_metadata(metadata_id):
+    metadata = EntityMetadata.query.get_or_404(metadata_id)
+    redirect_target = url_for("main.index")
+    if metadata.product:
+        redirect_target = url_for("main.product_detail", product_uuid=metadata.product.uuid)
+    elif metadata.vendor:
+        redirect_target = url_for("main.vendor_detail", vendor_uuid=metadata.vendor.uuid)
+
+    db.session.delete(metadata)
+    db.session.commit()
+    flash("Metadata deleted.", "success")
+    return redirect(redirect_target)
+
+
+@bp.route("/admin/relationships/<int:relationship_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_relationship(relationship_id):
+    relationship = EntityRelationship.query.get_or_404(relationship_id)
+    redirect_target = url_for("main.index")
+
+    if relationship.source_product:
+        redirect_target = url_for("main.product_detail", product_uuid=relationship.source_product.uuid)
+    elif relationship.target_product:
+        redirect_target = url_for("main.product_detail", product_uuid=relationship.target_product.uuid)
+    elif relationship.source_vendor:
+        redirect_target = url_for("main.vendor_detail", vendor_uuid=relationship.source_vendor.uuid)
+    elif relationship.target_vendor:
+        redirect_target = url_for("main.vendor_detail", vendor_uuid=relationship.target_vendor.uuid)
+
+    db.session.delete(relationship)
+    db.session.commit()
+    flash("Relationship deleted.", "success")
+    return redirect(redirect_target)
+
+
 # --- Moderation logic ---------------------------------------------------------
 def apply_proposal(proposal: Proposal):
     vendor = proposal.vendor

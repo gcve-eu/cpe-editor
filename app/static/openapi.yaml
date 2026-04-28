@@ -3,13 +3,16 @@ info:
   title: CPE Editor API
   version: 1.0.0
   description: |
-    Read-only API for browsing vendors, products, and CPE entries managed by CPE Editor.
+    API and admin endpoints for browsing vendors, products, and CPE entries managed by CPE Editor.
+    Read endpoints are under `/api/*`; admin mutation endpoints require an authenticated admin session
+    plus CSRF token.
 servers:
   - url: /
 tags:
   - name: Vendors
   - name: Products
   - name: CPE Entries
+  - name: Admin
 paths:
   /api/vendors:
     get:
@@ -144,6 +147,90 @@ paths:
                 $ref: '#/components/schemas/CPEEntry'
         '404':
           description: Not found
+  /admin/notes/{note_id}/delete:
+    post:
+      tags: [Admin]
+      summary: Delete an approved note (admin only)
+      description: Requires admin session and valid CSRF token in form body.
+      parameters:
+        - in: path
+          name: note_id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrf_token]
+              properties:
+                csrf_token:
+                  type: string
+      responses:
+        '302':
+          description: Note deleted and redirected back to relevant detail page.
+        '400':
+          description: Missing or invalid CSRF token.
+        '404':
+          description: Note not found.
+  /admin/metadata/{metadata_id}/delete:
+    post:
+      tags: [Admin]
+      summary: Delete an approved metadata entry (admin only)
+      description: Requires admin session and valid CSRF token in form body.
+      parameters:
+        - in: path
+          name: metadata_id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrf_token]
+              properties:
+                csrf_token:
+                  type: string
+      responses:
+        '302':
+          description: Metadata entry deleted and redirected back to relevant detail page.
+        '400':
+          description: Missing or invalid CSRF token.
+        '404':
+          description: Metadata entry not found.
+  /admin/relationships/{relationship_id}/delete:
+    post:
+      tags: [Admin]
+      summary: Delete an approved relationship (admin only)
+      description: Requires admin session and valid CSRF token in form body.
+      parameters:
+        - in: path
+          name: relationship_id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrf_token]
+              properties:
+                csrf_token:
+                  type: string
+      responses:
+        '302':
+          description: Relationship deleted and redirected back to relevant detail page.
+        '400':
+          description: Missing or invalid CSRF token.
+        '404':
+          description: Relationship not found.
 components:
   schemas:
     Pagination:
@@ -187,6 +274,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EntityNote'
+        approved_metadata:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntityMetadata'
         approved_relationships:
           type: array
           items:
@@ -223,6 +314,14 @@ components:
           nullable: true
         cpe_count:
           type: integer
+        approved_notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntityNote'
+        approved_metadata:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntityMetadata'
         approved_relationships:
           type: array
           items:
@@ -293,6 +392,38 @@ components:
           type: integer
           nullable: true
         note_text:
+          type: string
+        submitter_name:
+          type: string
+          nullable: true
+        submitter_email:
+          type: string
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+    EntityMetadata:
+      type: object
+      properties:
+        id:
+          type: integer
+        vendor_id:
+          type: integer
+          nullable: true
+        product_id:
+          type: integer
+          nullable: true
+        proposal_id:
+          type: integer
+          nullable: true
+        metadata_key:
+          type: string
+        metadata_value:
           type: string
         submitter_name:
           type: string

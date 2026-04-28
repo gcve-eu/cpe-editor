@@ -49,6 +49,12 @@
             {{ metadata.metadata_value }}
           {% endif %}
         </p>
+        {% if session.get("is_admin") %}
+          <form method="post" action="{{ url_for('main.admin_delete_metadata', metadata_id=metadata.id) }}" onsubmit="return confirm('Delete this metadata entry?');" style="display:inline-block; margin-top:.35rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="danger"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete metadata</button>
+          </form>
+        {% endif %}
       </li>
     {% else %}
       <li>No approved metadata yet.</li>
@@ -68,6 +74,12 @@
           on {{ note.submitted_at.strftime("%Y-%m-%d %H:%M UTC") if note.submitted_at else "Unknown date" }}.
           Approved on {{ note.approved_at.strftime("%Y-%m-%d %H:%M UTC") if note.approved_at else "Not available" }}.
         </p>
+        {% if session.get("is_admin") %}
+          <form method="post" action="{{ url_for('main.admin_delete_note', note_id=note.id) }}" onsubmit="return confirm('Delete this note?');" style="display:inline-block; margin-top:.35rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="danger"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete note</button>
+          </form>
+        {% endif %}
       </li>
     {% else %}
       <li>No approved notes yet.</li>
@@ -109,6 +121,12 @@
           {% endif %}
         </p>
         <p class="muted">{{ relationship_type_descriptions.get(relationship.relationship_type, "") }}</p>
+        {% if session.get("is_admin") %}
+          <form method="post" action="{{ url_for('main.admin_delete_relationship', relationship_id=relationship.id) }}" onsubmit="return confirm('Delete this relationship?');" style="display:inline-block; margin-top:.35rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="danger"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete relationship</button>
+          </form>
+        {% endif %}
       </li>
     {% else %}
       <li>No approved relationships yet.</li>
