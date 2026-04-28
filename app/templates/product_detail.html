@@ -5,6 +5,16 @@
   <div class="page-header">
     <h1>{{ product.title or product.name }}</h1>
     <div class="action-row">
+      <button
+        type="button"
+        class="button secondary icon-button js-export-json"
+        data-export-url="{{ url_for('main.api_product_detail', product_uuid=product.uuid) }}"
+        data-export-filename="product-{{ product.uuid }}.json"
+        aria-label="Export product JSON"
+        title="Export product JSON"
+      >
+        <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+      </button>
       <a
         class="button"
         href="{{ url_for('main.note_proposal_new', product_id=product.id) }}"
@@ -116,6 +126,16 @@
             {% endif %}
           {% endif %}
         </p>
+        <button
+          type="button"
+          class="button secondary icon-button js-export-json"
+          data-export-url="{{ url_for('main.api_relationship_detail', relationship_id=relationship.id) }}"
+          data-export-filename="relationship-{{ relationship.id }}.json"
+          aria-label="Export relationship {{ relationship.id }} JSON"
+          title="Export this relationship JSON"
+        >
+          <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+        </button>
         <p class="muted">
           {% if relationship.source_product_id == product.id %}
             Outgoing relationship from this product.
@@ -158,7 +178,7 @@
       {% endfor %}
     </ul>
     <table>
-      <thead><tr><th>CPE URI</th><th>Product</th><th>Version</th><th>Part</th></tr></thead>
+      <thead><tr><th>CPE URI</th><th>Product</th><th>Version</th><th>Part</th><th>Export</th></tr></thead>
       <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
       {% for cpe in combined_view_cpes %}
         <tr>
@@ -172,9 +192,21 @@
           </td>
           <td>{{ cpe.version }}</td>
           <td>{{ cpe.part }}</td>
+          <td>
+            <button
+              type="button"
+              class="button secondary icon-button js-export-json"
+              data-export-url="{{ url_for('main.api_cpe_detail', cpe_id=cpe.id) }}"
+              data-export-filename="cpe-{{ cpe.id }}.json"
+              aria-label="Export CPE {{ cpe.id }} JSON"
+              title="Export this CPE JSON"
+            >
+              <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+            </button>
+          </td>
         </tr>
       {% else %}
-        <tr><td colspan="4">No CPE entries found across related products.</td></tr>
+        <tr><td colspan="5">No CPE entries found across related products.</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -188,16 +220,28 @@
 <div class="card">
   <h2>CPE entries</h2>
   <table>
-    <thead><tr><th>CPE URI</th><th>Version</th><th>Part</th></tr></thead>
+    <thead><tr><th>CPE URI</th><th>Version</th><th>Part</th><th>Export</th></tr></thead>
     <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
     {% for cpe in product.cpes %}
       <tr>
         <td><a href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}"><code>{{ cpe.cpe_uri }}</code></a></td>
         <td>{{ cpe.version }}</td>
         <td>{{ cpe.part }}</td>
+        <td>
+          <button
+            type="button"
+            class="button secondary icon-button js-export-json"
+            data-export-url="{{ url_for('main.api_cpe_detail', cpe_id=cpe.id) }}"
+            data-export-filename="cpe-{{ cpe.id }}.json"
+            aria-label="Export CPE {{ cpe.id }} JSON"
+            title="Export this CPE JSON"
+          >
+            <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+          </button>
+        </td>
       </tr>
     {% else %}
-      <tr><td colspan="3">No CPE entries yet.</td></tr>
+      <tr><td colspan="4">No CPE entries yet.</td></tr>
     {% endfor %}
     </tbody>
   </table>

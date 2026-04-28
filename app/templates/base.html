@@ -145,6 +145,11 @@
     .button.secondary, button.secondary { background: #4b5563; }
     .button.warning, button.warning { background: #a36a00; }
     .button.danger, button.danger { background: #b3261e; }
+    .icon-button {
+      padding: .48rem .62rem;
+      min-width: 2.2rem;
+      min-height: 2.2rem;
+    }
     .collapse-toggle {
       margin-top: .65rem;
       background: #eef2ff;
@@ -285,6 +290,50 @@
       });
 
       listEl.insertAdjacentElement("afterend", button);
+    });
+
+    const exportButtons = document.querySelectorAll(".js-export-json");
+    exportButtons.forEach((button) => {
+      button.addEventListener("click", async () => {
+        const exportUrl = button.dataset.exportUrl;
+        const exportFilename = button.dataset.exportFilename || "export.json";
+        if (!exportUrl) {
+          return;
+        }
+
+        const originalLabel = button.getAttribute("aria-label") || "Export JSON";
+        button.disabled = true;
+        button.setAttribute("aria-label", "Export in progress");
+
+        try {
+          const response = await fetch(exportUrl, {
+            headers: { Accept: "application/json" },
+          });
+          if (!response.ok) {
+            throw new Error(`Export failed with status ${response.status}`);
+          }
+          const payload = await response.json();
+          const blob = new Blob([JSON.stringify(payload, null, 2)], {
+            type: "application/json",
+          });
+          const downloadUrl = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = downloadUrl;
+          anchor.download = exportFilename.endsWith(".json")
+            ? exportFilename
+            : `${exportFilename}.json`;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(downloadUrl);
+        } catch (error) {
+          console.error(error);
+          window.alert("Unable to export JSON for this item right now.");
+        } finally {
+          button.disabled = false;
+          button.setAttribute("aria-label", originalLabel);
+        }
+      });
     });
   });
 </script>
