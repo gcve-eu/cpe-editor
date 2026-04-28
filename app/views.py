@@ -23,6 +23,7 @@ from sqlalchemy import func, or_, text
 
 from .models import (
     CPEEntry,
+    CPEVulnerabilityReference,
     EntityMetadata,
     EntityNote,
     EntityRelationship,
@@ -49,6 +50,13 @@ PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES = {
     "equivalent-to",
 }
 ALLOWED_METADATA_KEYS = {"gcve:description", "gcve:url"}
+VULNERABILITY_REFERENCE_SOURCES = {"CVE", "GCVE", "GHSA"}
+ALLOWED_CPE_APPLICABILITY_STATUSES = {
+    "vulnerable",
+    "not_vulnerable",
+    "requires_configuration",
+    "under_investigation",
+}
 
 
 # --- Helpers -----------------------------------------------------------------
@@ -301,6 +309,40 @@ def _serialize_cpe(cpe):
         "from_proposal": cpe.from_proposal,
         "created_at": cpe.created_at.isoformat() if cpe.created_at else None,
         "updated_at": cpe.updated_at.isoformat() if cpe.updated_at else None,
+        "vulnerability_references": [
+            {
+                "id": reference.id,
+                "vulnerability_source": reference.vulnerability_source,
+                "vulnerability_id": reference.vulnerability_id,
+                "cpe_applicability": reference.cpe_applicability,
+                "rationale": reference.rationale,
+                "approved_at": reference.approved_at.isoformat() if reference.approved_at else None,
+                "submitted_at": reference.submitted_at.isoformat() if reference.submitted_at else None,
+            }
+            for reference in sorted(
+                cpe.vulnerability_links,
+                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                reverse=True,
+            )
+        ],
+    }
+
+
+def _serialize_cpe_vulnerability_reference(reference):
+    return {
+        "id": reference.id,
+        "cpe_entry_id": reference.cpe_entry_id,
+        "cpe_uri": reference.cpe_entry.cpe_uri if reference.cpe_entry else None,
+        "vulnerability_source": reference.vulnerability_source,
+        "vulnerability_id": reference.vulnerability_id,
+        "cpe_applicability": reference.cpe_applicability,
+        "rationale": reference.rationale,
+        "submitter_name": reference.submitter_name,
+        "submitter_email": reference.submitter_email,
+        "submitted_at": reference.submitted_at.isoformat() if reference.submitted_at else None,
+        "approved_at": reference.approved_at.isoformat() if reference.approved_at else None,
+        "created_at": reference.created_at.isoformat() if reference.created_at else None,
+        "updated_at": reference.updated_at.isoformat() if reference.updated_at else None,
     }
 
 
@@ -366,6 +408,10 @@ def _proposal_summary(proposal: Proposal):
     if proposal.proposal_type == "new_record_relationship":
         relationship_label = proposal.proposed_relationship_type or "relationship"
         return f"Approved a {relationship_label} relationship."
+    if proposal.proposal_type == "new_cpe_vulnerability_reference":
+        vuln_source = proposal.proposed_vulnerability_source or "vulnerability"
+        vuln_id = proposal.proposed_vulnerability_id or "id"
+        return f"Approved {vuln_source} reference {vuln_id} for a CPE."
     return "Approved proposal."
 
 
@@ -752,7 +798,19 @@ def product_detail(product_uuid):
 @bp.route("/cpes/<int:cpe_id>")
 def cpe_detail(cpe_id):
     cpe = CPEEntry.query.get_or_404(cpe_id)
-    return render_template("cpe_detail.html", cpe=cpe)
+    vulnerability_references = (
+        CPEVulnerabilityReference.query.filter_by(cpe_entry_id=cpe.id)
+        .order_by(
+            CPEVulnerabilityReference.approved_at.desc(),
+            CPEVulnerabilityReference.submitted_at.desc(),
+        )
+        .all()
+    )
+    return render_template(
+        "cpe_detail.html",
+        cpe=cpe,
+        vulnerability_references=vulnerability_references,
+    )
 
 
 @bp.route("/api/openapi.yaml")
@@ -860,6 +918,66 @@ def api_cpe_detail(cpe_id):
     return jsonify(_serialize_cpe(cpe))
 
 
+@bp.route("/api/cpes/<int:cpe_id>/vulnerability-references")
+def api_cpe_vulnerability_references(cpe_id):
+    cpe = CPEEntry.query.get_or_404(cpe_id)
+    refs = (
+        CPEVulnerabilityReference.query.filter_by(cpe_entry_id=cpe.id)
+        .order_by(
+            CPEVulnerabilityReference.approved_at.desc(),
+            CPEVulnerabilityReference.submitted_at.desc(),
+        )
+        .all()
+    )
+    return jsonify(
+        {
+            "cpe": {"id": cpe.id, "cpe_uri": cpe.cpe_uri},
+            "items": [_serialize_cpe_vulnerability_reference(ref) for ref in refs],
+            "total": len(refs),
+        }
+    )
+
+
+@bp.route("/api/vulnerability-references")
+def api_vulnerability_references():
+    vulnerability_id = (request.args.get("vulnerability_id") or "").strip()
+    vulnerability_source = (request.args.get("vulnerability_source") or "").strip().upper()
+    cpe_id = request.args.get("cpe_id", type=int)
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+
+    query = CPEVulnerabilityReference.query
+    if vulnerability_id:
+        query = query.filter(
+            func.lower(CPEVulnerabilityReference.vulnerability_id).like(f"%{vulnerability_id.lower()}%")
+        )
+    if vulnerability_source:
+        query = query.filter(CPEVulnerabilityReference.vulnerability_source == vulnerability_source)
+    if cpe_id:
+        query = query.filter(CPEVulnerabilityReference.cpe_entry_id == cpe_id)
+
+    total = query.count()
+    refs = (
+        query.order_by(
+            CPEVulnerabilityReference.approved_at.desc(),
+            CPEVulnerabilityReference.submitted_at.desc(),
+            CPEVulnerabilityReference.id.desc(),
+        )
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return jsonify(
+        {
+            "items": [_serialize_cpe_vulnerability_reference(ref) for ref in refs],
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": max((total + per_page - 1) // per_page, 1),
+        }
+    )
+
+
 @bp.route("/api/cpes")
 def api_cpes():
     q = (request.args.get("q") or "").strip()
@@ -924,6 +1042,7 @@ def api_cpes():
 def proposal_new():
     preselected_vendor_id = request.args.get("vendor_id", type=int)
     preselected_product_id = request.args.get("product_id", type=int)
+    preselected_cpe_entry_id = request.args.get("cpe_entry_id", type=int)
     preselected_proposal_type = request.args.get("proposal_type", "edit_cpe")
     allowed_types = {
         "edit_cpe",
@@ -931,6 +1050,7 @@ def proposal_new():
         "new_product",
         "new_vendor_product",
         "new_record_relationship",
+        "new_cpe_vulnerability_reference",
     }
     if preselected_proposal_type not in allowed_types:
         preselected_proposal_type = "edit_cpe"
@@ -990,6 +1110,14 @@ def proposal_new():
             proposed_title=request.form.get("proposed_title"),
             proposed_notes=request.form.get("proposed_notes"),
             proposed_relationship_type=request.form.get("proposed_relationship_type"),
+            proposed_vulnerability_id=(request.form.get("proposed_vulnerability_id") or "").strip()
+            or None,
+            proposed_vulnerability_source=(
+                request.form.get("proposed_vulnerability_source") or ""
+            ).strip()
+            or None,
+            proposed_cpe_applicability=(request.form.get("proposed_cpe_applicability") or "").strip()
+            or None,
             source_vendor_id=int(request.form.get("source_vendor_id"))
             if request.form.get("source_vendor_id")
             else None,
@@ -1067,6 +1195,19 @@ def proposal_new():
             if source_ref == target_ref:
                 flash("Source and target records must be different.", "danger")
                 return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+        if proposal_type == "new_cpe_vulnerability_reference":
+            if not proposal.cpe_entry_id:
+                flash("Please provide a target CPE entry ID for vulnerability references.", "danger")
+                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+            if proposal.proposed_vulnerability_source not in VULNERABILITY_REFERENCE_SOURCES:
+                flash("Please choose a supported vulnerability source.", "danger")
+                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+            if not proposal.proposed_vulnerability_id:
+                flash("Please provide a vulnerability identifier.", "danger")
+                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+            if proposal.proposed_cpe_applicability not in ALLOWED_CPE_APPLICABILITY_STATUSES:
+                flash("Please choose a valid cpeApplicability status.", "danger")
+                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
 
         db.session.add(proposal)
         db.session.commit()
@@ -1079,12 +1220,15 @@ def proposal_new():
         "proposal_form.html",
         preselected_vendor_id=preselected_vendor_id,
         preselected_product_id=preselected_product_id,
+        preselected_cpe_entry_id=preselected_cpe_entry_id,
         preselected_proposal_type=preselected_proposal_type,
         preselected_vendor=preselected_vendor,
         preselected_product=preselected_product,
         relationship_default_source_kind=relationship_default_kind,
         relationship_default_target_kind=relationship_default_kind,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
+        vulnerability_sources=sorted(VULNERABILITY_REFERENCE_SOURCES),
+        allowed_cpe_applicability_statuses=sorted(ALLOWED_CPE_APPLICABILITY_STATUSES),
     )
 
 
@@ -1748,6 +1892,30 @@ def apply_proposal(proposal: Proposal):
             approved_at=proposal.reviewed_at or datetime.utcnow(),
         )
         db.session.add(relationship)
+        return
+
+    if proposal.proposal_type == "new_cpe_vulnerability_reference":
+        if not proposal.cpe_entry_id:
+            raise ValueError("A target CPE entry is required for vulnerability reference proposals.")
+        if proposal.proposed_vulnerability_source not in VULNERABILITY_REFERENCE_SOURCES:
+            raise ValueError("Unsupported vulnerability source.")
+        if not proposal.proposed_vulnerability_id:
+            raise ValueError("A vulnerability identifier is required.")
+        if proposal.proposed_cpe_applicability not in ALLOWED_CPE_APPLICABILITY_STATUSES:
+            raise ValueError("Unsupported cpeApplicability status.")
+        vulnerability_reference = CPEVulnerabilityReference(
+            cpe_entry_id=proposal.cpe_entry_id,
+            proposal_id=proposal.id,
+            vulnerability_source=proposal.proposed_vulnerability_source,
+            vulnerability_id=proposal.proposed_vulnerability_id,
+            cpe_applicability=proposal.proposed_cpe_applicability,
+            rationale=proposal.rationale,
+            submitter_name=proposal.submitter_name,
+            submitter_email=proposal.submitter_email,
+            submitted_at=proposal.created_at or datetime.utcnow(),
+            approved_at=proposal.reviewed_at or datetime.utcnow(),
+        )
+        db.session.add(vulnerability_reference)
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")

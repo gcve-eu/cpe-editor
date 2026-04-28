@@ -125,6 +125,12 @@ class CPEEntry(TimestampMixin, db.Model):
 
     product = db.relationship("Product", back_populates="cpes")
     vendor = db.relationship("Vendor")
+    vulnerability_links = db.relationship(
+        "CPEVulnerabilityReference",
+        back_populates="cpe_entry",
+        cascade="all, delete-orphan",
+        order_by="desc(CPEVulnerabilityReference.approved_at), desc(CPEVulnerabilityReference.submitted_at)",
+    )
 
     __table_args__ = (
         db.Index("ix_cpe_vendor_product_part", "vendor_id", "product_id", "part"),
@@ -166,6 +172,9 @@ class Proposal(TimestampMixin, db.Model):
     proposed_relationship_type = db.Column(db.String(64), nullable=True)
     proposed_metadata_key = db.Column(db.String(128), nullable=True)
     proposed_metadata_value = db.Column(db.Text, nullable=True)
+    proposed_vulnerability_id = db.Column(db.String(64), nullable=True, index=True)
+    proposed_vulnerability_source = db.Column(db.String(16), nullable=True, index=True)
+    proposed_cpe_applicability = db.Column(db.String(64), nullable=True)
     source_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
     source_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
     target_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
@@ -186,6 +195,9 @@ class Proposal(TimestampMixin, db.Model):
         "EntityRelationship", back_populates="proposal", uselist=False
     )
     metadata_entry = db.relationship("EntityMetadata", back_populates="proposal", uselist=False)
+    vulnerability_reference_entry = db.relationship(
+        "CPEVulnerabilityReference", back_populates="proposal", uselist=False
+    )
 
 
 class EntityNote(TimestampMixin, db.Model):
@@ -273,4 +285,33 @@ class EntityMetadata(TimestampMixin, db.Model):
     __table_args__ = (
         db.Index("ix_metadata_vendor_key", "vendor_id", "metadata_key"),
         db.Index("ix_metadata_product_key", "product_id", "metadata_key"),
+    )
+
+
+class CPEVulnerabilityReference(TimestampMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    cpe_entry_id = db.Column(db.Integer, db.ForeignKey("cpe_entry.id"), nullable=False, index=True)
+    proposal_id = db.Column(
+        db.Integer, db.ForeignKey("proposal.id"), nullable=True, unique=True, index=True
+    )
+    vulnerability_source = db.Column(db.String(16), nullable=False, index=True)
+    vulnerability_id = db.Column(db.String(64), nullable=False, index=True)
+    cpe_applicability = db.Column(db.String(64), nullable=False)
+    rationale = db.Column(db.Text, nullable=True)
+    submitter_name = db.Column(db.String(255), nullable=True)
+    submitter_email = db.Column(db.String(255), nullable=True)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    approved_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    cpe_entry = db.relationship("CPEEntry", back_populates="vulnerability_links")
+    proposal = db.relationship("Proposal", back_populates="vulnerability_reference_entry")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "cpe_entry_id",
+            "vulnerability_source",
+            "vulnerability_id",
+            "cpe_applicability",
+            name="uq_cpe_vuln_applicability",
+        ),
     )

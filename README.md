@@ -27,6 +27,7 @@ A modern Flask application for browsing, curating, and publishing CPE (Common Pl
   - add a CPE to an existing vendor/product
   - add a product to an existing vendor
   - add a new vendor and product
+  - propose a CPE vulnerability reference (CVE/GCVE/GHSA + cpeApplicability)
   - attach note proposals to entities
 - Explore the approved change history and detail pages.
 
@@ -95,6 +96,8 @@ Documented endpoints include:
 - `GET /api/products/suggest`
 - `GET /api/cpes`
 - `GET /api/cpes/{cpe_id}`
+- `GET /api/cpes/{cpe_id}/vulnerability-references`
+- `GET /api/vulnerability-references`
 
 ### Quick API examples
 

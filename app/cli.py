@@ -10,7 +10,16 @@ from pathlib import Path
 import click
 from sqlalchemy import inspect, schema, text
 
-from .models import CPEEntry, EntityMetadata, EntityRelationship, Product, Proposal, Vendor, db
+from .models import (
+    CPEEntry,
+    CPEVulnerabilityReference,
+    EntityMetadata,
+    EntityRelationship,
+    Product,
+    Proposal,
+    Vendor,
+    db,
+)
 from .utils import parse_cpe23_uri, product_uuid_for_names, vendor_uuid_for_name
 
 DEFAULT_NVD_CPE_FEED = "https://nvd.nist.gov/feeds/json/cpe/2.0/nvdcpe-2.0.tar.gz"
@@ -568,6 +577,7 @@ def register_cli(app):
 
         if replace:
             click.echo("Deleting existing proposal, CPE, product and vendor rows...")
+            CPEVulnerabilityReference.query.delete()
             EntityMetadata.query.delete()
             Proposal.query.delete()
             EntityRelationship.query.delete()
@@ -840,6 +850,9 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
                 "proposed_cpe_uri": proposal.proposed_cpe_uri,
                 "proposed_metadata_key": proposal.proposed_metadata_key,
                 "proposed_metadata_value": proposal.proposed_metadata_value,
+                "proposed_vulnerability_source": proposal.proposed_vulnerability_source,
+                "proposed_vulnerability_id": proposal.proposed_vulnerability_id,
+                "proposed_cpe_applicability": proposal.proposed_cpe_applicability,
                 "review_comment": proposal.review_comment,
                 "reviewed_at": isoformat_or_none(proposal.reviewed_at),
                 "created_at": isoformat_or_none(proposal.created_at),
@@ -1164,6 +1177,9 @@ def upsert_proposals(
             proposed_cpe_uri=row.get("proposed_cpe_uri"),
             proposed_metadata_key=row.get("proposed_metadata_key"),
             proposed_metadata_value=row.get("proposed_metadata_value"),
+            proposed_vulnerability_source=row.get("proposed_vulnerability_source"),
+            proposed_vulnerability_id=row.get("proposed_vulnerability_id"),
+            proposed_cpe_applicability=row.get("proposed_cpe_applicability"),
             review_comment=row.get("review_comment"),
             reviewed_at=parse_datetime_or_none(row.get("reviewed_at")),
             created_at=parse_datetime_or_none(row.get("created_at")),

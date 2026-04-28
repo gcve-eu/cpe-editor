@@ -6,6 +6,7 @@
     <h1>{{ cpe.title or "CPE entry" }}</h1>
     <div class="action-row">
       <a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Submit a proposal</a>
+      <a class="button secondary" href="{{ url_for('main.proposal_new', proposal_type='new_cpe_vulnerability_reference', cpe_entry_id=cpe.id, product_id=cpe.product_id, vendor_id=cpe.vendor_id) }}"><i class="fa-solid fa-link" aria-hidden="true"></i>Propose CVE/GCVE/GHSA reference</a>
     </div>
   </div>
   <p><code>{{ cpe.cpe_uri }}</code></p>
@@ -24,6 +25,25 @@
     <tr><th>Target hardware</th><td>{{ cpe.target_hw }}</td></tr>
     <tr><th>Other</th><td>{{ cpe.other }}</td></tr>
     <tr><th>Notes</th><td>{{ cpe.notes or "—" }}</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Vulnerability references</h2>
+  <table>
+    <thead><tr><th>Identifier</th><th>cpeApplicability</th><th>Submitted</th><th>Rationale</th></tr></thead>
+    <tbody>
+      {% for reference in vulnerability_references %}
+        <tr>
+          <td><code>{{ reference.vulnerability_source }}:{{ reference.vulnerability_id }}</code></td>
+          <td><span class="pill">{{ reference.cpe_applicability }}</span></td>
+          <td>{{ reference.approved_at or reference.submitted_at }}</td>
+          <td>{{ reference.rationale or "—" }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">No approved vulnerability references for this CPE yet.</td></tr>
+      {% endfor %}
+    </tbody>
   </table>
 </div>
 
