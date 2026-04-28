@@ -28,6 +28,7 @@
             <option value="new_product" {% if preselected_proposal_type == "new_product" %}selected{% endif %}>Add a product to an existing vendor</option>
             <option value="new_vendor_product" {% if preselected_proposal_type == "new_vendor_product" %}selected{% endif %}>Add a new vendor and product</option>
             <option value="new_record_relationship" {% if preselected_proposal_type == "new_record_relationship" %}selected{% endif %}>Propose a vendor/product relationship</option>
+            <option value="new_cpe_vulnerability_reference" {% if preselected_proposal_type == "new_cpe_vulnerability_reference" %}selected{% endif %}>Propose a CPE → vulnerability reference</option>
           </select>
         </div>
         <div>
@@ -151,6 +152,44 @@
       </div>
     </div>
 
+    <div id="vuln_reference_section" class="form-section" style="display:none;">
+      <h2>CPE vulnerability reference proposal</h2>
+      <p class="muted">Create or reuse a CPE tuple and associate it with a CVE/GCVE/GHSA identifier plus a cpeApplicability status.</p>
+      <div class="grid grid-2">
+        <div>
+          <label for="cpe_triplet">Quick CPE tuple</label>
+          <input id="cpe_triplet" placeholder="vendor:product:version (example: microsoft:exchange_server:2019)">
+          <small class="muted">This helper fills vendor token, product token, and version fields.</small>
+        </div>
+      </div>
+      <div class="grid grid-2">
+        <div>
+          <label for="proposed_vulnerability_source">Vulnerability source</label>
+          <select id="proposed_vulnerability_source" name="proposed_vulnerability_source">
+            <option value="">Select source</option>
+            {% for source in vulnerability_sources %}
+              <option value="{{ source }}">{{ source }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="proposed_vulnerability_id">Vulnerability ID</label>
+          <input id="proposed_vulnerability_id" name="proposed_vulnerability_id" placeholder="CVE-2025-12345 / GCVE-2025-0001 / GHSA-xxxx-yyyy-zzzz">
+        </div>
+      </div>
+      <div class="grid grid-2">
+        <div>
+          <label for="proposed_cpe_applicability">cpeApplicability</label>
+          <select id="proposed_cpe_applicability" name="proposed_cpe_applicability">
+            <option value="">Select applicability</option>
+            {% for status in allowed_cpe_applicability_statuses %}
+              <option value="{{ status }}">{{ status }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
     <div class="form-section">
       <h2>Optional details (help reviewers)</h2>
       <p class="muted">Everything below is optional. Add only what you know.</p>
@@ -188,7 +227,7 @@
       <div class="grid grid-2">
         <div>
           <label for="cpe_entry_id">Existing CPE entry ID (optional)</label>
-          <input id="cpe_entry_id" name="cpe_entry_id" placeholder="Needed only for edit proposals">
+          <input id="cpe_entry_id" name="cpe_entry_id" placeholder="Needed only for edit proposals" value="{% if preselected_cpe_entry_id %}{{ preselected_cpe_entry_id }}{% endif %}">
         </div>
       </div>
 
@@ -256,9 +295,16 @@
     const sourceProductSearch = document.getElementById("source_product_search");
     const targetVendorSearch = document.getElementById("target_vendor_search");
     const targetProductSearch = document.getElementById("target_product_search");
+    const vulnReferenceSection = document.getElementById("vuln_reference_section");
+    const vulnSourceInput = document.getElementById("proposed_vulnerability_source");
+    const vulnIdInput = document.getElementById("proposed_vulnerability_id");
+    const cpeApplicabilityInput = document.getElementById("proposed_cpe_applicability");
+    const cpeEntryInput = document.getElementById("cpe_entry_id");
+    const cpeTripletInput = document.getElementById("cpe_triplet");
     const typesForAutoFill = new Set(["new_cpe", "new_product"]);
     const typesThatNeedProductToken = new Set(["new_cpe", "new_product", "new_vendor_product", "edit_cpe"]);
     const isRelationshipProposal = () => proposalType.value === "new_record_relationship";
+    const isVulnReferenceProposal = () => proposalType.value === "new_cpe_vulnerability_reference";
     const suggestLimit = 20;
 
     function debounce(fn, waitMs) {
@@ -338,15 +384,24 @@
       }
     }
 
+    function syncVulnerabilityReferenceMode() {
+      vulnReferenceSection.style.display = isVulnReferenceProposal() ? "" : "none";
+      vulnSourceInput.required = isVulnReferenceProposal();
+      vulnIdInput.required = isVulnReferenceProposal();
+      cpeApplicabilityInput.required = isVulnReferenceProposal();
+      cpeEntryInput.required = isVulnReferenceProposal();
+    }
+
     function syncVendorFieldMode() {
       const isNewVendorProduct = proposalType.value === "new_vendor_product";
       const isRelationship = isRelationshipProposal();
+      const isVulnReference = isVulnReferenceProposal();
       existingVendorGroup.style.display = isNewVendorProduct ? "none" : "";
       newVendorGroup.style.display = isNewVendorProduct ? "" : "none";
-      vendorSelect.required = !isNewVendorProduct && !isRelationship;
+      vendorSelect.required = !isNewVendorProduct && !isRelationship && !isVulnReference;
       vendorNameInput.required = isNewVendorProduct;
       notesInput.required = false;
-      productNameInput.required = typesThatNeedProductToken.has(proposalType.value) && !isRelationship;
+      productNameInput.required = typesThatNeedProductToken.has(proposalType.value) && !isRelationship && !isVulnReference;
       productIdInput.required = false;
       if (isNewVendorProduct) {
         vendorSelect.value = "";
@@ -373,6 +428,7 @@
 
     proposalType.addEventListener("change", syncVendorFieldMode);
     proposalType.addEventListener("change", syncRelationshipMode);
+    proposalType.addEventListener("change", syncVulnerabilityReferenceMode);
     sourceEntityKind.addEventListener("change", syncRelationshipMode);
     targetEntityKind.addEventListener("change", syncRelationshipMode);
     vendorSelect.addEventListener("change", maybeAutoFillVendor);
@@ -382,8 +438,20 @@
     connectPrefixSearch(targetVendorSearch, targetVendorInput, "/api/vendors/suggest", (vendor) => `${vendor.title} (${vendor.name})`);
     connectPrefixSearch(sourceProductSearch, sourceProductInput, "/api/products/suggest", (product) => `${product.title} (${product.vendor_name}/${product.name})`);
     connectPrefixSearch(targetProductSearch, targetProductInput, "/api/products/suggest", (product) => `${product.title} (${product.vendor_name}/${product.name})`);
+    cpeTripletInput.addEventListener("change", () => {
+      const tuple = (cpeTripletInput.value || "").trim();
+      const [vendorToken, productToken, versionToken] = tuple.split(":");
+      if (vendorToken && !vendorNameInput.value.trim()) vendorNameInput.value = vendorToken;
+      if (productToken && !productNameInput.value.trim()) productNameInput.value = productToken;
+      if (versionToken && !document.getElementById("proposed_version").value.trim()) {
+        document.getElementById("proposed_version").value = versionToken;
+      } else if (versionToken) {
+        document.getElementById("proposed_version").value = versionToken;
+      }
+    });
     syncVendorFieldMode();
     syncRelationshipMode();
+    syncVulnerabilityReferenceMode();
     maybeAutoFillVendor();
   })();
 </script>

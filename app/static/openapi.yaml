@@ -12,6 +12,7 @@ tags:
   - name: Vendors
   - name: Products
   - name: CPE Entries
+  - name: Vulnerability References
   - name: Admin
 paths:
   /api/vendors:
@@ -147,6 +148,66 @@ paths:
                 $ref: '#/components/schemas/CPEEntry'
         '404':
           description: Not found
+  /api/cpes/{cpe_id}/vulnerability-references:
+    get:
+      tags: [Vulnerability References]
+      summary: List vulnerability references for a CPE entry
+      parameters:
+        - in: path
+          name: cpe_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vulnerability references attached to the CPE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CPEVulnerabilityReferenceListByCPE'
+        '404':
+          description: Not found
+  /api/vulnerability-references:
+    get:
+      tags: [Vulnerability References]
+      summary: List vulnerability references across CPE entries
+      parameters:
+        - in: query
+          name: vulnerability_id
+          schema:
+            type: string
+          description: Case-insensitive substring filter on vulnerability identifier.
+        - in: query
+          name: vulnerability_source
+          schema:
+            type: string
+            enum: [CVE, GCVE, GHSA]
+          description: Exact source filter.
+        - in: query
+          name: cpe_id
+          schema:
+            type: integer
+          description: Restrict results to one CPE entry ID.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Paginated vulnerability references
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCPEVulnerabilityReferences'
   /admin/notes/{note_id}/delete:
     post:
       tags: [Admin]
@@ -509,6 +570,69 @@ components:
           type: string
           format: date-time
           nullable: true
+        vulnerability_references:
+          type: array
+          items:
+            $ref: '#/components/schemas/CPEVulnerabilityReference'
+    CPEVulnerabilityReference:
+      type: object
+      properties:
+        id:
+          type: integer
+        cpe_entry_id:
+          type: integer
+        cpe_uri:
+          type: string
+          nullable: true
+        vulnerability_source:
+          type: string
+          enum: [CVE, GCVE, GHSA]
+        vulnerability_id:
+          type: string
+        cpe_applicability:
+          type: string
+          enum: [vulnerable, not_vulnerable, requires_configuration, under_investigation]
+        rationale:
+          type: string
+          nullable: true
+        submitter_name:
+          type: string
+          nullable: true
+        submitter_email:
+          type: string
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    CPEVulnerabilityReferenceListByCPE:
+      type: object
+      properties:
+        cpe:
+          type: object
+          properties:
+            id:
+              type: integer
+            cpe_uri:
+              type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CPEVulnerabilityReference'
+        total:
+          type: integer
     PaginatedVendors:
       allOf:
         - $ref: '#/components/schemas/Pagination'
@@ -527,3 +651,12 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/CPEEntry'
+    PaginatedCPEVulnerabilityReferences:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CPEVulnerabilityReference'
