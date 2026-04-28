@@ -1073,6 +1073,8 @@ def proposal_new():
         flash("Proposal submitted. An admin will review it.", "success")
         return redirect(url_for("main.index"))
 
+    relationship_default_kind = "product" if preselected_product else "vendor"
+
     return render_template(
         "proposal_form.html",
         preselected_vendor_id=preselected_vendor_id,
@@ -1080,6 +1082,8 @@ def proposal_new():
         preselected_proposal_type=preselected_proposal_type,
         preselected_vendor=preselected_vendor,
         preselected_product=preselected_product,
+        relationship_default_source_kind=relationship_default_kind,
+        relationship_default_target_kind=relationship_default_kind,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
     )
 

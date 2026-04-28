@@ -101,15 +101,15 @@
         <div>
           <label for="source_entity_kind">Source record type</label>
           <select id="source_entity_kind" name="source_entity_kind">
-            <option value="vendor">Vendor</option>
-            <option value="product">Product</option>
+            <option value="vendor" {% if relationship_default_source_kind == "vendor" %}selected{% endif %}>Vendor</option>
+            <option value="product" {% if relationship_default_source_kind == "product" %}selected{% endif %}>Product</option>
           </select>
         </div>
         <div>
           <label for="target_entity_kind">Target record type</label>
           <select id="target_entity_kind" name="target_entity_kind">
-            <option value="vendor">Vendor</option>
-            <option value="product">Product</option>
+            <option value="vendor" {% if relationship_default_target_kind == "vendor" %}selected{% endif %}>Vendor</option>
+            <option value="product" {% if relationship_default_target_kind == "product" %}selected{% endif %}>Product</option>
           </select>
         </div>
       </div>
