@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Review proposal #{{ proposal.id }}{% endblock %}
 {% block content %}
+{% macro render_reference(ref_id, ref_name=None, ref_title=None, fallback='—') -%}
+  {%- if ref_id -%}
+    <code>#{{ ref_id }}</code>
+    {%- if ref_name %} — {{ ref_name }}{% endif -%}
+    {%- if ref_title %} ({{ ref_title }}){% endif -%}
+  {%- else -%}
+    {{ fallback }}
+  {%- endif -%}
+{%- endmacro %}
 <div class="card">
   <div class="page-header">
     <h1>Review proposal #{{ proposal.id }}</h1>
@@ -17,19 +26,19 @@
     <tr><th>Submitter</th><td>{{ proposal.submitter_name or 'Anonymous' }} / {{ proposal.submitter_email or 'No email' }}</td></tr>
     <tr><th>Submitter IP</th><td>{{ proposal.submitter_ip or '—' }}</td></tr>
     <tr><th>Rationale</th><td>{{ proposal.rationale or '—' }}</td></tr>
-    <tr><th>Vendor ref</th><td>{{ proposal.vendor_id or '—' }}</td></tr>
-    <tr><th>Product ref</th><td>{{ proposal.product_id or '—' }}</td></tr>
-    <tr><th>CPE ref</th><td>{{ proposal.cpe_entry_id or '—' }}</td></tr>
+    <tr><th>Vendor ref</th><td>{{ render_reference(proposal.vendor_id, proposal.vendor.name if proposal.vendor else None, proposal.vendor.title if proposal.vendor else None) }}</td></tr>
+    <tr><th>Product ref</th><td>{{ render_reference(proposal.product_id, proposal.product.name if proposal.product else None, proposal.product.title if proposal.product else None) }}</td></tr>
+    <tr><th>CPE ref</th><td>{{ render_reference(proposal.cpe_entry_id, proposal.cpe_entry.cpe_uri if proposal.cpe_entry else None, proposal.cpe_entry.title if proposal.cpe_entry else None) }}</td></tr>
     <tr><th>Vendor token</th><td>{{ proposal.proposed_vendor_name or '—' }}</td></tr>
     <tr><th>Vendor title</th><td>{{ proposal.proposed_vendor_title or '—' }}</td></tr>
     <tr><th>Product token</th><td>{{ proposal.proposed_product_name or '—' }}</td></tr>
     <tr><th>Product title</th><td>{{ proposal.proposed_product_title or '—' }}</td></tr>
     <tr><th>Generated CPE</th><td><code>{{ proposal.proposed_cpe_uri or '—' }}</code></td></tr>
     <tr><th>Relationship type</th><td>{{ proposal.proposed_relationship_type or '—' }}</td></tr>
-    <tr><th>Source vendor ref</th><td>{{ proposal.source_vendor_id or '—' }}</td></tr>
-    <tr><th>Source product ref</th><td>{{ proposal.source_product_id or '—' }}</td></tr>
-    <tr><th>Target vendor ref</th><td>{{ proposal.target_vendor_id or '—' }}</td></tr>
-    <tr><th>Target product ref</th><td>{{ proposal.target_product_id or '—' }}</td></tr>
+    <tr><th>Source vendor ref</th><td>{{ render_reference(proposal.source_vendor_id, proposal.source_vendor.name if proposal.source_vendor else None, proposal.source_vendor.title if proposal.source_vendor else None) }}</td></tr>
+    <tr><th>Source product ref</th><td>{{ render_reference(proposal.source_product_id, proposal.source_product.name if proposal.source_product else None, proposal.source_product.title if proposal.source_product else None) }}</td></tr>
+    <tr><th>Target vendor ref</th><td>{{ render_reference(proposal.target_vendor_id, proposal.target_vendor.name if proposal.target_vendor else None, proposal.target_vendor.title if proposal.target_vendor else None) }}</td></tr>
+    <tr><th>Target product ref</th><td>{{ render_reference(proposal.target_product_id, proposal.target_product.name if proposal.target_product else None, proposal.target_product.title if proposal.target_product else None) }}</td></tr>
     <tr><th>Proposed record note</th><td>{{ proposal.proposed_notes or '—' }}</td></tr>
     <tr><th>Metadata key</th><td>{{ proposal.proposed_metadata_key or '—' }}</td></tr>
     <tr><th>Metadata value</th><td>{{ proposal.proposed_metadata_value or '—' }}</td></tr>
