@@ -31,17 +31,48 @@
 <div class="card">
   <h2>Vulnerability references</h2>
   <table>
-    <thead><tr><th>Identifier</th><th>cpeApplicability</th><th>Submitted</th><th>Rationale</th></tr></thead>
+    <thead><tr><th>Identifier</th><th>cpeApplicability</th><th>Submitted</th><th>db.gcve.eu details</th><th>Rationale</th></tr></thead>
     <tbody>
       {% for reference in vulnerability_references %}
+        {% set lookup = vulnerability_details.get(reference.id) %}
         <tr>
           <td><code>{{ reference.vulnerability_source }}:{{ reference.vulnerability_id }}</code></td>
           <td><span class="pill">{{ reference.cpe_applicability }}</span></td>
           <td>{{ reference.approved_at or reference.submitted_at }}</td>
+          <td>
+            {% if lookup and lookup.ok %}
+              <strong>{{ lookup.title or "Details available" }}</strong>
+              {% if lookup.severity %}<div><span class="pill">{{ lookup.severity }}</span></div>{% endif %}
+              {% if lookup.summary %}<div class="muted">{{ lookup.summary }}</div>{% endif %}
+              <div class="muted">
+                {% if lookup.published_at %}Published: {{ lookup.published_at }}{% endif %}
+                {% if lookup.updated_at %}<br>Updated: {{ lookup.updated_at }}{% endif %}
+              </div>
+              {% if lookup.aliases %}
+                <div class="muted">Aliases: {{ lookup.aliases|join(", ") }}</div>
+              {% endif %}
+              <div><a href="{{ lookup.lookup_url }}" target="_blank" rel="noopener noreferrer">Open on db.gcve.eu</a></div>
+              {% if lookup.references %}
+                <details>
+                  <summary>Reference links</summary>
+                  <ul>
+                    {% for item in lookup.references %}
+                      <li><a href="{{ item }}" target="_blank" rel="noopener noreferrer">{{ item }}</a></li>
+                    {% endfor %}
+                  </ul>
+                </details>
+              {% endif %}
+            {% else %}
+              <span class="muted">{{ (lookup.error if lookup else "No details available.") }}</span>
+              {% if lookup and lookup.lookup_url %}
+                <div><a href="{{ lookup.lookup_url }}" target="_blank" rel="noopener noreferrer">Open on db.gcve.eu</a></div>
+              {% endif %}
+            {% endif %}
+          </td>
           <td>{{ reference.rationale or "—" }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="4">No approved vulnerability references for this CPE yet.</td></tr>
+        <tr><td colspan="5">No approved vulnerability references for this CPE yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>

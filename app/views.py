@@ -2,7 +2,11 @@ from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from functools import wraps
 from hmac import compare_digest
+import json
 import secrets
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 from xml.sax.saxutils import escape
 
 from flask import (
@@ -60,6 +64,125 @@ ALLOWED_CPE_APPLICABILITY_STATUSES = {
 
 
 # --- Helpers -----------------------------------------------------------------
+def _fetch_gcve_vulnerability(reference):
+    vulnerability_id = (reference.vulnerability_id or "").strip()
+    if not vulnerability_id:
+        return None
+
+    api_base_url = (
+        current_app.config.get("GCVE_API_BASE_URL") or "https://db.gcve.eu/api"
+    ).rstrip("/")
+    web_base_url = (current_app.config.get("GCVE_WEB_BASE_URL") or "https://db.gcve.eu").rstrip(
+        "/"
+    )
+    endpoint = f"{api_base_url}/vulnerability/{quote(vulnerability_id, safe='')}"
+    request_obj = Request(
+        endpoint,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "cpe-editor/1.0",
+        },
+    )
+
+    try:
+        with urlopen(request_obj, timeout=4) as response:
+            payload = json.load(response)
+    except HTTPError as exc:
+        return {
+            "ok": False,
+            "lookup_url": f"{web_base_url}/vuln/{quote(vulnerability_id, safe='')}",
+            "error": f"db.gcve.eu returned HTTP {exc.code}.",
+        }
+    except (URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        return {
+            "ok": False,
+            "lookup_url": f"{web_base_url}/vuln/{quote(vulnerability_id, safe='')}",
+            "error": "db.gcve.eu details are currently unavailable.",
+        }
+
+    record = payload
+    if isinstance(payload, dict):
+        data = payload.get("data")
+        if isinstance(data, dict):
+            record = data
+        elif isinstance(data, list) and data:
+            record = data[0]
+
+    if not isinstance(record, dict):
+        return {
+            "ok": False,
+            "lookup_url": f"{web_base_url}/vuln/{quote(vulnerability_id, safe='')}",
+            "error": "db.gcve.eu returned an unexpected format.",
+        }
+
+    cve_metadata = record.get("cveMetadata") if isinstance(record.get("cveMetadata"), dict) else {}
+    containers = record.get("containers") if isinstance(record.get("containers"), dict) else {}
+    cna = containers.get("cna") if isinstance(containers.get("cna"), dict) else {}
+
+    title = cna.get("title") if isinstance(cna.get("title"), str) else None
+
+    summary = None
+    descriptions = cna.get("descriptions")
+    if isinstance(descriptions, list):
+        for description in descriptions:
+            if isinstance(description, dict) and description.get("value"):
+                summary = description.get("value")
+                break
+
+    severity = None
+    metrics = cna.get("metrics")
+    if isinstance(metrics, list):
+        for metric in metrics:
+            if not isinstance(metric, dict):
+                continue
+            cvss = metric.get("cvssV3_1") or metric.get("cvssV3_0")
+            if isinstance(cvss, dict):
+                base_score = cvss.get("baseScore")
+                base_severity = cvss.get("baseSeverity")
+                if base_score and base_severity:
+                    severity = f"{base_severity} ({base_score})"
+                elif base_severity:
+                    severity = str(base_severity)
+                elif base_score:
+                    severity = str(base_score)
+                if severity:
+                    break
+
+    references = []
+    cna_references = cna.get("references")
+    if isinstance(cna_references, list):
+        for item in cna_references[:5]:
+            if not isinstance(item, dict):
+                continue
+            url = item.get("url")
+            if not url:
+                continue
+            references.append(url)
+
+    gcve_ids = []
+    gcve_record = record.get("gcve")
+    if isinstance(gcve_record, dict):
+        candidate = gcve_record.get("id")
+        if isinstance(candidate, str) and candidate:
+            gcve_ids.append(candidate)
+    aliases = []
+    for alias in gcve_ids:
+        if alias != vulnerability_id:
+            aliases.append(alias)
+
+    return {
+        "ok": True,
+        "lookup_url": f"{web_base_url}/vuln/{quote(vulnerability_id, safe='')}",
+        "title": title,
+        "summary": summary,
+        "published_at": cve_metadata.get("datePublished"),
+        "updated_at": cve_metadata.get("dateUpdated"),
+        "severity": severity,
+        "aliases": aliases,
+        "references": references,
+    }
+
+
 def _get_csrf_token():
     token = session.get("_csrf_token")
     if not token:
@@ -806,10 +929,15 @@ def cpe_detail(cpe_id):
         )
         .all()
     )
+    vulnerability_details = {
+        reference.id: _fetch_gcve_vulnerability(reference)
+        for reference in vulnerability_references
+    }
     return render_template(
         "cpe_detail.html",
         cpe=cpe,
         vulnerability_references=vulnerability_references,
+        vulnerability_details=vulnerability_details,
     )
 
 
