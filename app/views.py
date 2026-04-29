@@ -415,6 +415,13 @@ def _get_request_ip():
     return request.remote_addr or "unknown"
 
 
+def _get_request_user_agent():
+    user_agent = request.user_agent.string if request.user_agent else None
+    if not user_agent:
+        user_agent = request.headers.get("User-Agent")
+    return (user_agent or "").strip() or "unknown"
+
+
 def _is_rate_limited_for_ip(ip_address: str):
     limit = current_app.config.get("PROPOSAL_RATE_LIMIT_PER_HOUR", 10)
     if limit is None or limit <= 0:
@@ -1245,6 +1252,7 @@ def proposal_new():
             submitter_name=request.form.get("submitter_name"),
             submitter_email=request.form.get("submitter_email"),
             submitter_ip=submitter_ip,
+            submitter_user_agent=_get_request_user_agent(),
             rationale=request.form.get("rationale"),
             vendor_id=int(vendor_id) if vendor_id else None,
             product_id=int(product_id) if product_id else None,
@@ -1440,6 +1448,7 @@ def note_proposal_new():
             submitter_name=request.form.get("submitter_name"),
             submitter_email=request.form.get("submitter_email"),
             submitter_ip=submitter_ip,
+            submitter_user_agent=_get_request_user_agent(),
             rationale=request.form.get("rationale"),
             vendor_id=vendor_id,
             product_id=product_id,
@@ -1518,6 +1527,7 @@ def metadata_proposal_new():
             submitter_name=request.form.get("submitter_name"),
             submitter_email=request.form.get("submitter_email"),
             submitter_ip=submitter_ip,
+            submitter_user_agent=_get_request_user_agent(),
             rationale=request.form.get("rationale"),
             vendor_id=vendor_id,
             product_id=product_id,
@@ -1705,6 +1715,33 @@ def admin_dashboard():
     pending = Proposal.query.filter_by(status="pending").order_by(Proposal.created_at.asc()).all()
     recent = Proposal.query.order_by(Proposal.created_at.desc()).limit(20).all()
     return render_template("admin/dashboard.html", pending=pending, recent=recent)
+
+
+@bp.route("/admin/proposals/bulk-delete", methods=["POST"])
+@admin_required
+def admin_bulk_delete_proposals():
+    source_type = (request.form.get("source_type") or "").strip().lower()
+    source_value = (request.form.get("source_value") or "").strip()
+    status = (request.form.get("status") or "pending").strip().lower()
+
+    if source_type not in {"ip", "user_agent"}:
+        flash("Please select either IP or user-agent for bulk delete.", "danger")
+        return redirect(url_for("main.admin_dashboard"))
+    if not source_value:
+        flash("Please provide a source value for bulk delete.", "danger")
+        return redirect(url_for("main.admin_dashboard"))
+    if status not in {"pending", "all"}:
+        status = "pending"
+
+    column = Proposal.submitter_ip if source_type == "ip" else Proposal.submitter_user_agent
+    query = Proposal.query.filter(column == source_value)
+    if status == "pending":
+        query = query.filter(Proposal.status == "pending")
+
+    deleted = query.delete(synchronize_session=False)
+    db.session.commit()
+    flash(f"Deleted {deleted} proposal(s) for {source_type} source '{source_value}'.", "success")
+    return redirect(url_for("main.admin_dashboard"))
 
 
 def _resolve_vendor_for_ingest(payload):
