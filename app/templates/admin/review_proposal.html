@@ -25,6 +25,7 @@
   <table>
     <tr><th>Submitter</th><td>{{ proposal.submitter_name or 'Anonymous' }} / {{ proposal.submitter_email or 'No email' }}</td></tr>
     <tr><th>Submitter IP</th><td>{{ proposal.submitter_ip or '—' }}</td></tr>
+    <tr><th>Submitter user-agent</th><td>{{ proposal.submitter_user_agent or '—' }}</td></tr>
     <tr><th>Rationale</th><td>{{ proposal.rationale or '—' }}</td></tr>
     <tr><th>Vendor ref</th><td>{{ render_reference(proposal.vendor_id, proposal.vendor.name if proposal.vendor else None, proposal.vendor.title if proposal.vendor else None) }}</td></tr>
     <tr><th>Product ref</th><td>{{ render_reference(proposal.product_id, proposal.product.name if proposal.product else None, proposal.product.title if proposal.product else None) }}</td></tr>

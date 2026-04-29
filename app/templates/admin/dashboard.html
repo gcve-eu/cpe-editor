@@ -31,6 +31,27 @@
 </div>
 
 <div class="card">
+  <h2>Bulk delete spam proposals</h2>
+  <p>Delete spam proposal batches by matching submitter IP or user-agent. Default only deletes pending proposals.</p>
+  <form method="post" action="{{ url_for('main.admin_bulk_delete_proposals') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="source_type">Source type</label>
+    <select id="source_type" name="source_type" required>
+      <option value="ip">IP address</option>
+      <option value="user_agent">User-agent</option>
+    </select>
+    <label for="source_value">Source value</label>
+    <input id="source_value" name="source_value" placeholder="198.51.100.1 or Mozilla/5.0 ..." required>
+    <label for="status">Status scope</label>
+    <select id="status" name="status" required>
+      <option value="pending">Pending only (safe)</option>
+      <option value="all">All statuses</option>
+    </select>
+    <button type="submit" class="danger"><i class="fa-solid fa-trash" aria-hidden="true"></i>Bulk delete proposals</button>
+  </form>
+</div>
+
+<div class="card">
   <h2>Pending proposals</h2>
   <table>
     <thead><tr><th>ID</th><th>Type</th><th>Submitted by</th><th>Created</th><th></th></tr></thead>
