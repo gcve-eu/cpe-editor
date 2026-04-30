@@ -203,73 +203,6 @@ def _fetch_gcve_vulnerability(reference):
         "references": references,
     }
 
-def _request_ollama_metadata_suggestion(entity_label, model, prompt_template):
-    base_prompt = (
-        (prompt_template or "").strip()
-        or "from the following CPE name, can you make a description and provide an url"
-    )
-    base_url = str(current_app.config.get("OLLAMA_BASE_URL") or "").strip().rstrip("/")
-    if not base_url:
-        host_value = str(current_app.config.get("OLLAMA_HOST") or "127.0.0.1").strip()
-        numeric_port = int(current_app.config.get("OLLAMA_PORT") or 11434)
-        if host_value.startswith("http://") or host_value.startswith("https://"):
-            base_url = host_value
-        else:
-            base_url = f"http://{host_value}:{numeric_port}"
-
-    default_model = current_app.config.get("OLLAMA_MODEL") or "qwen3.6:35b"
-    model_value = (model or "").strip() or default_model
-
-    endpoint = f"{base_url}/api/generate"
-    payload = {
-        "model": model_value,
-        "stream": False,
-        "format": "json",
-        "prompt": f"{base_prompt}: {entity_label}\n\nReturn JSON with keys gcve:description and gcve:url.",
-        "options": {
-            "min_p": 0,
-            "presence_penalty": 1.5,
-            "repeat_penalty": 1,
-            "temperature": 1,
-            "top_k": 20,
-            "top_p": 0.95,
-        },
-    }
-    request_obj = Request(
-        endpoint,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
-        method="POST",
-    )
-
-    try:
-        with urlopen(request_obj, timeout=15) as response:
-            result = json.load(response)
-    except HTTPError as exc:
-        return {"ok": False, "error": f"Ollama returned HTTP {exc.code}."}
-    except (URLError, TimeoutError, ValueError, json.JSONDecodeError):
-        return {"ok": False, "error": "Unable to reach the Ollama connector."}
-
-    raw_response = result.get("response") if isinstance(result, dict) else None
-    if not isinstance(raw_response, str) or not raw_response.strip():
-        return {"ok": False, "error": "Ollama did not return usable content."}
-
-    try:
-        structured = json.loads(raw_response)
-    except json.JSONDecodeError:
-        description = raw_response.strip()
-        if not description:
-            return {"ok": False, "error": "Ollama response was not valid JSON."}
-        return {"ok": True, "description": description, "url": ""}
-
-    description = (structured.get("gcve:description") or "").strip()
-    url = (structured.get("gcve:url") or "").strip()
-    if not description and not url:
-        return {"ok": False, "error": "Ollama returned empty metadata suggestions."}
-
-    return {"ok": True, "description": description, "url": url}
-
-
 def _get_csrf_token():
     token = session.get("_csrf_token")
     if not token:
@@ -2258,34 +2191,6 @@ def admin_create_metadata():
     )
 
 
-@bp.route("/admin/metadata/ollama-suggest", methods=["POST"])
-@admin_required
-def admin_ollama_suggest_new_metadata():
-    payload = request.get_json(silent=True) or {}
-
-    prompt_template = payload.get("prompt")
-    model = payload.get("model")
-    vendor_id = payload.get("vendor_id")
-    product_id = payload.get("product_id")
-
-    entity_name = None
-    if product_id:
-        product = Product.query.get(product_id)
-        if product:
-            entity_name = product.title or product.name
-    elif vendor_id:
-        vendor = Vendor.query.get(vendor_id)
-        if vendor:
-            entity_name = vendor.title or vendor.name
-
-    if not entity_name:
-        return jsonify({"ok": False, "error": "Unable to infer a vendor or product name."}), 400
-
-    suggestion = _request_ollama_metadata_suggestion(entity_name, model, prompt_template)
-    if not suggestion.get("ok"):
-        return jsonify(suggestion), 502
-    return jsonify(suggestion)
-
 @bp.route("/admin/metadata/<int:metadata_id>/delete", methods=["POST"])
 @admin_required
 def admin_delete_metadata(metadata_id):
@@ -2336,30 +2241,6 @@ def admin_edit_metadata(metadata_id):
         allowed_metadata_keys=sorted(ALLOWED_METADATA_KEYS),
         redirect_target=redirect_target,
     )
-
-
-@bp.route("/admin/metadata/<int:metadata_id>/ollama-suggest", methods=["POST"])
-@admin_required
-def admin_ollama_suggest_metadata(metadata_id):
-    metadata = EntityMetadata.query.get_or_404(metadata_id)
-    payload = request.get_json(silent=True) or {}
-
-    prompt_template = payload.get("prompt")
-    model = payload.get("model")
-
-    entity_name = None
-    if metadata.product:
-        entity_name = metadata.product.title or metadata.product.name
-    elif metadata.vendor:
-        entity_name = metadata.vendor.title or metadata.vendor.name
-
-    if not entity_name:
-        return jsonify({"ok": False, "error": "Unable to infer a vendor or product name."}), 400
-
-    suggestion = _request_ollama_metadata_suggestion(entity_name, model, prompt_template)
-    if not suggestion.get("ok"):
-        return jsonify(suggestion), 502
-    return jsonify(suggestion)
 
 
 @bp.route("/admin/relationships/<int:relationship_id>/delete", methods=["POST"])
