@@ -203,6 +203,59 @@ def _fetch_gcve_vulnerability(reference):
         "references": references,
     }
 
+def _request_ollama_metadata_suggestion(entity_label, host, port, model, prompt_template):
+    base_prompt = (
+        (prompt_template or "").strip()
+        or "from the following CPE name, can you make a description and provide an url"
+    )
+    host_value = (host or "127.0.0.1").strip()
+    port_value = (port or "11434").strip()
+
+    try:
+        numeric_port = int(port_value)
+    except ValueError:
+        return {"ok": False, "error": "OLLAMA port must be a valid number."}
+
+    model_value = (model or "").strip() or "qwen3.6:35b"
+
+    endpoint = f"http://{host_value}:{numeric_port}/api/generate"
+    payload = {
+        "model": model_value,
+        "stream": False,
+        "format": "json",
+        "prompt": f"{base_prompt}: {entity_label}\n\nReturn JSON with keys gcve:description and gcve:url.",
+    }
+    request_obj = Request(
+        endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(request_obj, timeout=15) as response:
+            result = json.load(response)
+    except HTTPError as exc:
+        return {"ok": False, "error": f"Ollama returned HTTP {exc.code}."}
+    except (URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        return {"ok": False, "error": "Unable to reach the Ollama connector."}
+
+    raw_response = result.get("response") if isinstance(result, dict) else None
+    if not isinstance(raw_response, str) or not raw_response.strip():
+        return {"ok": False, "error": "Ollama did not return usable content."}
+
+    try:
+        structured = json.loads(raw_response)
+    except json.JSONDecodeError:
+        return {"ok": False, "error": "Ollama response was not valid JSON."}
+
+    description = (structured.get("gcve:description") or "").strip()
+    url = (structured.get("gcve:url") or "").strip()
+    if not description and not url:
+        return {"ok": False, "error": "Ollama returned empty metadata suggestions."}
+
+    return {"ok": True, "description": description, "url": url}
+
 
 def _get_csrf_token():
     token = session.get("_csrf_token")
@@ -223,6 +276,11 @@ def validate_csrf_token():
         return None
     session_token = session.get("_csrf_token")
     form_token = request.form.get("csrf_token")
+    if not form_token and request.is_json:
+        payload = request.get_json(silent=True) or {}
+        form_token = payload.get("csrf_token")
+    if not form_token:
+        form_token = request.headers.get("X-CSRF-Token")
     if not session_token or not form_token or not compare_digest(session_token, form_token):
         abort(400, description="Invalid or missing CSRF token.")
     return None
@@ -2183,6 +2241,32 @@ def admin_edit_metadata(metadata_id):
         allowed_metadata_keys=sorted(ALLOWED_METADATA_KEYS),
         redirect_target=redirect_target,
     )
+
+
+@bp.route("/admin/metadata/<int:metadata_id>/ollama-suggest", methods=["POST"])
+@admin_required
+def admin_ollama_suggest_metadata(metadata_id):
+    metadata = EntityMetadata.query.get_or_404(metadata_id)
+    payload = request.get_json(silent=True) or {}
+
+    host = payload.get("host")
+    port = payload.get("port")
+    prompt_template = payload.get("prompt")
+    model = payload.get("model")
+
+    entity_name = None
+    if metadata.product:
+        entity_name = metadata.product.title or metadata.product.name
+    elif metadata.vendor:
+        entity_name = metadata.vendor.title or metadata.vendor.name
+
+    if not entity_name:
+        return jsonify({"ok": False, "error": "Unable to infer a vendor or product name."}), 400
+
+    suggestion = _request_ollama_metadata_suggestion(entity_name, host, port, model, prompt_template)
+    if not suggestion.get("ok"):
+        return jsonify(suggestion), 502
+    return jsonify(suggestion)
 
 
 @bp.route("/admin/relationships/<int:relationship_id>/delete", methods=["POST"])
