@@ -208,13 +208,19 @@ def _request_ollama_metadata_suggestion(entity_label, model, prompt_template):
         (prompt_template or "").strip()
         or "from the following CPE name, can you make a description and provide an url"
     )
-    host_value = str(current_app.config.get("OLLAMA_HOST") or "127.0.0.1").strip()
-    numeric_port = int(current_app.config.get("OLLAMA_PORT") or 11434)
+    base_url = str(current_app.config.get("OLLAMA_BASE_URL") or "").strip().rstrip("/")
+    if not base_url:
+        host_value = str(current_app.config.get("OLLAMA_HOST") or "127.0.0.1").strip()
+        numeric_port = int(current_app.config.get("OLLAMA_PORT") or 11434)
+        if host_value.startswith("http://") or host_value.startswith("https://"):
+            base_url = host_value
+        else:
+            base_url = f"http://{host_value}:{numeric_port}"
 
     default_model = current_app.config.get("OLLAMA_MODEL") or "qwen3.6:35b"
     model_value = (model or "").strip() or default_model
 
-    endpoint = f"http://{host_value}:{numeric_port}/api/generate"
+    endpoint = f"{base_url}/api/generate"
     payload = {
         "model": model_value,
         "stream": False,
