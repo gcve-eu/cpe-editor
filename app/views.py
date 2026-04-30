@@ -249,7 +249,10 @@ def _request_ollama_metadata_suggestion(entity_label, model, prompt_template):
     try:
         structured = json.loads(raw_response)
     except json.JSONDecodeError:
-        return {"ok": False, "error": "Ollama response was not valid JSON."}
+        description = raw_response.strip()
+        if not description:
+            return {"ok": False, "error": "Ollama response was not valid JSON."}
+        return {"ok": True, "description": description, "url": ""}
 
     description = (structured.get("gcve:description") or "").strip()
     url = (structured.get("gcve:url") or "").strip()
