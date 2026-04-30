@@ -203,20 +203,16 @@ def _fetch_gcve_vulnerability(reference):
         "references": references,
     }
 
-def _request_ollama_metadata_suggestion(entity_label, host, port, model, prompt_template):
+def _request_ollama_metadata_suggestion(entity_label, model, prompt_template):
     base_prompt = (
         (prompt_template or "").strip()
         or "from the following CPE name, can you make a description and provide an url"
     )
-    host_value = (host or "127.0.0.1").strip()
-    port_value = (port or "11434").strip()
+    host_value = str(current_app.config.get("OLLAMA_HOST") or "127.0.0.1").strip()
+    numeric_port = int(current_app.config.get("OLLAMA_PORT") or 11434)
 
-    try:
-        numeric_port = int(port_value)
-    except ValueError:
-        return {"ok": False, "error": "OLLAMA port must be a valid number."}
-
-    model_value = (model or "").strip() or "qwen3.6:35b"
+    default_model = current_app.config.get("OLLAMA_MODEL") or "qwen3.6:35b"
+    model_value = (model or "").strip() or default_model
 
     endpoint = f"http://{host_value}:{numeric_port}/api/generate"
     payload = {
@@ -2250,8 +2246,6 @@ def admin_create_metadata():
 def admin_ollama_suggest_new_metadata():
     payload = request.get_json(silent=True) or {}
 
-    host = payload.get("host")
-    port = payload.get("port")
     prompt_template = payload.get("prompt")
     model = payload.get("model")
     vendor_id = payload.get("vendor_id")
@@ -2270,7 +2264,7 @@ def admin_ollama_suggest_new_metadata():
     if not entity_name:
         return jsonify({"ok": False, "error": "Unable to infer a vendor or product name."}), 400
 
-    suggestion = _request_ollama_metadata_suggestion(entity_name, host, port, model, prompt_template)
+    suggestion = _request_ollama_metadata_suggestion(entity_name, model, prompt_template)
     if not suggestion.get("ok"):
         return jsonify(suggestion), 502
     return jsonify(suggestion)
@@ -2333,8 +2327,6 @@ def admin_ollama_suggest_metadata(metadata_id):
     metadata = EntityMetadata.query.get_or_404(metadata_id)
     payload = request.get_json(silent=True) or {}
 
-    host = payload.get("host")
-    port = payload.get("port")
     prompt_template = payload.get("prompt")
     model = payload.get("model")
 
@@ -2347,7 +2339,7 @@ def admin_ollama_suggest_metadata(metadata_id):
     if not entity_name:
         return jsonify({"ok": False, "error": "Unable to infer a vendor or product name."}), 400
 
-    suggestion = _request_ollama_metadata_suggestion(entity_name, host, port, model, prompt_template)
+    suggestion = _request_ollama_metadata_suggestion(entity_name, model, prompt_template)
     if not suggestion.get("ok"):
         return jsonify(suggestion), 502
     return jsonify(suggestion)

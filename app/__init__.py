@@ -20,6 +20,9 @@ def create_app():
         ADMIN_USERNAME=os.getenv("ADMIN_USERNAME", "admin"),
         ADMIN_PASSWORD=os.getenv("ADMIN_PASSWORD", "admin"),
         PROPOSAL_RATE_LIMIT_PER_HOUR=int(os.getenv("PROPOSAL_RATE_LIMIT_PER_HOUR", "10")),
+        OLLAMA_HOST=os.getenv("OLLAMA_HOST", "127.0.0.1"),
+        OLLAMA_PORT=int(os.getenv("OLLAMA_PORT", "11434")),
+        OLLAMA_MODEL=os.getenv("OLLAMA_MODEL", "qwen3.6:35b"),
     )
     if database_uri.startswith("sqlite"):
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
