@@ -2191,6 +2191,90 @@ def admin_delete_note(note_id):
     return redirect(redirect_target)
 
 
+
+@bp.route("/admin/metadata/new", methods=["GET", "POST"])
+@admin_required
+def admin_create_metadata():
+    vendor_id = request.args.get("vendor_id", type=int)
+    product_id = request.args.get("product_id", type=int)
+    vendor = Vendor.query.get(vendor_id) if vendor_id else None
+    product = Product.query.get(product_id) if product_id else None
+
+    if bool(vendor) == bool(product):
+        flash("Please target exactly one record (vendor or product).", "danger")
+        return redirect(url_for("main.index"))
+
+    redirect_target = (
+        url_for("main.product_detail", product_uuid=product.uuid)
+        if product
+        else url_for("main.vendor_detail", vendor_uuid=vendor.uuid)
+    )
+
+    if request.method == "POST":
+        metadata_key = (request.form.get("metadata_key") or "").strip()
+        metadata_value = (request.form.get("metadata_value") or "").strip()
+
+        if metadata_key not in ALLOWED_METADATA_KEYS:
+            flash("Please choose a valid metadata key.", "danger")
+            return redirect(request.url)
+
+        if not metadata_value:
+            flash("Please provide a metadata value.", "danger")
+            return redirect(request.url)
+
+        metadata = EntityMetadata(
+            vendor_id=vendor.id if vendor else None,
+            product_id=product.id if product else None,
+            metadata_key=metadata_key,
+            metadata_value=metadata_value,
+            submitter_name="Admin",
+            submitted_at=datetime.utcnow(),
+            approved_at=datetime.utcnow(),
+        )
+        db.session.add(metadata)
+        db.session.commit()
+        flash("Metadata created.", "success")
+        return redirect(redirect_target)
+
+    return render_template(
+        "admin/create_metadata.html",
+        vendor=vendor,
+        product=product,
+        allowed_metadata_keys=sorted(ALLOWED_METADATA_KEYS),
+        redirect_target=redirect_target,
+    )
+
+
+@bp.route("/admin/metadata/ollama-suggest", methods=["POST"])
+@admin_required
+def admin_ollama_suggest_new_metadata():
+    payload = request.get_json(silent=True) or {}
+
+    host = payload.get("host")
+    port = payload.get("port")
+    prompt_template = payload.get("prompt")
+    model = payload.get("model")
+    vendor_id = payload.get("vendor_id")
+    product_id = payload.get("product_id")
+
+    entity_name = None
+    if product_id:
+        product = Product.query.get(product_id)
+        if product:
+            entity_name = product.title or product.name
+    elif vendor_id:
+        vendor = Vendor.query.get(vendor_id)
+        if vendor:
+            entity_name = vendor.title or vendor.name
+
+    if not entity_name:
+        return jsonify({"ok": False, "error": "Unable to infer a vendor or product name."}), 400
+
+    suggestion = _request_ollama_metadata_suggestion(entity_name, host, port, model, prompt_template)
+    if not suggestion.get("ok"):
+        return jsonify(suggestion), 502
+    return jsonify(suggestion)
+
 @bp.route("/admin/metadata/<int:metadata_id>/delete", methods=["POST"])
 @admin_required
 def admin_delete_metadata(metadata_id):

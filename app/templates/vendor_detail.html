@@ -48,6 +48,11 @@
 
 <div class="card">
   <h2>Approved metadata</h2>
+  {% if session.get("is_admin") %}
+    <a class="button" href="{{ url_for('main.admin_create_metadata', vendor_id=vendor.id) }}" style="margin-bottom:.75rem;">
+      <i class="fa-solid fa-plus" aria-hidden="true"></i>Add metadata
+    </a>
+  {% endif %}
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for metadata in vendor_metadata %}
       <li>

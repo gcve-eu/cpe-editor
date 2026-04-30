@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Create metadata{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="page-header">
+    <h1>Create metadata</h1>
+    <a class="button secondary" href="{{ redirect_target }}">
+      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back
+    </a>
+  </div>
+
+  <p class="muted">
+    {% if product %}
+      Creating metadata for product <strong>{{ product.title or product.name }}</strong>.
+    {% elif vendor %}
+      Creating metadata for vendor <strong>{{ vendor.title or vendor.name }}</strong>.
+    {% endif %}
+  </p>
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label for="metadata_key">Metadata key <span class="required-marker">*</span></label>
+    <select id="metadata_key" name="metadata_key" required>
+      {% for key in allowed_metadata_keys %}
+        <option value="{{ key }}">{{ key }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="metadata_value">Metadata value <span class="required-marker">*</span></label>
+    <textarea id="metadata_value" name="metadata_value" required></textarea>
+
+    <div class="card" style="margin-top: 1rem;">
+      <h2 style="margin-top: 0;">Ollama assistant</h2>
+      <p class="muted">Use Ollama to prefill <code>gcve:description</code> or <code>gcve:url</code> from the current vendor/product name.</p>
+
+      <label for="ollama_host">Ollama host</label>
+      <input id="ollama_host" name="ollama_host" type="text" value="127.0.0.1">
+
+      <label for="ollama_port">Ollama port</label>
+      <input id="ollama_port" name="ollama_port" type="text" value="11434">
+
+      <label for="ollama_model">Ollama model</label>
+      <input id="ollama_model" name="ollama_model" type="text" value="qwen3.6:35b">
+
+      <label for="ollama_prompt">Default prompt</label>
+      <textarea id="ollama_prompt" name="ollama_prompt">from the following CPE name, can you make a description and provide an url</textarea>
+
+      <div class="action-row" style="margin-top: 0.75rem;">
+        <button type="button" id="ollama_generate_button" class="secondary">
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>Generate with Ollama
+        </button>
+        <span id="ollama_status" class="muted" aria-live="polite"></span>
+      </div>
+    </div>
+
+    <div class="action-row end">
+      <button type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Create metadata</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  (function () {
+    const hostInput = document.getElementById('ollama_host');
+    const portInput = document.getElementById('ollama_port');
+    const modelInput = document.getElementById('ollama_model');
+    const promptInput = document.getElementById('ollama_prompt');
+    const status = document.getElementById('ollama_status');
+    const button = document.getElementById('ollama_generate_button');
+    const metadataKey = document.getElementById('metadata_key');
+    const metadataValue = document.getElementById('metadata_value');
+
+    hostInput.value = localStorage.getItem('ollama_host') || hostInput.value;
+    portInput.value = localStorage.getItem('ollama_port') || portInput.value;
+    modelInput.value = localStorage.getItem('ollama_model') || modelInput.value;
+    promptInput.value = localStorage.getItem('ollama_prompt') || promptInput.value;
+
+    function persistSettings() {
+      localStorage.setItem('ollama_host', hostInput.value.trim());
+      localStorage.setItem('ollama_port', portInput.value.trim());
+      localStorage.setItem('ollama_model', modelInput.value.trim());
+      localStorage.setItem('ollama_prompt', promptInput.value);
+    }
+
+    [hostInput, portInput, modelInput, promptInput].forEach((el) => el.addEventListener('change', persistSettings));
+
+    button.addEventListener('click', async function () {
+      persistSettings();
+      button.disabled = true;
+      status.textContent = 'Generating…';
+      try {
+        const response = await fetch('{{ url_for("main.admin_ollama_suggest_new_metadata") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({
+            host: hostInput.value,
+            port: portInput.value,
+            model: modelInput.value,
+            prompt: promptInput.value,
+            vendor_id: {{ vendor.id if vendor else 'null' }},
+            product_id: {{ product.id if product else 'null' }},
+            csrf_token: '{{ csrf_token() }}'
+          })
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          status.textContent = payload.error || 'Unable to generate metadata.';
+          return;
+        }
+
+        if (metadataKey.value === 'gcve:url') {
+          metadataValue.value = payload.url || metadataValue.value;
+        } else {
+          metadataValue.value = payload.description || metadataValue.value;
+        }
+        status.textContent = 'Suggestion added. You can edit before saving.';
+      } catch (error) {
+        status.textContent = 'Unable to contact suggestion endpoint.';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endblock %}
