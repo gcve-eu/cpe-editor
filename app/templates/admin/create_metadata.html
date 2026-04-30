@@ -34,12 +34,6 @@
       <h2 style="margin-top: 0;">Ollama assistant</h2>
       <p class="muted">Use Ollama to prefill <code>gcve:description</code> or <code>gcve:url</code> from the current vendor/product name.</p>
 
-      <label for="ollama_host">Ollama host</label>
-      <input id="ollama_host" name="ollama_host" type="text" value="127.0.0.1">
-
-      <label for="ollama_port">Ollama port</label>
-      <input id="ollama_port" name="ollama_port" type="text" value="11434">
-
       <label for="ollama_model">Ollama model</label>
       <input id="ollama_model" name="ollama_model" type="text" value="qwen3.6:35b">
 
@@ -62,8 +56,6 @@
 
 <script>
   (function () {
-    const hostInput = document.getElementById('ollama_host');
-    const portInput = document.getElementById('ollama_port');
     const modelInput = document.getElementById('ollama_model');
     const promptInput = document.getElementById('ollama_prompt');
     const status = document.getElementById('ollama_status');
@@ -71,19 +63,15 @@
     const metadataKey = document.getElementById('metadata_key');
     const metadataValue = document.getElementById('metadata_value');
 
-    hostInput.value = localStorage.getItem('ollama_host') || hostInput.value;
-    portInput.value = localStorage.getItem('ollama_port') || portInput.value;
     modelInput.value = localStorage.getItem('ollama_model') || modelInput.value;
     promptInput.value = localStorage.getItem('ollama_prompt') || promptInput.value;
 
     function persistSettings() {
-      localStorage.setItem('ollama_host', hostInput.value.trim());
-      localStorage.setItem('ollama_port', portInput.value.trim());
       localStorage.setItem('ollama_model', modelInput.value.trim());
       localStorage.setItem('ollama_prompt', promptInput.value);
     }
 
-    [hostInput, portInput, modelInput, promptInput].forEach((el) => el.addEventListener('change', persistSettings));
+    [modelInput, promptInput].forEach((el) => el.addEventListener('change', persistSettings));
 
     button.addEventListener('click', async function () {
       persistSettings();
@@ -97,8 +85,6 @@
             'X-Requested-With': 'XMLHttpRequest'
           },
           body: JSON.stringify({
-            host: hostInput.value,
-            port: portInput.value,
             model: modelInput.value,
             prompt: promptInput.value,
             vendor_id: {{ vendor.id if vendor else 'null' }},
