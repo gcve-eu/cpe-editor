@@ -51,3 +51,15 @@ def test_ollama_accepts_host_with_scheme(app, monkeypatch):
 
     assert result["ok"] is True
     assert captured["url"] == "http://ollama.internal:11434/api/generate"
+
+
+def test_ollama_falls_back_to_plain_text_when_response_is_not_json(app, monkeypatch):
+    def fake_urlopen(request_obj, timeout):
+        return io.BytesIO(json.dumps({"response": "plain text output"}).encode("utf-8"))
+
+    monkeypatch.setattr("app.views.urlopen", fake_urlopen)
+
+    with app.app_context():
+        result = _request_ollama_metadata_suggestion("apache", "", "")
+
+    assert result == {"ok": True, "description": "plain text output", "url": ""}
