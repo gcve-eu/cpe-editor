@@ -226,6 +226,14 @@ def _request_ollama_metadata_suggestion(entity_label, model, prompt_template):
         "stream": False,
         "format": "json",
         "prompt": f"{base_prompt}: {entity_label}\n\nReturn JSON with keys gcve:description and gcve:url.",
+        "options": {
+            "min_p": 0,
+            "presence_penalty": 1.5,
+            "repeat_penalty": 1,
+            "temperature": 1,
+            "top_k": 20,
+            "top_p": 0.95,
+        },
     }
     request_obj = Request(
         endpoint,

@@ -63,3 +63,26 @@ def test_ollama_falls_back_to_plain_text_when_response_is_not_json(app, monkeypa
         result = _request_ollama_metadata_suggestion("apache", "", "")
 
     assert result == {"ok": True, "description": "plain text output", "url": ""}
+
+
+def test_ollama_passes_expected_model_options(app, monkeypatch):
+    captured = {}
+
+    def fake_urlopen(request_obj, timeout):
+        captured["payload"] = json.loads(request_obj.data.decode("utf-8"))
+        return _fake_ollama_response()
+
+    monkeypatch.setattr("app.views.urlopen", fake_urlopen)
+
+    with app.app_context():
+        result = _request_ollama_metadata_suggestion("intel", "", "")
+
+    assert result["ok"] is True
+    assert captured["payload"]["options"] == {
+        "min_p": 0,
+        "presence_penalty": 1.5,
+        "repeat_penalty": 1,
+        "temperature": 1,
+        "top_k": 20,
+        "top_p": 0.95,
+    }
