@@ -182,6 +182,28 @@ From a local archive:
 python -m flask --app run import-nvd-cpematches --source /path/to/nvdcpematch-2.0.tar.gz
 ```
 
+### Import PURL → CPE mappings (purl2cpe)
+
+Import mappings from a local clone of [`scanoss/purl2cpe`](https://github.com/scanoss/purl2cpe).  
+By default, the command expects the repository at `../purl2cpe` relative to `cpe-editor`.
+If a CPE from `purl2cpe` does not exist locally yet, the importer will create the vendor, product, and CPE entry first.
+
+```bash
+python -m flask --app run import-purl2cpe
+```
+
+Use a custom clone path:
+
+```bash
+python -m flask --app run import-purl2cpe --source /path/to/purl2cpe
+```
+
+Replace existing CPE↔PURL mappings first:
+
+```bash
+python -m flask --app run import-purl2cpe --replace
+```
+
 ### Export dataset
 
 Export vendors, products, relationships, and CPE entries:

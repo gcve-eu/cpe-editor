@@ -131,6 +131,12 @@ class CPEEntry(TimestampMixin, db.Model):
         cascade="all, delete-orphan",
         order_by="desc(CPEVulnerabilityReference.approved_at), desc(CPEVulnerabilityReference.submitted_at)",
     )
+    purl_mappings = db.relationship(
+        "CPEPurlMapping",
+        back_populates="cpe_entry",
+        cascade="all, delete-orphan",
+        order_by="CPEPurlMapping.purl.asc()",
+    )
 
     __table_args__ = (
         db.Index("ix_cpe_vendor_product_part", "vendor_id", "product_id", "part"),
@@ -315,4 +321,23 @@ class CPEVulnerabilityReference(TimestampMixin, db.Model):
             "cpe_applicability",
             name="uq_cpe_vuln_applicability",
         ),
+    )
+
+
+class CPEPurlMapping(TimestampMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    cpe_name_id = db.Column(
+        db.String(36),
+        db.ForeignKey("cpe_entry.cpe_name_id"),
+        nullable=False,
+        index=True,
+    )
+    purl = db.Column(db.String(2048), nullable=False, index=True)
+    source = db.Column(db.String(255), nullable=False, default="purl2cpe")
+
+    cpe_entry = db.relationship("CPEEntry", back_populates="purl_mappings")
+
+    __table_args__ = (
+        db.UniqueConstraint("cpe_name_id", "purl", name="uq_cpe_purl_mapping"),
+        db.Index("ix_cpe_purl_mapping_purl_lower", db.func.lower(purl)),
     )
