@@ -13,6 +13,9 @@ A modern Flask application for browsing, curating, and publishing CPE (Common Pl
 - **Approved change feed** with dedicated pages plus RSS/Atom endpoints.
 - **Read-only OpenAPI interface** with interactive Swagger docs.
 - **NVD feed ingestion** for both CPE and CPE Match archives.
+- **PURL → CPE mapping import (`import-purl2cpe`)** with optional replace mode and auto-creation of missing vendor/product/CPE records.
+- **CPE vulnerability reference proposals** (CVE/GCVE/GHSA + `cpeApplicability`) in the public contribution workflow.
+- **Entity note proposals** for adding structured context without directly editing canonical records.
 - **Portable dataset export/import** to migrate curated data between instances.
 - **Stable deterministic UUIDs** for vendor and product identity consistency.
 
