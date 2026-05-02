@@ -549,6 +549,72 @@ def register_cli(app):
         created_products = 0
         skipped = 0
 
+        def ensure_cpe_name_id(cpe_uri: str, parsed: dict | None = None) -> str | None:
+            nonlocal imported_cpes, created_vendors, created_products
+            cpe_name_id = cpe_cache.get(cpe_uri)
+            if cpe_name_id:
+                return cpe_name_id
+            parsed = parsed or parse_cpe23_uri(cpe_uri)
+            if not parsed:
+                return None
+
+            vendor_name = parsed["vendor"]
+            product_name = parsed["product"]
+            vendor = vendor_cache.get(vendor_name)
+            if vendor is None:
+                vendor = Vendor(
+                    uuid=vendor_uuid_for_name(vendor_name),
+                    name=vendor_name,
+                    title=titleize_token(vendor_name),
+                )
+                db.session.add(vendor)
+                db.session.flush()
+                vendor_cache[vendor_name] = vendor
+                created_vendors += 1
+
+            product_key = (vendor.id, product_name)
+            product = product_cache.get(product_key)
+            if product is None:
+                product = Product(
+                    uuid=product_uuid_for_names(vendor_name, product_name),
+                    vendor_id=vendor.id,
+                    name=product_name,
+                    title=titleize_token(product_name),
+                )
+                db.session.add(product)
+                db.session.flush()
+                product_cache[product_key] = product
+                created_products += 1
+
+            cpe = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
+            if cpe is None:
+                cpe = CPEEntry(
+                    vendor_id=vendor.id,
+                    product_id=product.id,
+                    cpe_uri=cpe_uri,
+                    cpe_name_id=new_uuid(),
+                    deprecated=False,
+                    part=parsed["part"],
+                    version=parsed["version"],
+                    update=parsed["update"],
+                    edition=parsed["edition"],
+                    language=parsed["language"],
+                    sw_edition=parsed["sw_edition"],
+                    target_sw=parsed["target_sw"],
+                    target_hw=parsed["target_hw"],
+                    other=parsed["other"],
+                    title=titleize_token(product_name),
+                    notes="Imported from purl2cpe mapping",
+                )
+                db.session.add(cpe)
+                db.session.flush()
+                imported_cpes += 1
+            if not cpe.cpe_name_id:
+                cpe.cpe_name_id = new_uuid()
+                db.session.flush()
+            cpe_cache[cpe_uri] = cpe.cpe_name_id
+            return cpe.cpe_name_id
+
         for purl_file in data_dir.glob("**/purls.yml"):
             cpe_file = purl_file.with_name("cpes.yml")
             if not cpe_file.exists():
@@ -561,74 +627,42 @@ def register_cli(app):
                 continue
 
             for cpe_uri in cpes:
-                cpe_name_id = cpe_cache.get(cpe_uri)
+                parsed = parse_cpe23_uri(cpe_uri)
+                if not parsed:
+                    skipped += 1
+                    continue
+                cpe_name_ids = []
+                cpe_name_id = ensure_cpe_name_id(cpe_uri, parsed=parsed)
                 if not cpe_name_id:
-                    parsed = parse_cpe23_uri(cpe_uri)
-                    if not parsed:
-                        skipped += 1
-                        continue
-                    vendor_name = parsed["vendor"]
-                    product_name = parsed["product"]
-                    vendor = vendor_cache.get(vendor_name)
-                    if vendor is None:
-                        vendor = Vendor(
-                            uuid=vendor_uuid_for_name(vendor_name),
-                            name=vendor_name,
-                            title=titleize_token(vendor_name),
-                        )
-                        db.session.add(vendor)
-                        db.session.flush()
-                        vendor_cache[vendor_name] = vendor
-                        created_vendors += 1
-                    product_key = (vendor.id, product_name)
-                    product = product_cache.get(product_key)
-                    if product is None:
-                        product = Product(
-                            uuid=product_uuid_for_names(vendor_name, product_name),
-                            vendor_id=vendor.id,
-                            name=product_name,
-                            title=titleize_token(product_name),
-                        )
-                        db.session.add(product)
-                        db.session.flush()
-                        product_cache[product_key] = product
-                        created_products += 1
+                    skipped += 1
+                    continue
+                cpe_name_ids.append(cpe_name_id)
 
-                    cpe = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
-                    if cpe is None:
-                        cpe = CPEEntry(
-                            vendor_id=vendor.id,
-                            product_id=product.id,
-                            cpe_uri=cpe_uri,
-                            cpe_name_id=new_uuid(),
-                            deprecated=False,
-                            part=parsed["part"],
-                            version=parsed["version"],
-                            update=parsed["update"],
-                            edition=parsed["edition"],
-                            language=parsed["language"],
-                            sw_edition=parsed["sw_edition"],
-                            target_sw=parsed["target_sw"],
-                            target_hw=parsed["target_hw"],
-                            other=parsed["other"],
-                            title=titleize_token(product_name),
-                            notes="Imported from purl2cpe mapping",
-                        )
-                        db.session.add(cpe)
-                        db.session.flush()
-                        imported_cpes += 1
-                    if not cpe.cpe_name_id:
-                        cpe.cpe_name_id = new_uuid()
-                        db.session.flush()
-                    cpe_name_id = cpe.cpe_name_id
-                    cpe_cache[cpe_uri] = cpe_name_id
+                product_level_uri = build_cpe_uri(
+                    parsed["part"],
+                    parsed["vendor"],
+                    parsed["product"],
+                    "*",
+                    "*",
+                    "*",
+                    "*",
+                    "*",
+                    "*",
+                    "*",
+                    "*",
+                )
+                product_level_cpe_name_id = ensure_cpe_name_id(product_level_uri)
+                if product_level_cpe_name_id:
+                    cpe_name_ids.append(product_level_cpe_name_id)
+
                 for purl in purls:
-                    key = (cpe_name_id, purl)
-                    if key in existing_pairs:
-                        continue
-                    db.session.add(CPEPurlMapping(cpe_name_id=cpe_name_id, purl=purl, source="purl2cpe"))
-                    existing_pairs.add(key)
-                    imported += 1
+                    for cpe_name_id in set(cpe_name_ids):
+                        key = (cpe_name_id, purl)
+                        if key in existing_pairs:
+                            continue
+                        db.session.add(CPEPurlMapping(cpe_name_id=cpe_name_id, purl=purl, source="purl2cpe"))
+                        existing_pairs.add(key)
+                        imported += 1
             if imported and imported % 5000 == 0:
                 db.session.commit()
 
