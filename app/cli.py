@@ -21,7 +21,7 @@ from .models import (
     Vendor,
     db,
 )
-from .utils import new_uuid, parse_cpe23_uri, product_uuid_for_names, vendor_uuid_for_name
+from .utils import build_cpe_uri, new_uuid, parse_cpe23_uri, product_uuid_for_names, vendor_uuid_for_name
 
 DEFAULT_NVD_CPE_FEED = "https://nvd.nist.gov/feeds/json/cpe/2.0/nvdcpe-2.0.tar.gz"
 DEFAULT_NVD_CPE_MATCH_FEED = (
