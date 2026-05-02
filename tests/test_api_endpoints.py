@@ -1,4 +1,8 @@
+import io
+import json
+
 from app.models import CPEEntry, Product, Vendor
+from app import views
 
 
 def test_list_vendors_with_pagination(client):
@@ -112,3 +116,37 @@ def test_fixture_contains_expected_subset_records(app):
         assert Vendor.query.count() == 2
         assert Product.query.count() == 3
         assert CPEEntry.query.count() == 3
+
+
+def test_gcve_cpe_search_accepts_cvelistv5_payload(client, monkeypatch):
+    payload = {
+        "cvelistv5": [
+            {
+                "cveMetadata": {
+                    "cveId": "CVE-2018-1083",
+                    "dateUpdated": "2024-09-16T18:13:29.080Z",
+                },
+                "containers": {
+                    "cna": {
+                        "descriptions": [
+                            {"lang": "en", "value": "Example vulnerability description."}
+                        ]
+                    }
+                },
+            }
+        ]
+    }
+
+    def fake_urlopen(_request_obj, timeout=8):
+        return io.StringIO(json.dumps(payload))
+
+    monkeypatch.setattr(views, "urlopen", fake_urlopen)
+
+    response = client.get("/api/gcve/cpesearch?cpe=cpe:2.3:a:zsh:zsh:*:*:*:*:*:*:*:*")
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result["ok"] is True
+    assert result["count"] == 1
+    assert result["items"][0]["id"] == "CVE-2018-1083"
+    assert result["items"][0]["source"] == "CVE"
+    assert result["items"][0]["summary"] == "Example vulnerability description."
