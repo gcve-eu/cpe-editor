@@ -279,14 +279,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const renderItems = (items) => {
     if (!items.length) return "<p>No vulnerabilities returned for this CPE value.</p>";
-    const rows = items.slice(0, 25).map((item) => `
+    const rows = items.slice(0, 25).map((item) => {
+      const vulnId = item.id || "";
+      const gcveVulnUrl = `https://db.gcve.eu/vuln/${encodeURIComponent(vulnId)}`;
+      return `
       <tr>
-        <td><code>${item.source}:${item.id}</code></td>
+        <td>
+          <a href="${gcveVulnUrl}" target="_blank" rel="noopener noreferrer">
+            <code>${item.source}:${vulnId}</code>
+          </a>
+        </td>
         <td>${item.severity || "—"}</td>
         <td>${item.updated_at || "—"}</td>
         <td>${item.summary || "—"}</td>
       </tr>
-    `).join("");
+    `;
+    }).join("");
     return `<table><thead><tr><th>Vulnerability</th><th>Severity</th><th>Updated</th><th>Summary</th></tr></thead><tbody>${rows}</tbody></table>`;
   };
 
