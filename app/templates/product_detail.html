@@ -223,15 +223,36 @@
 </div>
 
 <div class="card">
+  <h2>db.gcve.eu vulnerability lookup</h2>
+  <p class="muted">Run a CPE search on db.gcve.eu at product-level wildcard or on an exact CPE version.</p>
+  <div class="action-row">
+    {% if product_level_cpe %}
+      <button type="button" class="button js-gcve-cpe-search" data-cpe="{{ product_level_cpe|e }}">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Lookup product-level CPE
+      </button>
+      <code>{{ product_level_cpe }}</code>
+    {% else %}
+      <span class="muted">No CPE entries available to build a product-level lookup.</span>
+    {% endif %}
+  </div>
+  <div id="gcve-cpe-search-results" class="muted" style="margin-top:.8rem;"></div>
+</div>
+
+<div class="card">
   <h2>CPE entries</h2>
   <table>
-    <thead><tr><th>CPE URI</th><th>Version</th><th>Part</th><th>Export</th></tr></thead>
+    <thead><tr><th>CPE URI</th><th>Version</th><th>Part</th><th>GCVE lookup</th><th>Export</th></tr></thead>
     <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
     {% for cpe in product.cpes %}
       <tr>
         <td><a href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}"><code>{{ cpe.cpe_uri }}</code></a></td>
         <td>{{ cpe.version }}</td>
         <td>{{ cpe.part }}</td>
+        <td>
+          <button type="button" class="button secondary js-gcve-cpe-search" data-cpe="{{ cpe.cpe_uri|e }}">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Lookup
+          </button>
+        </td>
         <td>
           <button
             type="button"
@@ -246,9 +267,47 @@
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="4">No CPE entries yet.</td></tr>
+      <tr><td colspan="5">No CPE entries yet.</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const resultContainer = document.getElementById("gcve-cpe-search-results");
+  const lookupButtons = document.querySelectorAll(".js-gcve-cpe-search");
+
+  const renderItems = (items) => {
+    if (!items.length) return "<p>No vulnerabilities returned for this CPE value.</p>";
+    const rows = items.slice(0, 25).map((item) => `
+      <tr>
+        <td><code>${item.source}:${item.id}</code></td>
+        <td>${item.severity || "—"}</td>
+        <td>${item.updated_at || "—"}</td>
+        <td>${item.summary || "—"}</td>
+      </tr>
+    `).join("");
+    return `<table><thead><tr><th>Vulnerability</th><th>Severity</th><th>Updated</th><th>Summary</th></tr></thead><tbody>${rows}</tbody></table>`;
+  };
+
+  lookupButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      const cpeValue = button.dataset.cpe;
+      if (!cpeValue || !resultContainer) return;
+      resultContainer.innerHTML = `<p>Looking up <code>${cpeValue}</code> on db.gcve.eu…</p>`;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/gcve/cpesearch?cpe=${encodeURIComponent(cpeValue)}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.error || `Lookup failed (${response.status})`);
+        resultContainer.innerHTML = `<p><strong>${payload.count}</strong> vulnerability matches for <code>${cpeValue}</code>.</p>${renderItems(payload.items || [])}`;
+      } catch (error) {
+        resultContainer.innerHTML = `<p>Unable to complete lookup: ${error.message}</p>`;
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+});
+</script>
 {% endblock %}

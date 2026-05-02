@@ -204,6 +204,85 @@ def _fetch_gcve_vulnerability(reference):
         "references": references,
     }
 
+
+def _fetch_gcve_cpe_matches(cpe_value):
+    normalized_cpe = (cpe_value or "").strip()
+    if not normalized_cpe:
+        return {"ok": False, "error": "Missing CPE value."}
+
+    api_base_url = (
+        current_app.config.get("GCVE_API_BASE_URL") or "https://db.gcve.eu/api"
+    ).rstrip("/")
+    endpoint = f"{api_base_url}/vulnerability/cpesearch/{quote(normalized_cpe, safe='')}"
+    request_obj = Request(
+        endpoint,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "cpe-editor/1.0",
+        },
+    )
+
+    try:
+        with urlopen(request_obj, timeout=8) as response:
+            payload = json.load(response)
+    except HTTPError as exc:
+        return {"ok": False, "error": f"db.gcve.eu returned HTTP {exc.code}."}
+    except (URLError, TimeoutError, ValueError, json.JSONDecodeError):
+        return {"ok": False, "error": "db.gcve.eu CPE lookup is currently unavailable."}
+
+    records = payload.get("data") if isinstance(payload, dict) else payload
+    if not isinstance(records, list):
+        records = []
+
+    items = []
+    for record in records[:100]:
+        if not isinstance(record, dict):
+            continue
+        vuln_id = str(record.get("vulnerability_id") or record.get("id") or "").strip()
+        source = str(record.get("source") or "").strip().upper() or "GCVE"
+        summary = str(record.get("summary") or record.get("description") or "").strip() or None
+        severity = str(record.get("severity") or "").strip() or None
+        updated_at = (
+            str(record.get("updated_at") or record.get("modified") or record.get("dateUpdated") or "").strip()
+            or None
+        )
+
+        if not vuln_id:
+            continue
+        items.append(
+            {
+                "id": vuln_id,
+                "source": source,
+                "summary": summary,
+                "severity": severity,
+                "updated_at": updated_at,
+            }
+        )
+
+    return {"ok": True, "count": len(items), "items": items}
+
+
+def _build_product_level_cpe(cpe_uri):
+    try:
+        parsed = parse_cpe23_uri(cpe_uri)
+    except ValueError:
+        return None
+    if not parsed:
+        return None
+    return build_cpe_uri(
+        part=parsed.get("part") or "a",
+        vendor=parsed.get("vendor") or "*",
+        product=parsed.get("product") or "*",
+        version="*",
+        update="*",
+        edition="*",
+        language="*",
+        sw_edition="*",
+        target_sw="*",
+        target_hw="*",
+        other="*",
+    )
+
 def _get_csrf_token():
     token = session.get("_csrf_token")
     if not token:
@@ -957,6 +1036,9 @@ def product_detail(product_uuid):
         .order_by(CPEEntry.cpe_uri.asc())
         .all()
     )
+    product_level_cpe = None
+    if product.cpes:
+        product_level_cpe = _build_product_level_cpe(product.cpes[0].cpe_uri)
     return render_template(
         "product_detail.html",
         product=product,
@@ -965,6 +1047,7 @@ def product_detail(product_uuid):
         product_relationships=product_relationships,
         combined_view_products=combined_view_products,
         combined_view_cpes=combined_view_cpes,
+        product_level_cpe=product_level_cpe,
         combined_view_relationship_types=sorted(PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES),
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
     )
@@ -1001,6 +1084,14 @@ def api_openapi_spec():
 @bp.route("/api/docs")
 def api_docs():
     return render_template("api_docs.html")
+
+
+@bp.route("/api/gcve/cpesearch")
+def api_gcve_cpe_search():
+    cpe_value = (request.args.get("cpe") or "").strip()
+    result = _fetch_gcve_cpe_matches(cpe_value)
+    status_code = 200 if result.get("ok") else 502
+    return jsonify(result), status_code
 
 
 @bp.route("/api/vendors")
