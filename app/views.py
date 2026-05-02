@@ -271,8 +271,8 @@ def _build_product_level_cpe(cpe_uri):
         return None
     return build_cpe_uri(
         part=parsed.get("part") or "a",
-        vendor=parsed.get("vendor") or "*",
-        product=parsed.get("product") or "*",
+        vendor_name=parsed.get("vendor") or "*",
+        product_name=parsed.get("product") or "*",
         version="*",
         update="*",
         edition="*",
