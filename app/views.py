@@ -231,6 +231,8 @@ def _fetch_gcve_cpe_matches(cpe_value):
         return {"ok": False, "error": "db.gcve.eu CPE lookup is currently unavailable."}
 
     records = payload.get("data") if isinstance(payload, dict) else payload
+    if isinstance(payload, dict) and isinstance(payload.get("cvelistv5"), list):
+        records = payload.get("cvelistv5")
     if not isinstance(records, list):
         records = []
 
@@ -238,14 +240,34 @@ def _fetch_gcve_cpe_matches(cpe_value):
     for record in records[:100]:
         if not isinstance(record, dict):
             continue
-        vuln_id = str(record.get("vulnerability_id") or record.get("id") or "").strip()
-        source = str(record.get("source") or "").strip().upper() or "GCVE"
-        summary = str(record.get("summary") or record.get("description") or "").strip() or None
-        severity = str(record.get("severity") or "").strip() or None
-        updated_at = (
-            str(record.get("updated_at") or record.get("modified") or record.get("dateUpdated") or "").strip()
-            or None
+        cve_metadata = record.get("cveMetadata") if isinstance(record.get("cveMetadata"), dict) else {}
+        containers = record.get("containers") if isinstance(record.get("containers"), dict) else {}
+        cna_container = containers.get("cna") if isinstance(containers.get("cna"), dict) else {}
+        descriptions = cna_container.get("descriptions") if isinstance(cna_container.get("descriptions"), list) else []
+        first_description = next(
+            (
+                item.get("value")
+                for item in descriptions
+                if isinstance(item, dict) and isinstance(item.get("value"), str) and item.get("value").strip()
+            ),
+            None,
         )
+        vuln_id = str(
+            record.get("vulnerability_id")
+            or record.get("id")
+            or cve_metadata.get("cveId")
+            or ""
+        ).strip()
+        source = str(record.get("source") or "").strip().upper() or "CVE"
+        summary = str(record.get("summary") or record.get("description") or first_description or "").strip() or None
+        severity = str(record.get("severity") or "").strip() or None
+        updated_at = str(
+            record.get("updated_at")
+            or record.get("modified")
+            or record.get("dateUpdated")
+            or cve_metadata.get("dateUpdated")
+            or ""
+        ).strip() or None
 
         if not vuln_id:
             continue
