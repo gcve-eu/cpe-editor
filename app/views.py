@@ -211,7 +211,7 @@ def _fetch_gcve_cpe_matches(cpe_value):
         return {"ok": False, "error": "Missing CPE value."}
 
     api_base_url = (
-        current_app.config.get("GCVE_API_BASE_URL") or "https://db.gcve.eu/api"
+        current_app.config.get("GCVE_API_BASE_URL") or "https://vulnerability.circl.lu/api"
     ).rstrip("/")
     endpoint = f"{api_base_url}/vulnerability/cpesearch/{quote(normalized_cpe, safe='')}"
     request_obj = Request(
