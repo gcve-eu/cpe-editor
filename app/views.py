@@ -1521,12 +1521,27 @@ def proposal_new():
                 flash("Please choose a valid cpeApplicability status.", "danger")
                 return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
         if proposal_type == "new_purl_mapping":
-            selected_targets = int(bool(proposal.vendor_id)) + int(bool(proposal.product_id)) + int(
-                bool(proposal.cpe_entry_id)
+            # Product/CPE targets can carry parent IDs from prefilled form context.
+            # Treat the most specific populated target as the intended scope.
+            effective_vendor_id = proposal.vendor_id
+            effective_product_id = proposal.product_id
+            effective_cpe_entry_id = proposal.cpe_entry_id
+
+            if effective_cpe_entry_id:
+                effective_vendor_id = None
+                effective_product_id = None
+            elif effective_product_id:
+                effective_vendor_id = None
+
+            selected_targets = int(bool(effective_vendor_id)) + int(bool(effective_product_id)) + int(
+                bool(effective_cpe_entry_id)
             )
             if selected_targets != 1:
                 flash("Choose exactly one target: vendor, product, or CPE version.", "danger")
                 return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+            proposal.vendor_id = effective_vendor_id
+            proposal.product_id = effective_product_id
+            proposal.cpe_entry_id = effective_cpe_entry_id
             if not proposal.proposed_purl:
                 flash("Please provide a proposed PURL.", "danger")
                 return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
