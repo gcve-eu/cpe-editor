@@ -11,6 +11,7 @@
           "cpes": [
             {
               "cpe_uri": "cpe:2.3:o:microsoft:windows_11:23h2:*:*:*:*:*:*:*",
+              "cpe_name_id": "cpe-name-windows-11-23h2",
               "part": "o",
               "version": "23h2",
               "title": "Microsoft Windows 11 23H2"
@@ -23,6 +24,7 @@
           "cpes": [
             {
               "cpe_uri": "cpe:2.3:a:microsoft:office:2021:*:*:*:*:*:*:*",
+              "cpe_name_id": "cpe-name-office-2021",
               "part": "a",
               "version": "2021",
               "title": "Microsoft Office 2021"
@@ -41,6 +43,7 @@
           "cpes": [
             {
               "cpe_uri": "cpe:2.3:a:apache:http_server:2.4.58:*:*:*:*:*:*:*",
+              "cpe_name_id": "cpe-name-apache-http-2458",
               "part": "a",
               "version": "2.4.58",
               "title": "Apache HTTP Server 2.4.58"
@@ -64,6 +67,18 @@
       "vulnerability_id": "GHSA-xxxx-yyyy-zzzz",
       "cpe_applicability": "under_investigation",
       "rationale": "Example advisory link"
+    }
+  ],
+  "purl_mappings": [
+    {
+      "cpe_uri": "cpe:2.3:a:apache:http_server:2.4.58:*:*:*:*:*:*:*",
+      "purl": "pkg:generic/apache/http_server@2.4.58",
+      "source": "purl2cpe"
+    },
+    {
+      "cpe_uri": "cpe:2.3:o:microsoft:windows_11:23h2:*:*:*:*:*:*:*",
+      "purl": "pkg:generic/microsoft/windows_11@23h2",
+      "source": "purl2cpe"
     }
   ]
 }

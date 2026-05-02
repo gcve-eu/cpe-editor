@@ -74,6 +74,9 @@ def test_cpe_listing_filters_and_detail(client):
     detail_payload = detail_response.get_json()
     assert detail_payload["id"] == cpe["id"]
     assert detail_payload["cpe_uri"] == cpe["cpe_uri"]
+    assert "purl_mappings" in detail_payload
+    assert isinstance(detail_payload["purl_mappings"], list)
+    assert len(detail_payload["purl_mappings"]) >= 1
 
 
 def test_vulnerability_reference_endpoints(client):
