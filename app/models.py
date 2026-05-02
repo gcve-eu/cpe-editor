@@ -182,6 +182,7 @@ class Proposal(TimestampMixin, db.Model):
     proposed_vulnerability_id = db.Column(db.String(64), nullable=True, index=True)
     proposed_vulnerability_source = db.Column(db.String(16), nullable=True, index=True)
     proposed_cpe_applicability = db.Column(db.String(64), nullable=True)
+    proposed_purl = db.Column(db.String(2048), nullable=True)
     source_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
     source_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
     target_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)

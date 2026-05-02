@@ -17,6 +17,7 @@
       </button>
       <a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Submit a proposal</a>
       <a class="button secondary" href="{{ url_for('main.proposal_new', proposal_type='new_cpe_vulnerability_reference', cpe_entry_id=cpe.id, product_id=cpe.product_id, vendor_id=cpe.vendor_id) }}"><i class="fa-solid fa-link" aria-hidden="true"></i>Propose CVE/GCVE/GHSA reference</a>
+      <a class="button secondary" href="{{ url_for('main.proposal_new', proposal_type='new_purl_mapping', cpe_entry_id=cpe.id, product_id=cpe.product_id, vendor_id=cpe.vendor_id) }}"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>Propose PURL mapping</a>
     </div>
   </div>
   <p><code>{{ cpe.cpe_uri }}</code></p>

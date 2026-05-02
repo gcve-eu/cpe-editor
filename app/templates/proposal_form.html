@@ -29,6 +29,7 @@
             <option value="new_vendor_product" {% if preselected_proposal_type == "new_vendor_product" %}selected{% endif %}>Add a new vendor and product</option>
             <option value="new_record_relationship" {% if preselected_proposal_type == "new_record_relationship" %}selected{% endif %}>Propose a vendor/product relationship</option>
             <option value="new_cpe_vulnerability_reference" {% if preselected_proposal_type == "new_cpe_vulnerability_reference" %}selected{% endif %}>Propose a CPE → vulnerability reference</option>
+            <option value="new_purl_mapping" {% if preselected_proposal_type == "new_purl_mapping" %}selected{% endif %}>Propose a PURL mapping</option>
           </select>
         </div>
         <div>
@@ -189,6 +190,16 @@
         </div>
       </div>
     </div>
+    <div id="purl_mapping_section" class="form-section" style="display:none;">
+      <h2>PURL mapping proposal</h2>
+      <p class="muted">Choose exactly one target scope: vendor, product, or CPE version ID.</p>
+      <div class="grid grid-2">
+        <div>
+          <label for="proposed_purl">Proposed PURL</label>
+          <input id="proposed_purl" name="proposed_purl" placeholder="pkg:type/namespace/name@version?qualifiers#subpath">
+        </div>
+      </div>
+    </div>
 
     <div class="form-section">
       <h2>Optional details (help reviewers)</h2>
@@ -301,10 +312,13 @@
     const cpeApplicabilityInput = document.getElementById("proposed_cpe_applicability");
     const cpeEntryInput = document.getElementById("cpe_entry_id");
     const cpeTripletInput = document.getElementById("cpe_triplet");
+    const purlMappingSection = document.getElementById("purl_mapping_section");
+    const proposedPurlInput = document.getElementById("proposed_purl");
     const typesForAutoFill = new Set(["new_cpe", "new_product"]);
     const typesThatNeedProductToken = new Set(["new_cpe", "new_product", "new_vendor_product", "edit_cpe"]);
     const isRelationshipProposal = () => proposalType.value === "new_record_relationship";
     const isVulnReferenceProposal = () => proposalType.value === "new_cpe_vulnerability_reference";
+    const isPurlMappingProposal = () => proposalType.value === "new_purl_mapping";
     const suggestLimit = 20;
 
     function debounce(fn, waitMs) {
@@ -391,17 +405,22 @@
       cpeApplicabilityInput.required = isVulnReferenceProposal();
       cpeEntryInput.required = isVulnReferenceProposal();
     }
+    function syncPurlMappingMode() {
+      purlMappingSection.style.display = isPurlMappingProposal() ? "" : "none";
+      proposedPurlInput.required = isPurlMappingProposal();
+    }
 
     function syncVendorFieldMode() {
       const isNewVendorProduct = proposalType.value === "new_vendor_product";
       const isRelationship = isRelationshipProposal();
       const isVulnReference = isVulnReferenceProposal();
+      const isPurlMapping = isPurlMappingProposal();
       existingVendorGroup.style.display = isNewVendorProduct ? "none" : "";
       newVendorGroup.style.display = isNewVendorProduct ? "" : "none";
-      vendorSelect.required = !isNewVendorProduct && !isRelationship && !isVulnReference;
+      vendorSelect.required = !isNewVendorProduct && !isRelationship && !isVulnReference && !isPurlMapping;
       vendorNameInput.required = isNewVendorProduct;
       notesInput.required = false;
-      productNameInput.required = typesThatNeedProductToken.has(proposalType.value) && !isRelationship && !isVulnReference;
+      productNameInput.required = typesThatNeedProductToken.has(proposalType.value) && !isRelationship && !isVulnReference && !isPurlMapping;
       productIdInput.required = false;
       if (isNewVendorProduct) {
         vendorSelect.value = "";
@@ -429,6 +448,7 @@
     proposalType.addEventListener("change", syncVendorFieldMode);
     proposalType.addEventListener("change", syncRelationshipMode);
     proposalType.addEventListener("change", syncVulnerabilityReferenceMode);
+    proposalType.addEventListener("change", syncPurlMappingMode);
     sourceEntityKind.addEventListener("change", syncRelationshipMode);
     targetEntityKind.addEventListener("change", syncRelationshipMode);
     vendorSelect.addEventListener("change", maybeAutoFillVendor);
@@ -452,6 +472,7 @@
     syncVendorFieldMode();
     syncRelationshipMode();
     syncVulnerabilityReferenceMode();
+    syncPurlMappingMode();
     maybeAutoFillVendor();
   })();
 </script>
