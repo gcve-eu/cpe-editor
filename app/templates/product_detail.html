@@ -222,6 +222,27 @@
   {% endif %}
 </div>
 
+
+<div class="card">
+  <h2>PURL mappings</h2>
+  <table>
+    <thead><tr><th>PURL</th><th>CPE URI</th><th>Version</th><th>Source</th><th>Last updated</th></tr></thead>
+    <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
+      {% for mapping in product_purl_mappings %}
+        <tr>
+          <td><code>{{ mapping.purl }}</code></td>
+          <td><a href="{{ url_for('main.cpe_detail', cpe_id=mapping.cpe_entry.id) }}"><code>{{ mapping.cpe_entry.cpe_uri }}</code></a></td>
+          <td>{{ mapping.cpe_entry.version }}</td>
+          <td>{{ mapping.source }}</td>
+          <td>{{ mapping.updated_at or mapping.created_at }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5">No PURL mappings found for this product yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
 <div class="card">
   <h2>db.gcve.eu vulnerability lookup</h2>
   <p class="muted">Run a CPE search on db.gcve.eu at product-level wildcard or on an exact CPE version.</p>
