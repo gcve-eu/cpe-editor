@@ -1023,6 +1023,7 @@ def vendor_detail(vendor_uuid):
         combined_view_vendors=combined_view_vendors,
         combined_view_products=combined_view_products,
         combined_view_relationship_types=sorted(PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES),
+        product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
     )
 
@@ -1061,6 +1062,12 @@ def product_detail(product_uuid):
     product_level_cpe = None
     if product.cpes:
         product_level_cpe = _build_product_level_cpe(product.cpes[0].cpe_uri)
+    product_purl_mappings = (
+        CPEPurlMapping.query.join(CPEEntry, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
+        .filter(CPEEntry.product_id == product.id)
+        .order_by(CPEPurlMapping.purl.asc(), CPEEntry.version.asc(), CPEEntry.id.asc())
+        .all()
+    )
     return render_template(
         "product_detail.html",
         product=product,
@@ -1071,6 +1078,7 @@ def product_detail(product_uuid):
         combined_view_cpes=combined_view_cpes,
         product_level_cpe=product_level_cpe,
         combined_view_relationship_types=sorted(PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES),
+        product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
     )
 
