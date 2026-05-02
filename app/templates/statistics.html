@@ -18,8 +18,16 @@
       <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ total_cpes }}</strong></p>
     </article>
     <article class="card">
+      <h2><i class="fa-solid fa-link" aria-hidden="true"></i> Total PURL mappings</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ total_purl_mappings }}</strong></p>
+    </article>
+    <article class="card">
       <h2><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Average products per vendor</h2>
       <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ average_products_per_vendor }}</strong></p>
+    </article>
+    <article class="card">
+      <h2><i class="fa-solid fa-percent" aria-hidden="true"></i> Average PURLs per CPE</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ average_purls_per_cpe }}</strong></p>
     </article>
   </section>
 
@@ -38,6 +46,7 @@
         <li>No vendor has products yet.</li>
       {% endif %}
       <li>Vendors without products: {{ vendors_without_products }}</li>
+      <li>CPE records with at least one PURL mapping: {{ cpes_with_purl_mappings }}</li>
     </ul>
 
     {% if cpe_part_counts %}

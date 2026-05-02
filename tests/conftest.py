@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from app.models import CPEEntry, CPEVulnerabilityReference, Product, Vendor, db
+from app.models import CPEEntry, CPEPurlMapping, CPEVulnerabilityReference, Product, Vendor, db
 
 
 @pytest.fixture()
@@ -67,6 +67,7 @@ def _load_fixture_data():
                     vendor_id=vendor.id,
                     product_id=product.id,
                     cpe_uri=cpe_item["cpe_uri"],
+                    cpe_name_id=cpe_item.get("cpe_name_id"),
                     part=cpe_item["part"],
                     version=cpe_item.get("version", "*"),
                     update=cpe_item.get("update", "*"),
@@ -93,5 +94,14 @@ def _load_fixture_data():
             rationale=ref_item.get("rationale"),
         )
         db.session.add(reference)
+
+    for mapping_item in payload.get("purl_mappings", []):
+        cpe = cpes_by_uri[mapping_item["cpe_uri"]]
+        mapping = CPEPurlMapping(
+            cpe_name_id=cpe.cpe_name_id,
+            purl=mapping_item["purl"],
+            source=mapping_item.get("source") or "purl2cpe",
+        )
+        db.session.add(mapping)
 
     db.session.commit()

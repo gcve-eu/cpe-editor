@@ -27,6 +27,7 @@ from sqlalchemy import func, or_, text
 
 from .models import (
     CPEEntry,
+    CPEPurlMapping,
     CPEVulnerabilityReference,
     EntityMetadata,
     EntityNote,
@@ -480,6 +481,17 @@ def _serialize_cpe(cpe):
                 reverse=True,
             )
         ],
+        "purl_mappings": [
+            {
+                "id": mapping.id,
+                "cpe_name_id": mapping.cpe_name_id,
+                "purl": mapping.purl,
+                "source": mapping.source,
+                "created_at": mapping.created_at.isoformat() if mapping.created_at else None,
+                "updated_at": mapping.updated_at.isoformat() if mapping.updated_at else None,
+            }
+            for mapping in cpe.purl_mappings
+        ],
     }
 
 
@@ -801,6 +813,11 @@ def statistics():
     total_vendors = db.session.query(func.count(Vendor.id)).scalar() or 0
     total_products = db.session.query(func.count(Product.id)).scalar() or 0
     total_cpes = db.session.query(func.count(CPEEntry.id)).scalar() or 0
+    total_purl_mappings = db.session.query(func.count(CPEPurlMapping.id)).scalar() or 0
+    cpes_with_purl_mappings = (
+        db.session.query(func.count(func.distinct(CPEPurlMapping.cpe_name_id))).scalar() or 0
+    )
+    average_purls_per_cpe = round(total_purl_mappings / total_cpes, 2) if total_cpes else 0
 
     vendor_product_counts_query = (
         db.session.query(
@@ -851,6 +868,9 @@ def statistics():
         total_vendors=total_vendors,
         total_products=total_products,
         total_cpes=total_cpes,
+        total_purl_mappings=total_purl_mappings,
+        cpes_with_purl_mappings=cpes_with_purl_mappings,
+        average_purls_per_cpe=average_purls_per_cpe,
         average_products_per_vendor=average_products_per_vendor,
         top_vendor=top_vendor,
         vendors_without_products=vendors_without_products,

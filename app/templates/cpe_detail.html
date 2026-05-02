@@ -39,6 +39,24 @@
 </div>
 
 <div class="card">
+  <h2>PURL mappings</h2>
+  <table>
+    <thead><tr><th>PURL</th><th>Source</th><th>Last updated</th></tr></thead>
+    <tbody>
+      {% for mapping in cpe.purl_mappings %}
+        <tr>
+          <td><code>{{ mapping.purl }}</code></td>
+          <td>{{ mapping.source }}</td>
+          <td>{{ mapping.updated_at or mapping.created_at }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">No PURL mappings for this CPE yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
   <h2>Vulnerability references</h2>
   <table>
     <thead><tr><th>Identifier</th><th>cpeApplicability</th><th>Submitted</th><th>db.gcve.eu details</th><th>Rationale</th></tr></thead>
