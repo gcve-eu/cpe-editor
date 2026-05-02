@@ -1016,6 +1016,12 @@ def vendor_detail(vendor_uuid):
         .order_by(Product.name.asc(), Product.id.asc())
         .all()
     )
+    product_purl_mappings = (
+        CPEPurlMapping.query.join(CPEEntry, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
+        .filter(CPEEntry.product_id.in_([related_product.id for related_product in combined_view_products]))
+        .order_by(CPEPurlMapping.purl.asc(), CPEEntry.version.asc(), CPEEntry.id.asc())
+        .all()
+    )
     return render_template(
         "vendor_detail.html",
         vendor=vendor,
