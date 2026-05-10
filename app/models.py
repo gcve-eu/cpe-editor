@@ -341,4 +341,9 @@ class CPEPurlMapping(TimestampMixin, db.Model):
     __table_args__ = (
         db.UniqueConstraint("cpe_name_id", "purl", name="uq_cpe_purl_mapping"),
         db.Index("ix_cpe_purl_mapping_purl_lower", db.func.lower(purl)),
+        db.Index(
+            "ix_cpe_purl_mapping_cpe_name_purl_lower",
+            "cpe_name_id",
+            db.func.lower(purl),
+        ),
     )
