@@ -846,7 +846,7 @@ def index():
 
     query = CPEEntry.query.join(Vendor).join(Product)
     if purl_q:
-        query = query.join(CPEPurlMapping, CPEPurlMapping.cpe_name_id == CPEEntry.id)
+        query = query.join(CPEPurlMapping, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
     if vendor_q:
         vendor_like = f"{vendor_q.lower()}%"
         query = query.filter(
@@ -1306,11 +1306,14 @@ def api_cpes():
     q = (request.args.get("q") or "").strip()
     vendor_q = (request.args.get("vendor_q") or "").strip()
     product_q = (request.args.get("product_q") or "").strip()
+    purl_q = (request.args.get("purl_q") or "").strip()
     part = (request.args.get("part") or "").strip()
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
     per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
 
     query = CPEEntry.query.join(Vendor).join(Product)
+    if purl_q:
+        query = query.join(CPEPurlMapping, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
     if q:
         like = f"%{q.lower()}%"
         query = query.filter(
@@ -1342,6 +1345,8 @@ def api_cpes():
         )
     if part:
         query = query.filter(CPEEntry.part == part)
+    if purl_q:
+        query = query.filter(func.lower(CPEPurlMapping.purl).like(f"{purl_q.lower()}%"))
 
     total = query.count()
     results = (

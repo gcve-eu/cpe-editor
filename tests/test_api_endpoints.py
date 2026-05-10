@@ -83,6 +83,16 @@ def test_cpe_listing_filters_and_detail(client):
     assert len(detail_payload["purl_mappings"]) >= 1
 
 
+def test_cpe_listing_supports_purl_prefix_filter(client):
+    response = client.get("/api/cpes?purl_q=pkg:generic/apache")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["total"] == 1
+    assert len(payload["items"]) == 1
+    assert "apache:http_server" in payload["items"][0]["cpe_uri"]
+
+
 def test_vulnerability_reference_endpoints(client):
     cpe_listing = client.get("/api/cpes?q=http_server")
     cpe_payload = cpe_listing.get_json()
