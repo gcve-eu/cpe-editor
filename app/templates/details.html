@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}About the collaborative initiative{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="page-header">
+    <h1>About this collaborative CPE platform</h1>
+  </div>
+  <p>
+    The <a href="https://gcve.eu/" target="_blank" rel="noopener noreferrer">GCVE initiative</a> launched this project to take
+    Common Platform Enumeration (CPE) and Package URL (PURL) maintenance to the next level through a collaborative interface.
+    Contributors can propose updates, moderators can review changes, and everyone can track how records evolve.
+  </p>
+  <p>
+    In addition to the web interface, a public API is available for integrations and automation, and a full database dump is
+    provided so organizations can mirror the data in their own environments.
+  </p>
+  <p>
+    The backend software is open source, so anyone can install their own instance and use the GCVE data dump to maintain a
+    local database of updated vendors, products, and CPE records.
+  </p>
+  <p>
+    The system builds on the existing CPE dataset maintained by the CVE Program and NIST. These datasets are available in the
+    public domain and serve as the baseline for collaborative improvement.
+  </p>
+</div>
+{% endblock %}

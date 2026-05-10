@@ -893,6 +893,11 @@ def index():
     )
 
 
+@bp.route("/details")
+def details():
+    return render_template("details.html")
+
+
 @bp.route("/vendors")
 def vendors():
     vendor_page = max(request.args.get("page", default=1, type=int) or 1, 1)
