@@ -23,7 +23,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import func, or_, text
+from sqlalchemy import func, or_, select, text
 
 from .models import (
     CPEEntry,
@@ -847,13 +847,12 @@ def index():
     query = CPEEntry.query.join(Vendor).join(Product)
     if purl_q:
         purl_like = f"{purl_q.lower()}%"
-        query = query.filter(
-            db.session.query(CPEPurlMapping.id)
-            .filter(CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
+        matching_cpe_name_ids = (
+            select(CPEPurlMapping.cpe_name_id)
             .filter(func.lower(CPEPurlMapping.purl).like(purl_like))
-            .correlate(CPEEntry)
-            .exists()
+            .distinct()
         )
+        query = query.filter(CPEEntry.cpe_name_id.in_(matching_cpe_name_ids))
     if vendor_q:
         vendor_like = f"{vendor_q.lower()}%"
         query = query.filter(
@@ -1323,13 +1322,12 @@ def api_cpes():
     query = CPEEntry.query.join(Vendor).join(Product)
     if purl_q:
         purl_like = f"{purl_q.lower()}%"
-        query = query.filter(
-            db.session.query(CPEPurlMapping.id)
-            .filter(CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
+        matching_cpe_name_ids = (
+            select(CPEPurlMapping.cpe_name_id)
             .filter(func.lower(CPEPurlMapping.purl).like(purl_like))
-            .correlate(CPEEntry)
-            .exists()
+            .distinct()
         )
+        query = query.filter(CPEEntry.cpe_name_id.in_(matching_cpe_name_ids))
     if q:
         like = f"%{q.lower()}%"
         query = query.filter(
