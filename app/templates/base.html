@@ -111,6 +111,31 @@
     }
     .grid { display: grid; gap: 1rem; }
     .grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .search-form {
+      align-items: end;
+    }
+    .search-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .65rem;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: .25rem;
+    }
+    .search-actions .button,
+    .search-actions button {
+      width: auto;
+      min-height: 2.75rem;
+    }
+    .search-hint {
+      grid-column: 1 / -1;
+      margin: -.35rem 0 0;
+      font-size: .92rem;
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+    }
     label { display:block; font-weight: 600; margin: .5rem 0 .25rem; }
     input, select, textarea, button {
       width: 100%;
