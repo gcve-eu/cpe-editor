@@ -257,6 +257,19 @@
       word-break: break-word;
     }
     footer { padding-top: .25rem; padding-bottom: 1.3rem; }
+    .footer-meta {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      flex-wrap: wrap;
+    }
+    .footer-logo {
+      width: 1.8rem;
+      height: 1.8rem;
+      object-fit: contain;
+      border-radius: 999px;
+      box-shadow: 0 0 0 1px rgba(30, 41, 59, .12);
+    }
     @media (max-width: 760px) {
       header { position: static; }
       nav .brand {
@@ -306,7 +319,7 @@
   {% block content %}{% endblock %}
 </main>
 <footer>
-  <p class="muted">An interface for moderated CPE editing by the <a href="https://gcve.eu" target="_blank" rel="noopener noreferrer">GCVE initiative</a> and open source at <a href="https://github.com/adulau/cpe-editor" target="_blank" rel="noopener noreferrer">GitHub: adulau/cpe-editor</a>.</p>
+  <p class="muted footer-meta"><img class="footer-logo" src="https://gcve.eu/logos/gcve.png" alt="GCVE logo">An interface for moderated CPE editing by the <a href="https://gcve.eu" target="_blank" rel="noopener noreferrer">GCVE initiative</a> and open source at <a href="https://github.com/gcve-eu/cpe-editor/" target="_blank" rel="noopener noreferrer">GitHub: gcve-eu/cpe-editor</a>.</p>
 </footer>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
