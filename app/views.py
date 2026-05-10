@@ -2006,6 +2006,8 @@ def admin_ingest_json():
             object_type = "relationship"
         elif "metadata_key" in payload:
             object_type = "metadata"
+        elif "cpe_uri" in payload and "purl" in payload:
+            object_type = "purl_mapping"
         elif "cpe_uri" in payload:
             object_type = "cpe"
         elif "product_name" in payload:
@@ -2087,7 +2089,44 @@ def admin_ingest_json():
             cpe.title = payload.get("title")
             cpe.notes = payload.get("notes")
             cpe.from_proposal = bool(payload.get("from_proposal", False))
+            purl_mappings_payload = payload.get("purl_mappings") or []
+            for mapping_payload in purl_mappings_payload:
+                if not isinstance(mapping_payload, dict):
+                    continue
+                purl_value = (mapping_payload.get("purl") or "").strip()
+                if not purl_value or not cpe.cpe_name_id:
+                    continue
+                mapping = CPEPurlMapping.query.filter_by(
+                    cpe_name_id=cpe.cpe_name_id,
+                    purl=purl_value,
+                ).first()
+                if mapping is None:
+                    mapping = CPEPurlMapping(cpe_name_id=cpe.cpe_name_id, purl=purl_value)
+                    db.session.add(mapping)
+                mapping.source = mapping_payload.get("source") or "purl2cpe"
             flash(f"CPE upserted: {cpe.cpe_uri}.", "success")
+        elif object_type == "purl_mapping":
+            cpe_uri = (payload.get("cpe_uri") or "").strip()
+            purl_value = (payload.get("purl") or "").strip()
+            if not cpe_uri:
+                raise ValueError("cpe_uri is required for PURL mapping ingest.")
+            if not purl_value:
+                raise ValueError("purl is required for PURL mapping ingest.")
+
+            cpe = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
+            if cpe is None and payload.get("cpe_name_id"):
+                cpe = CPEEntry.query.filter_by(cpe_name_id=payload.get("cpe_name_id")).first()
+            if cpe is None:
+                raise ValueError("Unable to resolve CPE for PURL mapping ingest.")
+            if not cpe.cpe_name_id:
+                raise ValueError("Resolved CPE does not have a cpe_name_id; cannot create PURL mapping.")
+
+            mapping = CPEPurlMapping.query.filter_by(cpe_name_id=cpe.cpe_name_id, purl=purl_value).first()
+            if mapping is None:
+                mapping = CPEPurlMapping(cpe_name_id=cpe.cpe_name_id, purl=purl_value)
+                db.session.add(mapping)
+            mapping.source = payload.get("source") or "purl2cpe"
+            flash("PURL mapping ingested.", "success")
         elif object_type == "metadata":
             record_type = (payload.get("record_type") or "").strip().lower()
             if record_type not in {"vendor", "product"}:
@@ -2229,7 +2268,7 @@ def admin_ingest_json():
             flash("Relationship ingested.", "success")
         else:
             raise ValueError(
-                "Unable to infer payload type. Set 'type' to one of vendor, product, cpe, metadata, relationship."
+                "Unable to infer payload type. Set 'type' to one of vendor, product, cpe, purl_mapping, metadata, relationship."
             )
 
         db.session.commit()
