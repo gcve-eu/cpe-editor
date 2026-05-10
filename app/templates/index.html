@@ -25,6 +25,11 @@
       <input id="product_q" name="product_q" value="{{ product_q }}" placeholder="exchange">
     </div>
     <div>
+      <label for="purl_q">PURL starts with</label>
+      <input id="purl_q" name="purl_q" value="{{ purl_q }}" placeholder="pkg:npm/react">
+      <small class="muted">Use this to pivot from package coordinates to vendor/product records.</small>
+    </div>
+    <div>
       <label for="part">Part</label>
       <select id="part" name="part">
         <option value="">Any</option>
@@ -52,7 +57,7 @@
   {% if results %}
     <table>
       <thead>
-        <tr><th>CPE</th><th>Vendor / Product</th><th>Version</th><th>Export</th></tr>
+        <tr><th>CPE</th><th>Vendor / Product</th><th>Version</th><th>PURLs</th><th>Export</th></tr>
       </thead>
       <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
       {% for cpe in results %}
@@ -64,6 +69,15 @@
             <a href="{{ url_for('main.product_detail', product_uuid=cpe.product.uuid) }}">{{ cpe.product.title or cpe.product.name }}</a>
           </td>
           <td>{{ cpe.version }}</td>
+          <td>
+            {% if cpe.purl_mappings %}
+              {% for mapping in cpe.purl_mappings %}
+                <div><code>{{ mapping.purl }}</code></div>
+              {% endfor %}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
           <td>
             <button
               type="button"
@@ -85,7 +99,7 @@
         {% if has_prev %}
           <a
             class="button secondary"
-            href="{{ url_for('main.index', vendor_q=vendor_q, product_q=product_q, part=part, page=page-1) }}"
+            href="{{ url_for('main.index', vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part, page=page-1) }}"
           >
             <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
           </a>
@@ -93,7 +107,7 @@
         {% if has_next %}
           <a
             class="button secondary"
-            href="{{ url_for('main.index', vendor_q=vendor_q, product_q=product_q, part=part, page=page+1) }}"
+            href="{{ url_for('main.index', vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part, page=page+1) }}"
           >
             Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
           </a>
