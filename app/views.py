@@ -822,10 +822,11 @@ def _collect_related_vendors_for_combined_view(vendor: Vendor):
 def index():
     vendor_q = (request.args.get("vendor_q") or "").strip()
     product_q = (request.args.get("product_q") or "").strip()
+    purl_q = (request.args.get("purl_q") or "").strip()
     part = (request.args.get("part") or "").strip()
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
     per_page = 25
-    has_search_filters = any([vendor_q, product_q, part])
+    has_search_filters = any([vendor_q, product_q, purl_q, part])
 
     if not has_search_filters:
         return render_template(
@@ -833,6 +834,7 @@ def index():
             results=[],
             vendor_q=vendor_q,
             product_q=product_q,
+            purl_q=purl_q,
             part=part,
             page=1,
             total_pages=1,
@@ -843,6 +845,8 @@ def index():
         )
 
     query = CPEEntry.query.join(Vendor).join(Product)
+    if purl_q:
+        query = query.join(CPEPurlMapping, CPEPurlMapping.cpe_name_id == CPEEntry.id)
     if vendor_q:
         vendor_like = f"{vendor_q.lower()}%"
         query = query.filter(
@@ -861,6 +865,9 @@ def index():
         )
     if part:
         query = query.filter(CPEEntry.part == part)
+    if purl_q:
+        purl_like = f"{purl_q.lower()}%"
+        query = query.filter(func.lower(CPEPurlMapping.purl).like(purl_like))
 
     ordered_query = query.order_by(Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc())
     total_results = ordered_query.count()
@@ -875,6 +882,7 @@ def index():
         results=results,
         vendor_q=vendor_q,
         product_q=product_q,
+        purl_q=purl_q,
         part=part,
         page=page,
         total_pages=total_pages,
