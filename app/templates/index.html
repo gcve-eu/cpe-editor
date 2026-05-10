@@ -15,7 +15,7 @@
 <div class="card">
   <h1>Search CPEs</h1>
   <p class="muted">Search by vendor and product prefixes, then narrow by part.</p>
-  <form method="get" class="grid grid-2">
+  <form method="get" class="grid grid-2 search-form" aria-label="CPE search form">
     <div>
       <label for="vendor_q">Vendor starts with</label>
       <input id="vendor_q" name="vendor_q" value="{{ vendor_q }}" placeholder="microsoft">
@@ -38,9 +38,13 @@
         <option value="h" {% if part == 'h' %}selected{% endif %}>Hardware (h)</option>
       </select>
     </div>
-    <div>
+    <div class="search-actions">
       <button class="search-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Search CPEs</span></button>
+      {% if has_search_filters %}
+        <a class="button secondary" href="{{ url_for('main.index') }}"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i><span>Reset filters</span></a>
+      {% endif %}
     </div>
+    <p class="muted search-hint"><i class="fa-regular fa-lightbulb" aria-hidden="true"></i>Tip: vendor and product fields use prefix matching (for example, <code>micro</code> or <code>exch</code>).</p>
   </form>
 </div>
 
