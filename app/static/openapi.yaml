@@ -104,6 +104,11 @@ paths:
             type: string
           description: Product name/title prefix filter.
         - in: query
+          name: purl_q
+          schema:
+            type: string
+          description: PURL prefix filter.
+        - in: query
           name: part
           schema:
             type: string
