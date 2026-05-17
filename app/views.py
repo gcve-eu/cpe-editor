@@ -37,7 +37,13 @@ from .models import (
     Vendor,
     db,
 )
-from .utils import build_cpe_uri, normalize_token, parse_cpe23_uri
+from .utils import (
+    build_cpe_uri,
+    normalize_token,
+    parse_cpe23_uri,
+    product_uuid_for_names,
+    vendor_uuid_for_name,
+)
 
 bp = Blueprint("main", __name__)
 RELATIONSHIP_TYPE_DESCRIPTIONS = {
@@ -1958,7 +1964,12 @@ def _resolve_vendor_for_ingest(payload):
     if vendor is None and vendor_name:
         vendor = Vendor.query.filter_by(name=normalize_token(vendor_name)).first()
     if vendor is None and vendor_name:
-        vendor = Vendor(name=normalize_token(vendor_name), title=payload.get("title") or vendor_name)
+        normalized_vendor_name = normalize_token(vendor_name)
+        vendor = Vendor(
+            uuid=vendor_uuid_for_name(normalized_vendor_name),
+            name=normalized_vendor_name,
+            title=payload.get("title") or vendor_name,
+        )
         db.session.add(vendor)
         db.session.flush()
     return vendor
@@ -1984,9 +1995,11 @@ def _resolve_product_for_ingest(payload):
     if product_name:
         product = Product.query.filter_by(vendor_id=vendor.id, name=normalize_token(product_name)).first()
     if product is None and product_name:
+        normalized_product_name = normalize_token(product_name)
         product = Product(
+            uuid=product_uuid_for_names(vendor.name, normalized_product_name),
             vendor_id=vendor.id,
-            name=normalize_token(product_name),
+            name=normalized_product_name,
             title=payload.get("title") or product_name,
         )
         db.session.add(product)
@@ -2275,7 +2288,7 @@ def admin_ingest_json():
             relationship.rationale = payload.get("rationale")
             relationship.submitter_name = payload.get("submitter_name")
             relationship.submitter_email = payload.get("submitter_email")
-            relationship.submitted_at = _coerce_datetime(payload.get("submitted_at"))
+            relationship.submitted_at = _coerce_datetime(payload.get("submitted_at")) or datetime.utcnow()
             relationship.approved_at = _coerce_datetime(payload.get("approved_at"))
             flash("Relationship ingested.", "success")
         else:
