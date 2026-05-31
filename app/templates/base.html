@@ -393,6 +393,34 @@
       font-size: 1rem;
       margin-top: .15rem;
     }
+    .intro-logo-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 4.6rem;
+      height: 4.6rem;
+      padding: .45rem;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid rgba(5, 122, 120, .16);
+      box-shadow: 0 10px 22px rgba(5, 59, 61, .10);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .intro-logo-link:hover,
+    .intro-logo-link:focus-visible {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(5, 59, 61, .14);
+      outline: 2px solid rgba(5, 122, 120, .32);
+      outline-offset: 3px;
+    }
+    .intro-logo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      image-rendering: -webkit-optimize-contrast;
+      filter: contrast(1.06) saturate(1.04);
+    }
     .info-box h2, .info-box h3 { margin: 0 0 .25rem; font-size: 1.05rem; }
     .info-box p { margin: 0; }
     code {
