@@ -51,15 +51,29 @@
     header { padding-top: 1.1rem; position: sticky; top: 0; z-index: 10; }
     nav {
       display: flex;
-      gap: .75rem;
+      gap: .8rem 1rem;
       flex-wrap: wrap;
       align-items: center;
-      background: rgba(255, 255, 255, 0.76);
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: .65rem;
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(203, 217, 221, .92);
+      border-radius: 18px;
+      padding: .72rem .85rem;
       box-shadow: var(--shadow-soft);
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(12px);
+    }
+    .nav-links,
+    .nav-account {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: .25rem;
+    }
+    .nav-links { flex: 1 1 520px; }
+    .nav-account {
+      justify-content: flex-end;
+      margin-left: auto;
+      padding-left: .75rem;
+      border-left: 1px solid rgba(5, 122, 120, .14);
     }
     nav a {
       text-decoration: none;
@@ -67,11 +81,19 @@
       display: inline-flex;
       align-items: center;
       gap: .45rem;
-      padding: .5rem .7rem;
-      border-radius: 10px;
-      transition: background-color .18s ease, color .18s ease;
+      min-height: 2.35rem;
+      padding: .5rem .72rem;
+      border-radius: 9px;
+      font-weight: 600;
+      transition: background-color .18s ease, color .18s ease, box-shadow .18s ease;
     }
-    nav a:hover { background: var(--primary-soft); color: #024b4a; }
+    nav a:hover,
+    nav a:focus-visible {
+      background: var(--primary-soft);
+      color: #024b4a;
+      box-shadow: inset 0 0 0 1px rgba(5, 122, 120, .12);
+      outline: none;
+    }
     nav .inline-form { margin: 0; }
     nav .nav-button {
       border: none;
@@ -80,21 +102,30 @@
       display: inline-flex;
       align-items: center;
       gap: .45rem;
-      padding: .5rem .7rem;
-      border-radius: 10px;
+      min-height: 2.35rem;
+      padding: .5rem .72rem;
+      border-radius: 9px;
       cursor: pointer;
       font: inherit;
+      font-weight: 600;
     }
-    nav .nav-button:hover { background: var(--primary-soft); }
+    nav .nav-button:hover,
+    nav .nav-button:focus-visible {
+      background: var(--primary-soft);
+      color: #024b4a;
+      box-shadow: inset 0 0 0 1px rgba(5, 122, 120, .12);
+      outline: none;
+    }
     nav .brand {
       color: #0f2528;
-      margin-right: .25rem;
-      font-weight: 700;
+      margin-right: .15rem;
+      font-weight: 750;
       display: inline-flex;
       align-items: center;
-      gap: .5rem;
-      padding-right: .95rem;
-      border-right: 1px solid rgba(5, 122, 120, .18);
+      gap: .55rem;
+      padding: .35rem .75rem .35rem .45rem;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(228, 247, 244, .78) 0%, rgba(255, 255, 255, .56) 100%);
     }
     nav .brand-logo {
       width: 2.4rem;
@@ -388,9 +419,21 @@
     }
     @media (max-width: 760px) {
       header { position: static; }
-      nav .brand {
-        border-right: none;
-        padding-right: 0;
+      nav {
+        border-radius: 14px;
+        align-items: stretch;
+      }
+      .nav-links,
+      .nav-account {
+        flex: 1 1 100%;
+        justify-content: flex-start;
+      }
+      .nav-account {
+        margin-left: 0;
+        padding-left: 0;
+        padding-top: .55rem;
+        border-left: 0;
+        border-top: 1px solid rgba(5, 122, 120, .14);
       }
       nav .brand-logo {
         width: 2.05rem;
@@ -402,27 +445,31 @@
 </head>
 <body>
 <header>
-  <nav>
+  <nav aria-label="Primary navigation">
     <a class="brand" href="{{ url_for('main.index') }}">
       <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
       <strong>CPE Editor</strong>
       <img class="brand-logo" src="https://gcve.eu/logos/gcve.png" alt="GCVE logo">
     </a>
-    <a href="{{ url_for('main.vendors') }}"><i class="fa-solid fa-building" aria-hidden="true"></i>Browse vendors</a>
-    <a href="{{ url_for('main.approved_changes') }}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>Approved changes</a>
-    <a href="{{ url_for('main.statistics') }}"><i class="fa-solid fa-chart-column" aria-hidden="true"></i>Statistics</a>
-    <a href="{{ url_for('main.details') }}"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>Details</a>
-    <a href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</a>
-    <a href="{{ url_for('main.api_docs') }}"><i class="fa-solid fa-code" aria-hidden="true"></i>API docs</a>
-    <a href="{{ url_for('main.admin_dashboard') }}"><i class="fa-solid fa-user-gear" aria-hidden="true"></i>Admin</a>
-    {% if session.get('is_admin') %}
-      <form method="post" action="{{ url_for('main.admin_logout') }}" class="inline-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="nav-button"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Logout</button>
-      </form>
-    {% else %}
-      <a href="{{ url_for('main.admin_login') }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>Admin login</a>
-    {% endif %}
+    <div class="nav-links">
+      <a href="{{ url_for('main.vendors') }}"><i class="fa-solid fa-building" aria-hidden="true"></i>Browse vendors</a>
+      <a href="{{ url_for('main.approved_changes') }}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>Approved changes</a>
+      <a href="{{ url_for('main.statistics') }}"><i class="fa-solid fa-chart-column" aria-hidden="true"></i>Statistics</a>
+      <a href="{{ url_for('main.details') }}"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>Details</a>
+      <a href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</a>
+      <a href="{{ url_for('main.api_docs') }}"><i class="fa-solid fa-code" aria-hidden="true"></i>API docs</a>
+    </div>
+    <div class="nav-account">
+      <a href="{{ url_for('main.admin_dashboard') }}"><i class="fa-solid fa-user-gear" aria-hidden="true"></i>Admin</a>
+      {% if session.get('is_admin') %}
+        <form method="post" action="{{ url_for('main.admin_logout') }}" class="inline-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="nav-button"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Logout</button>
+        </form>
+      {% else %}
+        <a href="{{ url_for('main.admin_login') }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>Admin login</a>
+      {% endif %}
+    </div>
   </nav>
 </header>
 <main>
