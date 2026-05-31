@@ -13,6 +13,7 @@ tags:
   - name: Products
   - name: CPE Entries
   - name: Vulnerability References
+  - name: Changes
   - name: Admin
 paths:
   /api/vendors:
@@ -213,6 +214,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedCPEVulnerabilityReferences'
+  /api/changes:
+    get:
+      tags: [Changes]
+      summary: List approved changes
+      description: Returns accepted proposals from the public approved changes history.
+      parameters:
+        - in: query
+          name: proposal_type
+          schema:
+            type: string
+          description: Exact proposal type filter, such as `edit_cpe` or `new_cpe_vulnerability_reference`.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Paginated approved changes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedApprovedChanges'
+  /api/changes/{proposal_id}:
+    get:
+      tags: [Changes]
+      summary: Get approved change by proposal ID
+      parameters:
+        - in: path
+          name: proposal_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Approved change detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovedChange'
+        '404':
+          description: Not found
   /admin/notes/{note_id}/delete:
     post:
       tags: [Admin]
@@ -505,6 +556,185 @@ components:
           type: string
           format: date-time
           nullable: true
+    ApprovedChangeRecordRef:
+      type: object
+      nullable: true
+      properties:
+        entity_type:
+          type: string
+          enum: [vendor, product, cpe]
+        id:
+          type: integer
+        uuid:
+          type: string
+          format: uuid
+          nullable: true
+        vendor_id:
+          type: integer
+          nullable: true
+        vendor_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        product_id:
+          type: integer
+          nullable: true
+        product_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        cpe_uri:
+          type: string
+          nullable: true
+    ApprovedChangeProposedFields:
+      type: object
+      properties:
+        vendor_name:
+          type: string
+          nullable: true
+        vendor_title:
+          type: string
+          nullable: true
+        product_name:
+          type: string
+          nullable: true
+        product_title:
+          type: string
+          nullable: true
+        part:
+          type: string
+          nullable: true
+        version:
+          type: string
+          nullable: true
+        update:
+          type: string
+          nullable: true
+        edition:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        sw_edition:
+          type: string
+          nullable: true
+        target_sw:
+          type: string
+          nullable: true
+        target_hw:
+          type: string
+          nullable: true
+        other:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        cpe_uri:
+          type: string
+          nullable: true
+        relationship_type:
+          type: string
+          nullable: true
+        metadata_key:
+          type: string
+          nullable: true
+        metadata_value:
+          type: string
+          nullable: true
+        vulnerability_id:
+          type: string
+          nullable: true
+        vulnerability_source:
+          type: string
+          nullable: true
+        cpe_applicability:
+          type: string
+          nullable: true
+    ApprovedChangeAppliedRecords:
+      type: object
+      properties:
+        note:
+          $ref: '#/components/schemas/EntityNote'
+        metadata:
+          $ref: '#/components/schemas/EntityMetadata'
+        relationship:
+          $ref: '#/components/schemas/EntityRelationship'
+        vulnerability_reference:
+          $ref: '#/components/schemas/CPEVulnerabilityReference'
+    ApprovedChangeLinks:
+      type: object
+      properties:
+        html:
+          type: string
+        api:
+          type: string
+    ApprovedChange:
+      type: object
+      properties:
+        id:
+          type: integer
+        proposal_type:
+          type: string
+        status:
+          type: string
+          enum: [accepted]
+        summary:
+          type: string
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        review_comment:
+          type: string
+          nullable: true
+        rationale:
+          type: string
+          nullable: true
+        submitter_name:
+          type: string
+          nullable: true
+        submitter_email:
+          type: string
+          nullable: true
+        vendor:
+          $ref: '#/components/schemas/ApprovedChangeRecordRef'
+        product:
+          $ref: '#/components/schemas/ApprovedChangeRecordRef'
+        cpe:
+          $ref: '#/components/schemas/ApprovedChangeRecordRef'
+        source:
+          $ref: '#/components/schemas/EntityRecordRef'
+        target:
+          $ref: '#/components/schemas/EntityRecordRef'
+        proposed:
+          $ref: '#/components/schemas/ApprovedChangeProposedFields'
+        applied_records:
+          $ref: '#/components/schemas/ApprovedChangeAppliedRecords'
+        links:
+          $ref: '#/components/schemas/ApprovedChangeLinks'
     CPEEntry:
       type: object
       properties:
@@ -656,6 +886,15 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/CPEEntry'
+    PaginatedApprovedChanges:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ApprovedChange'
     PaginatedCPEVulnerabilityReferences:
       allOf:
         - $ref: '#/components/schemas/Pagination'
