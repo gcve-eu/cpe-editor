@@ -1,6 +1,40 @@
 {% extends "base.html" %}
 {% block title %}Search CPEs{% endblock %}
 {% block content %}
+<section class="hero" aria-labelledby="home-hero-title">
+  <div>
+    <p class="hero-kicker">
+      <span>GCVE initiative</span>
+      <span>CPE curation</span>
+      <span>Proposal workflow</span>
+      <span>API access</span>
+    </p>
+    <h1 id="home-hero-title" class="hero-title">Intelligence-grade CPE editing for transparent vulnerability data.</h1>
+    <p class="hero-copy">
+      Search canonical platform names, map package URLs, and submit moderated improvements through a focused workspace built for maintainers, reviewers, and consumers of security metadata.
+    </p>
+    <div class="hero-actions">
+      <a class="button" href="#cpe-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Start searching</a>
+      <a class="button secondary" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit a proposal</a>
+    </div>
+  </div>
+  <div class="signal-panel" aria-label="CPE curation flow">
+    <div class="signal-node">
+      <span><strong>Discover</strong><br><small>Vendor, product, PURL, CPE URI</small></span>
+      <i class="fa-solid fa-satellite-dish" aria-hidden="true"></i>
+    </div>
+    <div class="signal-flow">↓ ↓ ↓</div>
+    <div class="signal-node">
+      <span><strong>Moderate</strong><br><small>Reviewed proposals and notes</small></span>
+      <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+    </div>
+    <div class="signal-flow">↓ ↓ ↓</div>
+    <div class="signal-node">
+      <span><strong>Distribute</strong><br><small>Change history, API, dataset export</small></span>
+      <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+    </div>
+  </div>
+</section>
 <div class="info-box" role="note" aria-label="About CPE and GCVE">
   <span class="icon" aria-hidden="true"><i class="fa-solid fa-circle-info"></i></span>
   <div>
@@ -12,8 +46,8 @@
   </div>
 </div>
 
-<div class="card">
-  <h1>Search CPEs</h1>
+<div id="cpe-search" class="card">
+  <h2>Search CPEs</h2>
   <p class="muted">Search by vendor and product prefixes, then narrow by part.</p>
   <form method="get" class="grid grid-2 search-form" aria-label="CPE search form">
     <div>
