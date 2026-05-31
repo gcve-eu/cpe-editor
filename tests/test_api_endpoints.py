@@ -145,6 +145,35 @@ def test_approved_changes_api_filters_proposal_type(client):
     assert payload["total"] == 0
     assert payload["items"] == []
 
+def test_approved_changes_api_can_include_bcp10_change_bundle(client):
+    response = client.get("/api/changes?per_page=1&include=bcp10")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    dataset = payload["bcp10_dataset"]
+    assert dataset["format"] == "cpe-editor-dataset"
+    assert dataset["profile"] == "gcve-bcp-10-change-bundle"
+    assert dataset["counts"] == {
+        "vendors": 1,
+        "products": 1,
+        "cpes": 1,
+        "metadata": 0,
+        "relationships": 0,
+        "proposals": 1,
+    }
+    assert dataset["vendors"][0]["uuid"] == payload["items"][0]["vendor"]["uuid"]
+    assert dataset["products"][0]["vendor_uuid"] == dataset["vendors"][0]["uuid"]
+    assert dataset["cpes"][0]["cpe_uri"].startswith("cpe:2.3:o:microsoft:windows_11")
+    assert dataset["cpes"][0]["vendor_uuid"] == dataset["vendors"][0]["uuid"]
+    assert dataset["cpes"][0]["product_uuid"] == dataset["products"][0]["uuid"]
+    assert dataset["proposals"][0]["status"] == "accepted"
+    assert "submitter_ip" not in dataset["proposals"][0]
+
+    detail_response = client.get(f"/api/changes/{payload['items'][0]['id']}?include=bcp10")
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.get_json()
+    assert detail_payload["bcp10_dataset"]["counts"]["cpes"] == 1
+
 def test_openapi_and_docs_endpoints(client):
     openapi_response = client.get("/api/openapi.yaml")
     docs_response = client.get("/api/docs")
