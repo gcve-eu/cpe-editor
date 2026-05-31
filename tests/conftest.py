@@ -1,11 +1,12 @@
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from app import create_app
-from app.models import CPEEntry, CPEPurlMapping, CPEVulnerabilityReference, Product, Vendor, db
+from app.models import CPEEntry, CPEPurlMapping, CPEVulnerabilityReference, Product, Proposal, Vendor, db
 
 
 @pytest.fixture()
@@ -103,5 +104,32 @@ def _load_fixture_data():
             source=mapping_item.get("source") or "purl2cpe",
         )
         db.session.add(mapping)
+
+    microsoft_windows = cpes_by_uri[
+        "cpe:2.3:o:microsoft:windows_11:23h2:*:*:*:*:*:*:*"
+    ]
+    accepted_proposal = Proposal(
+        proposal_type="edit_cpe",
+        status="accepted",
+        submitter_name="Fixture Contributor",
+        submitter_email="fixture@example.test",
+        rationale="Correct the display title.",
+        vendor_id=microsoft_windows.vendor_id,
+        product_id=microsoft_windows.product_id,
+        cpe_entry_id=microsoft_windows.id,
+        proposed_title="Microsoft Windows 11 Version 23H2",
+        proposed_cpe_uri=microsoft_windows.cpe_uri,
+        review_comment="Approved for API fixture coverage.",
+        reviewed_at=datetime(2024, 1, 2, 3, 4, 5),
+    )
+    db.session.add(accepted_proposal)
+
+    pending_proposal = Proposal(
+        proposal_type="edit_cpe",
+        status="pending",
+        cpe_entry_id=microsoft_windows.id,
+        proposed_title="Pending title that should not be public",
+    )
+    db.session.add(pending_proposal)
 
     db.session.commit()

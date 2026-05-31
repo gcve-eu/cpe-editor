@@ -111,6 +111,40 @@ def test_vulnerability_reference_endpoints(client):
     assert listing_payload["items"][0]["vulnerability_id"] == "CVE-2024-12345"
 
 
+def test_approved_changes_api_list_and_detail(client):
+    response = client.get("/api/changes?per_page=1")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["page"] == 1
+    assert payload["per_page"] == 1
+    assert payload["total"] == 1
+    assert payload["total_pages"] == 1
+    assert len(payload["items"]) == 1
+
+    change = payload["items"][0]
+    assert change["status"] == "accepted"
+    assert change["proposal_type"] == "edit_cpe"
+    assert change["approved_at"] == "2024-01-02T03:04:05"
+    assert change["submitter_name"] == "Fixture Contributor"
+    assert change["proposed"]["title"] == "Microsoft Windows 11 Version 23H2"
+    assert change["cpe"]["cpe_uri"].startswith("cpe:2.3:o:microsoft:windows_11")
+    assert "submitter_ip" not in change
+
+    detail_response = client.get(f"/api/changes/{change['id']}")
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.get_json()
+    assert detail_payload["id"] == change["id"]
+    assert detail_payload["summary"] == change["summary"]
+
+def test_approved_changes_api_filters_proposal_type(client):
+    response = client.get("/api/changes?proposal_type=new_cpe")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["total"] == 0
+    assert payload["items"] == []
+
 def test_openapi_and_docs_endpoints(client):
     openapi_response = client.get("/api/openapi.yaml")
     docs_response = client.get("/api/docs")

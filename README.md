@@ -99,6 +99,8 @@ Documented endpoints include:
 - `GET /api/vendors/suggest`
 - `GET /api/products/{product_uuid}`
 - `GET /api/products/suggest`
+- `GET /api/changes`
+- `GET /api/changes/{proposal_id}`
 - `GET /api/cpes`
 - `GET /api/cpes/{cpe_id}`
 - `GET /api/cpes/{cpe_id}/vulnerability-references`
@@ -109,6 +111,7 @@ Documented endpoints include:
 ```bash
 curl "http://127.0.0.1:5000/api/vendors?page=1&per_page=5"
 curl "http://127.0.0.1:5000/api/cpes?vendor_q=microsoft&part=a&per_page=10"
+curl "http://127.0.0.1:5000/api/changes?per_page=10"
 ```
 
 ## Running API tests

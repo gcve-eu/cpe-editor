@@ -620,6 +620,105 @@ def _serialize_cpe_vulnerability_reference(reference):
     }
 
 
+def _serialize_proposal_record_ref(record):
+    if record is None:
+        return None
+    if isinstance(record, Vendor):
+        return {
+            "entity_type": "vendor",
+            "id": record.id,
+            "uuid": record.uuid,
+            "name": record.name,
+            "title": record.title,
+        }
+    if isinstance(record, Product):
+        return {
+            "entity_type": "product",
+            "id": record.id,
+            "uuid": record.uuid,
+            "vendor_id": record.vendor_id,
+            "vendor_uuid": record.vendor.uuid if record.vendor else None,
+            "name": record.name,
+            "title": record.title,
+        }
+    if isinstance(record, CPEEntry):
+        return {
+            "entity_type": "cpe",
+            "id": record.id,
+            "vendor_id": record.vendor_id,
+            "vendor_uuid": record.vendor.uuid if record.vendor else None,
+            "product_id": record.product_id,
+            "product_uuid": record.product.uuid if record.product else None,
+            "cpe_uri": record.cpe_uri,
+            "title": record.title,
+        }
+    return None
+
+
+def _serialize_approved_change(proposal: Proposal):
+    approved_at = proposal.reviewed_at or proposal.created_at
+    applied_records = {}
+    if proposal.note_entry:
+        applied_records["note"] = _serialize_entity_note(proposal.note_entry)
+    if proposal.metadata_entry:
+        applied_records["metadata"] = _serialize_entity_metadata(proposal.metadata_entry)
+    if proposal.relationship_entry:
+        applied_records["relationship"] = _serialize_entity_relationship(proposal.relationship_entry)
+    if proposal.vulnerability_reference_entry:
+        applied_records["vulnerability_reference"] = _serialize_cpe_vulnerability_reference(
+            proposal.vulnerability_reference_entry
+        )
+
+    return {
+        "id": proposal.id,
+        "proposal_type": proposal.proposal_type,
+        "status": proposal.status,
+        "summary": _proposal_summary(proposal),
+        "approved_at": approved_at.isoformat() if approved_at else None,
+        "created_at": proposal.created_at.isoformat() if proposal.created_at else None,
+        "updated_at": proposal.updated_at.isoformat() if proposal.updated_at else None,
+        "reviewed_at": proposal.reviewed_at.isoformat() if proposal.reviewed_at else None,
+        "review_comment": proposal.review_comment,
+        "rationale": proposal.rationale,
+        "submitter_name": proposal.submitter_name,
+        "submitter_email": proposal.submitter_email,
+        "vendor": _serialize_proposal_record_ref(proposal.vendor),
+        "product": _serialize_proposal_record_ref(proposal.product),
+        "cpe": _serialize_proposal_record_ref(proposal.cpe_entry),
+        "source": _record_label(proposal.source_vendor, proposal.source_product),
+        "target": _record_label(proposal.target_vendor, proposal.target_product),
+        "proposed": {
+            "vendor_name": proposal.proposed_vendor_name,
+            "vendor_title": proposal.proposed_vendor_title,
+            "product_name": proposal.proposed_product_name,
+            "product_title": proposal.proposed_product_title,
+            "part": proposal.proposed_part,
+            "version": proposal.proposed_version,
+            "update": proposal.proposed_update,
+            "edition": proposal.proposed_edition,
+            "language": proposal.proposed_language,
+            "sw_edition": proposal.proposed_sw_edition,
+            "target_sw": proposal.proposed_target_sw,
+            "target_hw": proposal.proposed_target_hw,
+            "other": proposal.proposed_other,
+            "title": proposal.proposed_title,
+            "notes": proposal.proposed_notes,
+            "cpe_uri": proposal.proposed_cpe_uri,
+            "relationship_type": proposal.proposed_relationship_type,
+            "metadata_key": proposal.proposed_metadata_key,
+            "metadata_value": proposal.proposed_metadata_value,
+            "vulnerability_id": proposal.proposed_vulnerability_id,
+            "vulnerability_source": proposal.proposed_vulnerability_source,
+            "cpe_applicability": proposal.proposed_cpe_applicability,
+        },
+        "applied_records": applied_records,
+        "links": {
+            "html": url_for("main.approved_change_detail", proposal_id=proposal.id),
+            "api": url_for("main.api_change_detail", proposal_id=proposal.id),
+        },
+    }
+
+
 def _proposal_focus_links(proposal: Proposal):
     links = []
     seen = set()
@@ -1311,6 +1410,40 @@ def api_vulnerability_references():
             "total_pages": max((total + per_page - 1) // per_page, 1),
         }
     )
+
+
+@bp.route("/api/changes")
+def api_changes():
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+    proposal_type = (request.args.get("proposal_type") or "").strip()
+
+    query = Proposal.query.filter_by(status="accepted")
+    if proposal_type:
+        query = query.filter(Proposal.proposal_type == proposal_type)
+
+    total = query.count()
+    changes = (
+        query.order_by(Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return jsonify(
+        {
+            "items": [_serialize_approved_change(proposal) for proposal in changes],
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": max((total + per_page - 1) // per_page, 1),
+        }
+    )
+
+
+@bp.route("/api/changes/<int:proposal_id>")
+def api_change_detail(proposal_id):
+    proposal = Proposal.query.filter_by(id=proposal_id, status="accepted").first_or_404()
+    return jsonify(_serialize_approved_change(proposal))
 
 
 @bp.route("/api/cpes")
