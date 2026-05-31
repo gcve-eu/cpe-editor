@@ -238,6 +238,12 @@ paths:
             minimum: 1
             maximum: 100
             default: 25
+        - in: query
+          name: include
+          schema:
+            type: string
+            enum: [bcp10]
+          description: Include a GCVE BCP-10-compatible `cpe-editor-dataset` change bundle for the returned page.
       responses:
         '200':
           description: Paginated approved changes
@@ -255,6 +261,12 @@ paths:
           required: true
           schema:
             type: integer
+        - in: query
+          name: include
+          schema:
+            type: string
+            enum: [bcp10]
+          description: Include a GCVE BCP-10-compatible `cpe-editor-dataset` change bundle for this change.
       responses:
         '200':
           description: Approved change detail
@@ -672,6 +684,195 @@ components:
           $ref: '#/components/schemas/EntityRelationship'
         vulnerability_reference:
           $ref: '#/components/schemas/CPEVulnerabilityReference'
+    BCP10DatasetCounts:
+      type: object
+      properties:
+        vendors:
+          type: integer
+        products:
+          type: integer
+        cpes:
+          type: integer
+        metadata:
+          type: integer
+        relationships:
+          type: integer
+        proposals:
+          type: integer
+    BCP10Vendor:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    BCP10Product:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        vendor_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        title:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    BCP10CPE:
+      allOf:
+        - $ref: '#/components/schemas/CPEEntry'
+      description: CPE entry serialized with GCVE BCP-10 field names and UUID links.
+    BCP10Metadata:
+      type: object
+      properties:
+        record_uuid:
+          type: string
+          format: uuid
+        record_type:
+          type: string
+          enum: [vendor, product]
+        metadata_key:
+          type: string
+        metadata_value:
+          type: string
+        submitter_name:
+          type: string
+          nullable: true
+        submitter_email:
+          type: string
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    BCP10Relationship:
+      type: object
+      properties:
+        relationship_type:
+          type: string
+        source_vendor_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        source_product_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        target_vendor_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        target_product_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        rationale:
+          type: string
+          nullable: true
+        submitter_name:
+          type: string
+          nullable: true
+        submitter_email:
+          type: string
+          nullable: true
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    BCP10ChangeBundle:
+      type: object
+      description: GCVE BCP-10-compatible `cpe-editor-dataset` bundle containing records touched by approved changes.
+      properties:
+        format:
+          type: string
+          enum: [cpe-editor-dataset]
+        version:
+          type: string
+        profile:
+          type: string
+          enum: [gcve-bcp-10-change-bundle]
+        exported_at:
+          type: string
+          format: date-time
+        counts:
+          $ref: '#/components/schemas/BCP10DatasetCounts'
+        vendors:
+          type: array
+          items:
+            $ref: '#/components/schemas/BCP10Vendor'
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/BCP10Product'
+        cpes:
+          type: array
+          items:
+            $ref: '#/components/schemas/BCP10CPE'
+        metadata:
+          type: array
+          items:
+            $ref: '#/components/schemas/BCP10Metadata'
+        relationships:
+          type: array
+          items:
+            $ref: '#/components/schemas/BCP10Relationship'
+        proposals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovedChangeProposedFields'
     ApprovedChangeLinks:
       type: object
       properties:
@@ -735,6 +936,8 @@ components:
           $ref: '#/components/schemas/ApprovedChangeAppliedRecords'
         links:
           $ref: '#/components/schemas/ApprovedChangeLinks'
+        bcp10_dataset:
+          $ref: '#/components/schemas/BCP10ChangeBundle'
     CPEEntry:
       type: object
       properties:
@@ -895,6 +1098,8 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ApprovedChange'
+            bcp10_dataset:
+              $ref: '#/components/schemas/BCP10ChangeBundle'
     PaginatedCPEVulnerabilityReferences:
       allOf:
         - $ref: '#/components/schemas/Pagination'

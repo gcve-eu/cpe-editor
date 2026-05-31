@@ -719,6 +719,230 @@ def _serialize_approved_change(proposal: Proposal):
     }
 
 
+def _isoformat_or_none(value):
+    return value.isoformat() if value else None
+
+
+def _serialize_bcp10_vendor(vendor: Vendor):
+    return {
+        "uuid": vendor.uuid,
+        "name": vendor.name,
+        "title": vendor.title,
+        "notes": vendor.notes,
+        "created_at": _isoformat_or_none(vendor.created_at),
+        "updated_at": _isoformat_or_none(vendor.updated_at),
+    }
+
+
+def _serialize_bcp10_product(product: Product):
+    return {
+        "uuid": product.uuid,
+        "vendor_uuid": product.vendor.uuid if product.vendor else None,
+        "name": product.name,
+        "title": product.title,
+        "notes": product.notes,
+        "created_at": _isoformat_or_none(product.created_at),
+        "updated_at": _isoformat_or_none(product.updated_at),
+    }
+
+
+def _serialize_bcp10_cpe(cpe: CPEEntry):
+    return {
+        "cpe_uri": cpe.cpe_uri,
+        "cpe_name_id": cpe.cpe_name_id,
+        "vendor_uuid": cpe.vendor.uuid if cpe.vendor else None,
+        "product_uuid": cpe.product.uuid if cpe.product else None,
+        "deprecated": cpe.deprecated,
+        "deprecated_by": cpe.deprecated_by,
+        "part": cpe.part,
+        "version": cpe.version,
+        "update": cpe.update,
+        "edition": cpe.edition,
+        "language": cpe.language,
+        "sw_edition": cpe.sw_edition,
+        "target_sw": cpe.target_sw,
+        "target_hw": cpe.target_hw,
+        "other": cpe.other,
+        "title": cpe.title,
+        "notes": cpe.notes,
+        "from_proposal": cpe.from_proposal,
+        "created_at": _isoformat_or_none(cpe.created_at),
+        "updated_at": _isoformat_or_none(cpe.updated_at),
+        "vulnerability_references": [
+            {
+                "id": reference.id,
+                "vulnerability_id": reference.vulnerability_id,
+                "vulnerability_source": reference.vulnerability_source,
+                "cpe_applicability": reference.cpe_applicability,
+                "submitted_at": _isoformat_or_none(reference.submitted_at),
+                "approved_at": _isoformat_or_none(reference.approved_at),
+                "rationale": reference.rationale,
+            }
+            for reference in cpe.vulnerability_links
+        ],
+    }
+
+
+def _serialize_bcp10_metadata(metadata: EntityMetadata):
+    return {
+        "record_uuid": metadata.vendor.uuid if metadata.vendor else metadata.product.uuid,
+        "record_type": "vendor" if metadata.vendor_id else "product",
+        "metadata_key": metadata.metadata_key,
+        "metadata_value": metadata.metadata_value,
+        "submitter_name": metadata.submitter_name,
+        "submitter_email": metadata.submitter_email,
+        "submitted_at": _isoformat_or_none(metadata.submitted_at),
+        "approved_at": _isoformat_or_none(metadata.approved_at),
+        "created_at": _isoformat_or_none(metadata.created_at),
+        "updated_at": _isoformat_or_none(metadata.updated_at),
+    }
+
+
+def _serialize_bcp10_relationship(relationship: EntityRelationship):
+    return {
+        "relationship_type": relationship.relationship_type,
+        "source_vendor_uuid": (
+            relationship.source_vendor.uuid if relationship.source_vendor else None
+        ),
+        "source_product_uuid": (
+            relationship.source_product.uuid if relationship.source_product else None
+        ),
+        "target_vendor_uuid": (
+            relationship.target_vendor.uuid if relationship.target_vendor else None
+        ),
+        "target_product_uuid": (
+            relationship.target_product.uuid if relationship.target_product else None
+        ),
+        "rationale": relationship.rationale,
+        "submitter_name": relationship.submitter_name,
+        "submitter_email": relationship.submitter_email,
+        "submitted_at": _isoformat_or_none(relationship.submitted_at),
+        "approved_at": _isoformat_or_none(relationship.approved_at),
+        "created_at": _isoformat_or_none(relationship.created_at),
+        "updated_at": _isoformat_or_none(relationship.updated_at),
+    }
+
+
+def _serialize_bcp10_proposal(proposal: Proposal):
+    return {
+        "proposal_type": proposal.proposal_type,
+        "status": proposal.status,
+        "submitter_name": proposal.submitter_name,
+        "submitter_email": proposal.submitter_email,
+        "rationale": proposal.rationale,
+        "vendor_uuid": proposal.vendor.uuid if proposal.vendor else None,
+        "product_uuid": proposal.product.uuid if proposal.product else None,
+        "cpe_uri": proposal.cpe_entry.cpe_uri if proposal.cpe_entry else None,
+        "proposed_vendor_name": proposal.proposed_vendor_name,
+        "proposed_vendor_title": proposal.proposed_vendor_title,
+        "proposed_product_name": proposal.proposed_product_name,
+        "proposed_product_title": proposal.proposed_product_title,
+        "proposed_part": proposal.proposed_part,
+        "proposed_version": proposal.proposed_version,
+        "proposed_update": proposal.proposed_update,
+        "proposed_edition": proposal.proposed_edition,
+        "proposed_language": proposal.proposed_language,
+        "proposed_sw_edition": proposal.proposed_sw_edition,
+        "proposed_target_sw": proposal.proposed_target_sw,
+        "proposed_target_hw": proposal.proposed_target_hw,
+        "proposed_other": proposal.proposed_other,
+        "proposed_title": proposal.proposed_title,
+        "proposed_notes": proposal.proposed_notes,
+        "proposed_cpe_uri": proposal.proposed_cpe_uri,
+        "proposed_metadata_key": proposal.proposed_metadata_key,
+        "proposed_metadata_value": proposal.proposed_metadata_value,
+        "proposed_relationship_type": proposal.proposed_relationship_type,
+        "proposed_vulnerability_source": proposal.proposed_vulnerability_source,
+        "proposed_vulnerability_id": proposal.proposed_vulnerability_id,
+        "proposed_cpe_applicability": proposal.proposed_cpe_applicability,
+        "review_comment": proposal.review_comment,
+        "reviewed_at": _isoformat_or_none(proposal.reviewed_at),
+        "created_at": _isoformat_or_none(proposal.created_at),
+        "updated_at": _isoformat_or_none(proposal.updated_at),
+    }
+
+
+def _build_bcp10_change_dataset(proposals: list[Proposal]):
+    vendors_by_uuid = {}
+    products_by_uuid = {}
+    cpes_by_uri = {}
+    metadata_rows = []
+    relationships = []
+
+    def add_vendor(vendor):
+        if vendor:
+            vendors_by_uuid[vendor.uuid] = vendor
+
+    def add_product(product):
+        if product:
+            products_by_uuid[product.uuid] = product
+            add_vendor(product.vendor)
+
+    def add_cpe(cpe):
+        if cpe:
+            cpes_by_uri[cpe.cpe_uri] = cpe
+            add_vendor(cpe.vendor)
+            add_product(cpe.product)
+
+    for proposal in proposals:
+        add_vendor(proposal.vendor)
+        add_product(proposal.product)
+        add_cpe(proposal.cpe_entry)
+        add_vendor(proposal.source_vendor)
+        add_product(proposal.source_product)
+        add_vendor(proposal.target_vendor)
+        add_product(proposal.target_product)
+        if proposal.metadata_entry:
+            metadata_rows.append(proposal.metadata_entry)
+            add_vendor(proposal.metadata_entry.vendor)
+            add_product(proposal.metadata_entry.product)
+        if proposal.relationship_entry:
+            relationships.append(proposal.relationship_entry)
+            add_vendor(proposal.relationship_entry.source_vendor)
+            add_product(proposal.relationship_entry.source_product)
+            add_vendor(proposal.relationship_entry.target_vendor)
+            add_product(proposal.relationship_entry.target_product)
+        if proposal.vulnerability_reference_entry:
+            add_cpe(proposal.vulnerability_reference_entry.cpe_entry)
+
+    vendors = [
+        _serialize_bcp10_vendor(vendor)
+        for vendor in sorted(vendors_by_uuid.values(), key=lambda item: item.uuid)
+    ]
+    products = [
+        _serialize_bcp10_product(product)
+        for product in sorted(products_by_uuid.values(), key=lambda item: item.uuid)
+    ]
+    cpes = [
+        _serialize_bcp10_cpe(cpe)
+        for cpe in sorted(cpes_by_uri.values(), key=lambda item: item.cpe_uri)
+    ]
+    metadata = [_serialize_bcp10_metadata(item) for item in metadata_rows]
+    relationship_rows = [_serialize_bcp10_relationship(item) for item in relationships]
+    proposal_rows = [_serialize_bcp10_proposal(item) for item in proposals]
+
+    return {
+        "format": "cpe-editor-dataset",
+        "version": "1",
+        "profile": "gcve-bcp-10-change-bundle",
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "counts": {
+            "vendors": len(vendors),
+            "products": len(products),
+            "cpes": len(cpes),
+            "metadata": len(metadata),
+            "relationships": len(relationship_rows),
+            "proposals": len(proposal_rows),
+        },
+        "vendors": vendors,
+        "products": products,
+        "cpes": cpes,
+        "metadata": metadata,
+        "relationships": relationship_rows,
+        "proposals": proposal_rows,
+    }
+
+
 def _proposal_focus_links(proposal: Proposal):
     links = []
     seen = set()
@@ -1429,21 +1653,25 @@ def api_changes():
         .limit(per_page)
         .all()
     )
-    return jsonify(
-        {
-            "items": [_serialize_approved_change(proposal) for proposal in changes],
-            "page": page,
-            "per_page": per_page,
-            "total": total,
-            "total_pages": max((total + per_page - 1) // per_page, 1),
-        }
-    )
+    payload = {
+        "items": [_serialize_approved_change(proposal) for proposal in changes],
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": max((total + per_page - 1) // per_page, 1),
+    }
+    if (request.args.get("include") or "").strip().lower() == "bcp10":
+        payload["bcp10_dataset"] = _build_bcp10_change_dataset(changes)
+    return jsonify(payload)
 
 
 @bp.route("/api/changes/<int:proposal_id>")
 def api_change_detail(proposal_id):
     proposal = Proposal.query.filter_by(id=proposal_id, status="accepted").first_or_404()
-    return jsonify(_serialize_approved_change(proposal))
+    payload = _serialize_approved_change(proposal)
+    if (request.args.get("include") or "").strip().lower() == "bcp10":
+        payload["bcp10_dataset"] = _build_bcp10_change_dataset([proposal])
+    return jsonify(payload)
 
 
 @bp.route("/api/cpes")
