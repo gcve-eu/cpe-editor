@@ -686,8 +686,6 @@ def _proposal_summary(proposal: Proposal):
         vuln_source = proposal.proposed_vulnerability_source or "vulnerability"
         vuln_id = proposal.proposed_vulnerability_id or "id"
         return f"Approved {vuln_source} reference {vuln_id} for a CPE."
-    if proposal.proposal_type == "new_purl_mapping":
-        return "Approved a PURL mapping proposal."
     return "Approved proposal."
 
 
@@ -1397,7 +1395,6 @@ def proposal_new():
         "new_vendor_product",
         "new_record_relationship",
         "new_cpe_vulnerability_reference",
-        "new_purl_mapping",
     }
     if preselected_proposal_type not in allowed_types:
         preselected_proposal_type = "edit_cpe"
@@ -1466,7 +1463,6 @@ def proposal_new():
             or None,
             proposed_cpe_applicability=(request.form.get("proposed_cpe_applicability") or "").strip()
             or None,
-            proposed_purl=(request.form.get("proposed_purl") or "").strip() or None,
             source_vendor_id=int(request.form.get("source_vendor_id"))
             if request.form.get("source_vendor_id")
             else None,
@@ -1557,32 +1553,6 @@ def proposal_new():
             if proposal.proposed_cpe_applicability not in ALLOWED_CPE_APPLICABILITY_STATUSES:
                 flash("Please choose a valid cpeApplicability status.", "danger")
                 return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
-        if proposal_type == "new_purl_mapping":
-            # Product/CPE targets can carry parent IDs from prefilled form context.
-            # Treat the most specific populated target as the intended scope.
-            effective_vendor_id = proposal.vendor_id
-            effective_product_id = proposal.product_id
-            effective_cpe_entry_id = proposal.cpe_entry_id
-
-            if effective_cpe_entry_id:
-                effective_vendor_id = None
-                effective_product_id = None
-            elif effective_product_id:
-                effective_vendor_id = None
-
-            selected_targets = int(bool(effective_vendor_id)) + int(bool(effective_product_id)) + int(
-                bool(effective_cpe_entry_id)
-            )
-            if selected_targets != 1:
-                flash("Choose exactly one target: vendor, product, or CPE version.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
-            proposal.vendor_id = effective_vendor_id
-            proposal.product_id = effective_product_id
-            proposal.cpe_entry_id = effective_cpe_entry_id
-            if not proposal.proposed_purl:
-                flash("Please provide a proposed PURL.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
-
         db.session.add(proposal)
         db.session.commit()
         flash("Proposal submitted. An admin will review it.", "success")
@@ -2726,33 +2696,6 @@ def apply_proposal(proposal: Proposal):
             approved_at=proposal.reviewed_at or datetime.utcnow(),
         )
         db.session.add(vulnerability_reference)
-        return
-
-    if proposal.proposal_type == "new_purl_mapping":
-        if not proposal.proposed_purl:
-            raise ValueError("A PURL value is required for mapping proposals.")
-        cpe_query = CPEEntry.query
-        if proposal.cpe_entry_id:
-            cpe_query = cpe_query.filter(CPEEntry.id == proposal.cpe_entry_id)
-        elif proposal.product_id:
-            cpe_query = cpe_query.filter(CPEEntry.product_id == proposal.product_id)
-        elif proposal.vendor_id:
-            cpe_query = cpe_query.filter(CPEEntry.vendor_id == proposal.vendor_id)
-        else:
-            raise ValueError("A target vendor, product, or CPE entry is required for PURL proposals.")
-        for cpe_entry in cpe_query.all():
-            existing_mapping = CPEPurlMapping.query.filter_by(
-                cpe_name_id=cpe_entry.id, purl=proposal.proposed_purl
-            ).first()
-            if existing_mapping:
-                continue
-            db.session.add(
-                CPEPurlMapping(
-                    cpe_name_id=cpe_entry.id,
-                    purl=proposal.proposed_purl,
-                    source="proposal",
-                )
-            )
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")
