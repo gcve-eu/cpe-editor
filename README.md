@@ -86,6 +86,9 @@ Then open the local URL printed by Flask.
 - Approved change detail: `GET /changes/{proposal_id}`
 - RSS feed: `GET /changes.rss`
 - Atom feed: `GET /changes.atom`
+- Vendor change feeds: `GET /vendors/{vendor_uuid}/changes.rss`, `GET /vendors/{vendor_uuid}/changes.atom`
+- Product change feeds: `GET /products/{product_uuid}/changes.rss`, `GET /products/{product_uuid}/changes.atom`
+- CPE change feeds: `GET /cpes/{cpe_id}/changes.rss`, `GET /cpes/{cpe_id}/changes.atom`
 
 ## OpenAPI interface
 

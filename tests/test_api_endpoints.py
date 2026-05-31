@@ -137,6 +137,46 @@ def test_approved_changes_api_list_and_detail(client):
     assert detail_payload["id"] == change["id"]
     assert detail_payload["summary"] == change["summary"]
 
+
+def test_scoped_approved_change_feeds_and_discovery_links(client):
+    change_payload = client.get("/api/changes?per_page=1").get_json()
+    change = change_payload["items"][0]
+    vendor_uuid = change["vendor"]["uuid"]
+    product_uuid = change["product"]["uuid"]
+    cpe_id = change["cpe"]["id"]
+
+    feed_paths = [
+        "/changes.rss",
+        "/changes.atom",
+        f"/vendors/{vendor_uuid}/changes.rss",
+        f"/vendors/{vendor_uuid}/changes.atom",
+        f"/products/{product_uuid}/changes.rss",
+        f"/products/{product_uuid}/changes.atom",
+        f"/cpes/{cpe_id}/changes.rss",
+        f"/cpes/{cpe_id}/changes.atom",
+    ]
+
+    for feed_path in feed_paths:
+        response = client.get(feed_path)
+        assert response.status_code == 200
+        assert b"Approved change #" in response.data
+        assert b"cpe:2.3:o:microsoft:windows_11" in response.data
+
+    vendor_page = client.get(f"/vendors/{vendor_uuid}")
+    assert vendor_page.status_code == 200
+    assert f'href="/vendors/{vendor_uuid}/changes.rss"'.encode() in vendor_page.data
+    assert f'href="/vendors/{vendor_uuid}/changes.atom"'.encode() in vendor_page.data
+
+    product_page = client.get(f"/products/{product_uuid}")
+    assert product_page.status_code == 200
+    assert f'href="/products/{product_uuid}/changes.rss"'.encode() in product_page.data
+    assert f'href="/products/{product_uuid}/changes.atom"'.encode() in product_page.data
+
+    cpe_page = client.get(f"/cpes/{cpe_id}")
+    assert cpe_page.status_code == 200
+    assert f'href="/cpes/{cpe_id}/changes.rss"'.encode() in cpe_page.data
+    assert f'href="/cpes/{cpe_id}/changes.atom"'.encode() in cpe_page.data
+
 def test_approved_changes_api_filters_proposal_type(client):
     response = client.get("/api/changes?proposal_type=new_cpe")
 

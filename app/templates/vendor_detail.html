@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Vendor {{ vendor.title or vendor.name }}{% endblock %}
+{% block feed_links %}
+  <link rel="alternate" type="application/rss+xml" title="Approved changes for {{ vendor.title or vendor.name }} RSS" href="{{ url_for('main.vendor_changes_rss', vendor_uuid=vendor.uuid) }}">
+  <link rel="alternate" type="application/atom+xml" title="Approved changes for {{ vendor.title or vendor.name }} Atom" href="{{ url_for('main.vendor_changes_atom', vendor_uuid=vendor.uuid) }}">
+{% endblock %}
 {% block content %}
 <div class="card">
   <div class="page-header">
@@ -41,6 +45,7 @@
       </a>
     </div>
   </div>
+  <p class="muted">Approved changes feed: <a href="{{ url_for('main.vendor_changes_rss', vendor_uuid=vendor.uuid) }}">RSS</a> · <a href="{{ url_for('main.vendor_changes_atom', vendor_uuid=vendor.uuid) }}">Atom</a></p>
   <p class="muted">Vendor token: <code>{{ vendor.name }}</code></p>
   <p class="muted">Vendor UUID: <code>{{ vendor.uuid }}</code></p>
   <p>{{ vendor.notes or "No vendor notes yet." }}</p>

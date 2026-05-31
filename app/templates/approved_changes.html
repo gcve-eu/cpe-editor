@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Approved Changes{% endblock %}
+{% block feed_links %}
+  <link rel="alternate" type="application/rss+xml" title="CPE Editor Approved Changes RSS" href="{{ url_for('main.approved_changes_rss') }}">
+  <link rel="alternate" type="application/atom+xml" title="CPE Editor Approved Changes Atom" href="{{ url_for('main.approved_changes_atom') }}">
+{% endblock %}
 {% block content %}
 <div class="card">
   <div class="page-header">
