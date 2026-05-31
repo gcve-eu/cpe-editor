@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Approved Change #{{ proposal.id }}{% endblock %}
+{% block feed_links %}
+  <link rel="alternate" type="application/rss+xml" title="CPE Editor Approved Changes RSS" href="{{ url_for('main.approved_changes_rss') }}">
+  <link rel="alternate" type="application/atom+xml" title="CPE Editor Approved Changes Atom" href="{{ url_for('main.approved_changes_atom') }}">
+{% endblock %}
 {% block content %}
 <div class="card">
   {% set approved_timestamp = proposal.reviewed_at or proposal.created_at %}

@@ -1036,6 +1036,105 @@ def _build_change_feed_entries(changes: list[Proposal]):
     return entries
 
 
+def _approved_changes_query(*criteria):
+    query = Proposal.query.filter_by(status="accepted")
+    for criterion in criteria:
+        query = query.filter(criterion)
+    return query.order_by(
+        Proposal.reviewed_at.desc(),
+        Proposal.created_at.desc(),
+        Proposal.id.desc(),
+    )
+
+
+def _vendor_change_criterion(vendor: Vendor):
+    product_ids = select(Product.id).where(Product.vendor_id == vendor.id)
+    cpe_ids = select(CPEEntry.id).where(CPEEntry.vendor_id == vendor.id)
+    return or_(
+        Proposal.vendor_id == vendor.id,
+        Proposal.product_id.in_(product_ids),
+        Proposal.cpe_entry_id.in_(cpe_ids),
+        Proposal.source_vendor_id == vendor.id,
+        Proposal.target_vendor_id == vendor.id,
+        Proposal.source_product_id.in_(product_ids),
+        Proposal.target_product_id.in_(product_ids),
+    )
+
+
+def _product_change_criterion(product: Product):
+    cpe_ids = select(CPEEntry.id).where(CPEEntry.product_id == product.id)
+    return or_(
+        Proposal.product_id == product.id,
+        Proposal.cpe_entry_id.in_(cpe_ids),
+        Proposal.source_product_id == product.id,
+        Proposal.target_product_id == product.id,
+    )
+
+
+def _build_rss_feed(changes, feed_url, site_url, title, description):
+    entries = _build_change_feed_entries(changes)
+    updated_at = entries[0]["published_rfc822"] if entries else format_datetime(datetime.now(timezone.utc))
+    items = "".join(
+        (
+            "<item>"
+            f"<title>{escape(entry['title'])}</title>"
+            f"<description>{escape(entry['summary'])}</description>"
+            f"<link>{escape(entry['url'])}</link>"
+            f"<guid>{escape(entry['url'])}</guid>"
+            f"<pubDate>{entry['published_rfc822']}</pubDate>"
+            "</item>"
+        )
+        for entry in entries
+    )
+    rss = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">'
+        "<channel>"
+        f"<title>{escape(title)}</title>"
+        f"<description>{escape(description)}</description>"
+        f"<link>{escape(site_url)}</link>"
+        f"<lastBuildDate>{updated_at}</lastBuildDate>"
+        f'<atom:link href="{escape(feed_url)}" rel="self" type="application/rss+xml" />'
+        f"{items}"
+        "</channel>"
+        "</rss>"
+    )
+    return Response(rss, mimetype="application/rss+xml")
+
+
+def _build_atom_feed(changes, feed_url, site_url, title):
+    entries = _build_change_feed_entries(changes)
+    updated_at = (
+        entries[0]["published_rfc3339"]
+        if entries
+        else datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    )
+    items = "".join(
+        (
+            "<entry>"
+            f"<id>{escape(entry['url'])}</id>"
+            f"<title>{escape(entry['title'])}</title>"
+            f'<link href="{escape(entry["url"])}" />'
+            f"<updated>{entry['published_rfc3339']}</updated>"
+            f"<summary>{escape(entry['summary'])}</summary>"
+            "</entry>"
+        )
+        for entry in entries
+    )
+    atom = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<feed xmlns="http://www.w3.org/2005/Atom">'
+        f"<title>{escape(title)}</title>"
+        f"<id>{escape(site_url)}</id>"
+        f'<link href="{escape(site_url)}" />'
+        f'<link href="{escape(feed_url)}" rel="self" type="application/atom+xml" />'
+        f"<updated>{updated_at}</updated>"
+        f"{items}"
+        "</feed>"
+    )
+    return Response(atom, mimetype="application/atom+xml")
+
+
 def _collect_related_products_for_combined_view(product: Product):
     related_vendor_ids = {product.vendor_id}
     vendor_queue = [product.vendor_id]
@@ -2095,11 +2194,7 @@ def approved_changes():
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
     per_page = 20
 
-    ordered_query = Proposal.query.filter_by(status="accepted").order_by(
-        Proposal.reviewed_at.desc(),
-        Proposal.created_at.desc(),
-        Proposal.id.desc(),
-    )
+    ordered_query = _approved_changes_query()
     total_changes = ordered_query.count()
     total_pages = max((total_changes + per_page - 1) // per_page, 1)
     if page > total_pages:
@@ -2121,86 +2216,106 @@ def approved_changes():
 
 @bp.route("/changes.rss")
 def approved_changes_rss():
-    changes = (
-        Proposal.query.filter_by(status="accepted")
-        .order_by(Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc())
-        .limit(20)
-        .all()
+    changes = _approved_changes_query().limit(20).all()
+    return _build_rss_feed(
+        changes,
+        url_for("main.approved_changes_rss", _external=True),
+        url_for("main.approved_changes", _external=True),
+        "CPE Editor Approved Changes",
+        "Recent approved changes in the CPE Editor catalog.",
     )
-    entries = _build_change_feed_entries(changes)
-    feed_url = url_for("main.approved_changes_rss", _external=True)
-    site_url = url_for("main.approved_changes", _external=True)
-    updated_at = entries[0]["published_rfc822"] if entries else format_datetime(datetime.now(timezone.utc))
-
-    items = "".join(
-        (
-            "<item>"
-            f"<title>{escape(entry['title'])}</title>"
-            f"<description>{escape(entry['summary'])}</description>"
-            f"<link>{escape(entry['url'])}</link>"
-            f"<guid>{escape(entry['url'])}</guid>"
-            f"<pubDate>{entry['published_rfc822']}</pubDate>"
-            "</item>"
-        )
-        for entry in entries
-    )
-    rss = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        "<rss version=\"2.0\">"
-        "<channel>"
-        "<title>CPE Editor Approved Changes</title>"
-        "<description>Recent approved changes in the CPE Editor catalog.</description>"
-        f"<link>{escape(site_url)}</link>"
-        f"<lastBuildDate>{updated_at}</lastBuildDate>"
-        f"<atom:link href=\"{escape(feed_url)}\" rel=\"self\" type=\"application/rss+xml\" xmlns:atom=\"http://www.w3.org/2005/Atom\" />"
-        f"{items}"
-        "</channel>"
-        "</rss>"
-    )
-    return Response(rss, mimetype="application/rss+xml")
 
 
 @bp.route("/changes.atom")
 def approved_changes_atom():
-    changes = (
-        Proposal.query.filter_by(status="accepted")
-        .order_by(Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc())
-        .limit(20)
-        .all()
-    )
-    entries = _build_change_feed_entries(changes)
-    feed_url = url_for("main.approved_changes_atom", _external=True)
-    site_url = url_for("main.approved_changes", _external=True)
-    updated_at = (
-        entries[0]["published_rfc3339"]
-        if entries
-        else datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    changes = _approved_changes_query().limit(20).all()
+    return _build_atom_feed(
+        changes,
+        url_for("main.approved_changes_atom", _external=True),
+        url_for("main.approved_changes", _external=True),
+        "CPE Editor Approved Changes",
     )
 
-    items = "".join(
-        (
-            "<entry>"
-            f"<id>{escape(entry['url'])}</id>"
-            f"<title>{escape(entry['title'])}</title>"
-            f"<link href=\"{escape(entry['url'])}\" />"
-            f"<updated>{entry['published_rfc3339']}</updated>"
-            f"<summary>{escape(entry['summary'])}</summary>"
-            "</entry>"
-        )
-        for entry in entries
+
+@bp.route("/vendors/<string:vendor_uuid>/changes.rss")
+def vendor_changes_rss(vendor_uuid):
+    vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
+    changes = _approved_changes_query(_vendor_change_criterion(vendor)).limit(20).all()
+    vendor_label = vendor.title or vendor.name
+    return _build_rss_feed(
+        changes,
+        url_for("main.vendor_changes_rss", vendor_uuid=vendor.uuid, _external=True),
+        url_for("main.vendor_detail", vendor_uuid=vendor.uuid, _external=True),
+        f"CPE Editor Approved Changes for {vendor_label}",
+        f"Recent approved changes related to the {vendor_label} vendor.",
     )
-    atom = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        "<feed xmlns=\"http://www.w3.org/2005/Atom\">"
-        "<title>CPE Editor Approved Changes</title>"
-        f"<id>{escape(site_url)}</id>"
-        f"<link href=\"{escape(site_url)}\" />"
-        f"<link href=\"{escape(feed_url)}\" rel=\"self\" />"
-        f"<updated>{updated_at}</updated>"
-        f"{items}"
-        "</feed>"
+
+
+@bp.route("/vendors/<string:vendor_uuid>/changes.atom")
+def vendor_changes_atom(vendor_uuid):
+    vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
+    changes = _approved_changes_query(_vendor_change_criterion(vendor)).limit(20).all()
+    vendor_label = vendor.title or vendor.name
+    return _build_atom_feed(
+        changes,
+        url_for("main.vendor_changes_atom", vendor_uuid=vendor.uuid, _external=True),
+        url_for("main.vendor_detail", vendor_uuid=vendor.uuid, _external=True),
+        f"CPE Editor Approved Changes for {vendor_label}",
     )
-    return Response(atom, mimetype="application/atom+xml")
+
+
+@bp.route("/products/<string:product_uuid>/changes.rss")
+def product_changes_rss(product_uuid):
+    product = Product.query.filter_by(uuid=product_uuid).first_or_404()
+    changes = _approved_changes_query(_product_change_criterion(product)).limit(20).all()
+    product_label = product.title or product.name
+    return _build_rss_feed(
+        changes,
+        url_for("main.product_changes_rss", product_uuid=product.uuid, _external=True),
+        url_for("main.product_detail", product_uuid=product.uuid, _external=True),
+        f"CPE Editor Approved Changes for {product_label}",
+        f"Recent approved changes related to the {product_label} product.",
+    )
+
+
+@bp.route("/products/<string:product_uuid>/changes.atom")
+def product_changes_atom(product_uuid):
+    product = Product.query.filter_by(uuid=product_uuid).first_or_404()
+    changes = _approved_changes_query(_product_change_criterion(product)).limit(20).all()
+    product_label = product.title or product.name
+    return _build_atom_feed(
+        changes,
+        url_for("main.product_changes_atom", product_uuid=product.uuid, _external=True),
+        url_for("main.product_detail", product_uuid=product.uuid, _external=True),
+        f"CPE Editor Approved Changes for {product_label}",
+    )
+
+
+@bp.route("/cpes/<int:cpe_id>/changes.rss")
+def cpe_changes_rss(cpe_id):
+    cpe = CPEEntry.query.get_or_404(cpe_id)
+    changes = _approved_changes_query(Proposal.cpe_entry_id == cpe.id).limit(20).all()
+    cpe_label = cpe.title or cpe.cpe_uri
+    return _build_rss_feed(
+        changes,
+        url_for("main.cpe_changes_rss", cpe_id=cpe.id, _external=True),
+        url_for("main.cpe_detail", cpe_id=cpe.id, _external=True),
+        f"CPE Editor Approved Changes for {cpe_label}",
+        f"Recent approved changes related to {cpe_label}.",
+    )
+
+
+@bp.route("/cpes/<int:cpe_id>/changes.atom")
+def cpe_changes_atom(cpe_id):
+    cpe = CPEEntry.query.get_or_404(cpe_id)
+    changes = _approved_changes_query(Proposal.cpe_entry_id == cpe.id).limit(20).all()
+    cpe_label = cpe.title or cpe.cpe_uri
+    return _build_atom_feed(
+        changes,
+        url_for("main.cpe_changes_atom", cpe_id=cpe.id, _external=True),
+        url_for("main.cpe_detail", cpe_id=cpe.id, _external=True),
+        f"CPE Editor Approved Changes for {cpe_label}",
+    )
 
 
 @bp.route("/changes/<int:proposal_id>")

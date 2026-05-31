@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ cpe.cpe_uri }}{% endblock %}
+{% block feed_links %}
+  <link rel="alternate" type="application/rss+xml" title="Approved changes for {{ cpe.title or cpe.cpe_uri }} RSS" href="{{ url_for('main.cpe_changes_rss', cpe_id=cpe.id) }}">
+  <link rel="alternate" type="application/atom+xml" title="Approved changes for {{ cpe.title or cpe.cpe_uri }} Atom" href="{{ url_for('main.cpe_changes_atom', cpe_id=cpe.id) }}">
+{% endblock %}
 {% block content %}
 <div class="card">
   <div class="page-header">
@@ -19,6 +23,7 @@
       <a class="button secondary" href="{{ url_for('main.proposal_new', proposal_type='new_cpe_vulnerability_reference', cpe_entry_id=cpe.id, product_id=cpe.product_id, vendor_id=cpe.vendor_id) }}"><i class="fa-solid fa-link" aria-hidden="true"></i>Propose CVE/GCVE/GHSA reference</a>
     </div>
   </div>
+  <p class="muted">Approved changes feed: <a href="{{ url_for('main.cpe_changes_rss', cpe_id=cpe.id) }}">RSS</a> · <a href="{{ url_for('main.cpe_changes_atom', cpe_id=cpe.id) }}">Atom</a></p>
   <p><code>{{ cpe.cpe_uri }}</code></p>
   <p>
     <span class="pill">part: {{ cpe.part }}</span>
