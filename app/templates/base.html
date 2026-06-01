@@ -489,8 +489,8 @@
       <a href="{{ url_for('main.api_docs') }}"><i class="fa-solid fa-code" aria-hidden="true"></i>API docs</a>
     </div>
     <div class="nav-account">
-      <a href="{{ url_for('main.admin_dashboard') }}"><i class="fa-solid fa-user-gear" aria-hidden="true"></i>Admin</a>
       {% if session.get('is_admin') %}
+        <a href="{{ url_for('main.admin_dashboard') }}"><i class="fa-solid fa-user-gear" aria-hidden="true"></i>Admin</a>
         <form method="post" action="{{ url_for('main.admin_logout') }}" class="inline-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="nav-button"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Logout</button>
