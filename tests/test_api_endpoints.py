@@ -234,6 +234,76 @@ def test_vendor_page_bottom_pagination_and_toggle_labels(client, app):
     assert b'data-show-less-label="Show less"' in response.data
 
 
+def test_statistics_api_returns_clean_dataset_summary(client):
+    response = client.get("/api/statistics")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["counts"] == {
+        "vendors": 2,
+        "products": 3,
+        "cpes": 3,
+        "purl_mappings": 2,
+        "cpes_with_purl_mappings": 2,
+        "vendors_with_products": 2,
+        "vendors_without_products": 0,
+    }
+    assert payload["averages"] == {
+        "purls_per_cpe": 0.67,
+        "products_per_vendor": 1.5,
+    }
+    assert payload["top_vendor"]["name"] == "microsoft"
+    assert payload["top_vendor"]["product_count"] == 2
+    assert payload["top_vendor"]["rank"] == 1
+    assert payload["cpe_part_counts"] == [
+        {"part": "a", "count": 2},
+        {"part": "o", "count": 1},
+    ]
+
+
+def test_statistics_top_list_api_paginates_vendors_and_products(client):
+    vendors_response = client.get("/api/statistics/top-list?entity=vendors&per_page=1")
+
+    assert vendors_response.status_code == 200
+    vendors_payload = vendors_response.get_json()
+    assert vendors_payload["entity"] == "vendors"
+    assert vendors_payload["page"] == 1
+    assert vendors_payload["per_page"] == 1
+    assert vendors_payload["total"] == 2
+    assert vendors_payload["total_pages"] == 2
+    assert vendors_payload["items"] == [
+        {
+            "entity_type": "vendor",
+            "id": vendors_payload["items"][0]["id"],
+            "uuid": vendors_payload["items"][0]["uuid"],
+            "name": "microsoft",
+            "title": "Microsoft",
+            "product_count": 2,
+            "rank": 1,
+        }
+    ]
+
+    products_response = client.get("/api/statistics/top-list?entity=products&page=2&per_page=2")
+
+    assert products_response.status_code == 200
+    products_payload = products_response.get_json()
+    assert products_payload["entity"] == "products"
+    assert products_payload["page"] == 2
+    assert products_payload["per_page"] == 2
+    assert products_payload["total"] == 3
+    assert products_payload["total_pages"] == 2
+    assert products_payload["items"][0]["rank"] == 3
+    assert products_payload["items"][0]["name"] == "windows_11"
+    assert products_payload["items"][0]["vendor_name"] == "microsoft"
+    assert products_payload["items"][0]["cpe_count"] == 1
+
+
+def test_statistics_top_list_api_rejects_unknown_entity(client):
+    response = client.get("/api/statistics/top-list?entity=projects")
+
+    assert response.status_code == 400
+
+
 def test_openapi_and_docs_endpoints(client):
     openapi_response = client.get("/api/openapi.yaml")
     docs_response = client.get("/api/docs")

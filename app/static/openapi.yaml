@@ -13,9 +13,57 @@ tags:
   - name: Products
   - name: CPE Entries
   - name: Vulnerability References
+  - name: Statistics
   - name: Changes
   - name: Admin
 paths:
+  /api/statistics:
+    get:
+      tags: [Statistics]
+      summary: Get dataset statistics
+      description: Returns the aggregate counts, averages, CPE part distribution, and top vendor shown on the statistics page as clean JSON.
+      responses:
+        '200':
+          description: Dataset statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatisticsSummary'
+  /api/statistics/top-list:
+    get:
+      tags: [Statistics]
+      summary: List top vendors or products
+      description: Returns a paginated top list for vendors ranked by product count or products ranked by CPE count.
+      parameters:
+        - in: query
+          name: entity
+          schema:
+            type: string
+            enum: [vendors, products]
+            default: vendors
+          description: Select which top list to return. Singular aliases are accepted by the API.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Paginated top list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedStatisticsTopList'
+        '400':
+          description: Unknown entity value.
   /api/vendors:
     get:
       tags: [Vendors]
@@ -1055,6 +1103,120 @@ components:
           type: string
           format: date-time
           nullable: true
+    StatisticsCounts:
+      type: object
+      properties:
+        vendors:
+          type: integer
+        products:
+          type: integer
+        cpes:
+          type: integer
+        purl_mappings:
+          type: integer
+        cpes_with_purl_mappings:
+          type: integer
+        vendors_with_products:
+          type: integer
+        vendors_without_products:
+          type: integer
+    StatisticsAverages:
+      type: object
+      properties:
+        purls_per_cpe:
+          type: number
+          format: float
+        products_per_vendor:
+          type: number
+          format: float
+    StatisticsCPEPartCount:
+      type: object
+      properties:
+        part:
+          type: string
+          nullable: true
+        count:
+          type: integer
+    StatisticsTopVendor:
+      type: object
+      properties:
+        entity_type:
+          type: string
+          enum: [vendor]
+        id:
+          type: integer
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+          nullable: true
+        product_count:
+          type: integer
+        rank:
+          type: integer
+    StatisticsTopProduct:
+      type: object
+      properties:
+        entity_type:
+          type: string
+          enum: [product]
+        id:
+          type: integer
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+          nullable: true
+        vendor_id:
+          type: integer
+        vendor_uuid:
+          type: string
+          format: uuid
+        vendor_name:
+          type: string
+        vendor_title:
+          type: string
+          nullable: true
+        cpe_count:
+          type: integer
+        rank:
+          type: integer
+    StatisticsTopListItem:
+      oneOf:
+        - $ref: '#/components/schemas/StatisticsTopVendor'
+        - $ref: '#/components/schemas/StatisticsTopProduct'
+    StatisticsSummary:
+      type: object
+      properties:
+        counts:
+          $ref: '#/components/schemas/StatisticsCounts'
+        averages:
+          $ref: '#/components/schemas/StatisticsAverages'
+        top_vendor:
+          $ref: '#/components/schemas/StatisticsTopVendor'
+          nullable: true
+        cpe_part_counts:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsCPEPartCount'
+    PaginatedStatisticsTopList:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            entity:
+              type: string
+              enum: [vendors, products]
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/StatisticsTopListItem'
     CPEVulnerabilityReferenceListByCPE:
       type: object
       properties:
