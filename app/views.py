@@ -451,6 +451,127 @@ def _serialize_product_option(product):
     }
 
 
+def _serialize_top_vendor(row, rank=None):
+    payload = {
+        "entity_type": "vendor",
+        "id": row.vendor_id,
+        "uuid": row.vendor_uuid,
+        "name": row.vendor_name,
+        "title": row.vendor_title,
+        "product_count": row.product_count,
+    }
+    if rank is not None:
+        payload["rank"] = rank
+    return payload
+
+
+def _serialize_top_product(row, rank=None):
+    payload = {
+        "entity_type": "product",
+        "id": row.product_id,
+        "uuid": row.product_uuid,
+        "name": row.product_name,
+        "title": row.product_title,
+        "vendor_id": row.vendor_id,
+        "vendor_uuid": row.vendor_uuid,
+        "vendor_name": row.vendor_name,
+        "vendor_title": row.vendor_title,
+        "cpe_count": row.cpe_count,
+    }
+    if rank is not None:
+        payload["rank"] = rank
+    return payload
+
+
+def _statistics_top_vendors_query():
+    return (
+        db.session.query(
+            Vendor.id.label("vendor_id"),
+            Vendor.uuid.label("vendor_uuid"),
+            Vendor.name.label("vendor_name"),
+            Vendor.title.label("vendor_title"),
+            func.count(Product.id).label("product_count"),
+        )
+        .outerjoin(Product, Product.vendor_id == Vendor.id)
+        .group_by(Vendor.id, Vendor.uuid, Vendor.name, Vendor.title)
+        .order_by(func.count(Product.id).desc(), Vendor.name.asc())
+    )
+
+
+def _statistics_top_products_query():
+    return (
+        db.session.query(
+            Product.id.label("product_id"),
+            Product.uuid.label("product_uuid"),
+            Product.name.label("product_name"),
+            Product.title.label("product_title"),
+            Vendor.id.label("vendor_id"),
+            Vendor.uuid.label("vendor_uuid"),
+            Vendor.name.label("vendor_name"),
+            Vendor.title.label("vendor_title"),
+            func.count(CPEEntry.id).label("cpe_count"),
+        )
+        .join(Vendor, Product.vendor_id == Vendor.id)
+        .outerjoin(CPEEntry, CPEEntry.product_id == Product.id)
+        .group_by(
+            Product.id,
+            Product.uuid,
+            Product.name,
+            Product.title,
+            Vendor.id,
+            Vendor.uuid,
+            Vendor.name,
+            Vendor.title,
+        )
+        .order_by(func.count(CPEEntry.id).desc(), Vendor.name.asc(), Product.name.asc())
+    )
+
+
+def _build_statistics_payload():
+    total_vendors = db.session.query(func.count(Vendor.id)).scalar() or 0
+    total_products = db.session.query(func.count(Product.id)).scalar() or 0
+    total_cpes = db.session.query(func.count(CPEEntry.id)).scalar() or 0
+    total_purl_mappings = db.session.query(func.count(CPEPurlMapping.id)).scalar() or 0
+    cpes_with_purl_mappings = (
+        db.session.query(func.count(func.distinct(CPEPurlMapping.cpe_name_id))).scalar() or 0
+    )
+    vendors_with_products = (
+        db.session.query(func.count(func.distinct(Vendor.id)))
+        .join(Product, Product.vendor_id == Vendor.id)
+        .scalar()
+        or 0
+    )
+    vendors_without_products = max(total_vendors - vendors_with_products, 0)
+    top_vendor = _statistics_top_vendors_query().first()
+    cpe_part_counts = (
+        db.session.query(CPEEntry.part, func.count(CPEEntry.id).label("count"))
+        .group_by(CPEEntry.part)
+        .order_by(func.count(CPEEntry.id).desc(), CPEEntry.part.asc())
+        .all()
+    )
+
+    return {
+        "counts": {
+            "vendors": total_vendors,
+            "products": total_products,
+            "cpes": total_cpes,
+            "purl_mappings": total_purl_mappings,
+            "cpes_with_purl_mappings": cpes_with_purl_mappings,
+            "vendors_with_products": vendors_with_products,
+            "vendors_without_products": vendors_without_products,
+        },
+        "averages": {
+            "purls_per_cpe": round(total_purl_mappings / total_cpes, 2) if total_cpes else 0,
+            "products_per_vendor": round(total_products / total_vendors, 2) if total_vendors else 0,
+        },
+        "top_vendor": _serialize_top_vendor(top_vendor, rank=1) if top_vendor else None,
+        "cpe_part_counts": [
+            {"part": part, "count": count}
+            for part, count in cpe_part_counts
+        ],
+    }
+
+
 def _serialize_entity_note(note):
     return {
         "id": note.id,
@@ -1355,27 +1476,15 @@ def statistics():
     vendor_page = max(request.args.get("vendor_page", default=1, type=int) or 1, 1)
     vendors_per_page = 25
 
-    total_vendors = db.session.query(func.count(Vendor.id)).scalar() or 0
-    total_products = db.session.query(func.count(Product.id)).scalar() or 0
-    total_cpes = db.session.query(func.count(CPEEntry.id)).scalar() or 0
-    total_purl_mappings = db.session.query(func.count(CPEPurlMapping.id)).scalar() or 0
-    cpes_with_purl_mappings = (
-        db.session.query(func.count(func.distinct(CPEPurlMapping.cpe_name_id))).scalar() or 0
-    )
-    average_purls_per_cpe = round(total_purl_mappings / total_cpes, 2) if total_cpes else 0
+    statistics_payload = _build_statistics_payload()
+    total_vendors = statistics_payload["counts"]["vendors"]
+    total_products = statistics_payload["counts"]["products"]
+    total_cpes = statistics_payload["counts"]["cpes"]
+    total_purl_mappings = statistics_payload["counts"]["purl_mappings"]
+    cpes_with_purl_mappings = statistics_payload["counts"]["cpes_with_purl_mappings"]
+    average_purls_per_cpe = statistics_payload["averages"]["purls_per_cpe"]
 
-    vendor_product_counts_query = (
-        db.session.query(
-            Vendor.id.label("vendor_id"),
-            Vendor.uuid.label("vendor_uuid"),
-            Vendor.name.label("vendor_name"),
-            Vendor.title.label("vendor_title"),
-            func.count(Product.id).label("product_count"),
-        )
-        .outerjoin(Product, Product.vendor_id == Vendor.id)
-        .group_by(Vendor.id, Vendor.uuid, Vendor.name, Vendor.title)
-        .order_by(func.count(Product.id).desc(), Vendor.name.asc())
-    )
+    vendor_product_counts_query = _statistics_top_vendors_query()
 
     vendor_product_total = vendor_product_counts_query.count()
     vendor_product_total_pages = max((vendor_product_total + vendors_per_page - 1) // vendors_per_page, 1)
@@ -1390,23 +1499,12 @@ def statistics():
     )
 
     top_vendor = vendor_product_counts_query.first()
-    vendors_with_products = (
-        db.session.query(func.count(func.distinct(Vendor.id)))
-        .join(Product, Product.vendor_id == Vendor.id)
-        .scalar()
-        or 0
-    )
-    average_products_per_vendor = (
-        round(total_products / total_vendors, 2) if total_vendors else 0
-    )
-    vendors_without_products = max(total_vendors - vendors_with_products, 0)
-
-    cpe_part_counts = (
-        db.session.query(CPEEntry.part, func.count(CPEEntry.id).label("count"))
-        .group_by(CPEEntry.part)
-        .order_by(func.count(CPEEntry.id).desc())
-        .all()
-    )
+    average_products_per_vendor = statistics_payload["averages"]["products_per_vendor"]
+    vendors_without_products = statistics_payload["counts"]["vendors_without_products"]
+    cpe_part_counts = [
+        (item["part"], item["count"])
+        for item in statistics_payload["cpe_part_counts"]
+    ]
 
     return render_template(
         "statistics.html",
@@ -1572,6 +1670,47 @@ def api_gcve_cpe_search():
     result = _fetch_gcve_cpe_matches(cpe_value)
     status_code = 200 if result.get("ok") else 502
     return jsonify(result), status_code
+
+
+@bp.route("/api/statistics")
+def api_statistics():
+    return jsonify(_build_statistics_payload())
+
+
+@bp.route("/api/statistics/top-list")
+def api_statistics_top_list():
+    entity = (request.args.get("entity") or "vendors").strip().lower()
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+
+    if entity in {"vendor", "vendors"}:
+        normalized_entity = "vendors"
+        query = _statistics_top_vendors_query()
+        serializer = _serialize_top_vendor
+    elif entity in {"product", "products"}:
+        normalized_entity = "products"
+        query = _statistics_top_products_query()
+        serializer = _serialize_top_product
+    else:
+        abort(400, description="entity must be one of: vendors, products")
+
+    total = query.count()
+    rank_start = (page - 1) * per_page + 1
+    results = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    return jsonify(
+        {
+            "entity": normalized_entity,
+            "items": [
+                serializer(row, rank=rank_start + index)
+                for index, row in enumerate(results)
+            ],
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": max((total + per_page - 1) // per_page, 1),
+        }
+    )
 
 
 @bp.route("/api/vendors")
