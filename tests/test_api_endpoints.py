@@ -1,7 +1,7 @@
 import io
 import json
 
-from app.models import CPEEntry, Product, Vendor
+from app.models import CPEEntry, Product, Vendor, db
 from app import views
 
 
@@ -213,6 +213,26 @@ def test_approved_changes_api_can_include_bcp10_change_bundle(client):
     assert detail_response.status_code == 200
     detail_payload = detail_response.get_json()
     assert detail_payload["bcp10_dataset"]["counts"]["cpes"] == 1
+
+
+def test_vendor_page_bottom_pagination_and_toggle_labels(client, app):
+    with app.app_context():
+        for index in range(30):
+            db.session.add(
+                Vendor(
+                    name=f"extra_vendor_{index:02d}",
+                    title=f"Extra Vendor {index:02d}",
+                )
+            )
+        db.session.commit()
+
+    response = client.get("/vendors")
+
+    assert response.status_code == 200
+    assert response.data.count(b'href="/vendors?page=2"') == 2
+    assert b'data-show-more-label="Show more"' in response.data
+    assert b'data-show-less-label="Show less"' in response.data
+
 
 def test_openapi_and_docs_endpoints(client):
     openapi_response = client.get("/api/openapi.yaml")
