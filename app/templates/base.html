@@ -537,7 +537,9 @@
       button.className = "collapse-toggle";
       button.setAttribute("aria-expanded", "false");
       button.setAttribute("aria-controls", `collapsible-list-${index}`);
-      button.textContent = `Show ${items.length - limit} more`;
+      const showMoreLabel = listEl.dataset.showMoreLabel || `Show ${items.length - limit} more`;
+      const showLessLabel = listEl.dataset.showLessLabel || "Show less";
+      button.textContent = showMoreLabel;
       listEl.id = `collapsible-list-${index}`;
 
       button.addEventListener("click", () => {
@@ -548,7 +550,7 @@
         });
 
         button.setAttribute("aria-expanded", String(!isExpanded));
-        button.textContent = isExpanded ? `Show ${items.length - limit} more` : "Show less";
+        button.textContent = isExpanded ? showMoreLabel : showLessLabel;
       });
 
       listEl.insertAdjacentElement("afterend", button);
