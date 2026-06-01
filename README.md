@@ -63,6 +63,16 @@ python run.py
 
 Then open the local URL printed by Flask.
 
+### Production start
+
+Use the dedicated WSGI entry point with a production WSGI server instead of the Flask debug server:
+
+```bash
+gunicorn --bind 0.0.0.0:8000 wsgi:app
+```
+
+The `wsgi.py` entry point creates the Flask application without enabling debug mode.
+
 ### Configuration (environment variables)
 
 - `DATABASE_URL`
