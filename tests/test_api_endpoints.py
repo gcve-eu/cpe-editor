@@ -234,6 +234,15 @@ def test_vendor_page_bottom_pagination_and_toggle_labels(client, app):
     assert b'data-show-less-label="Show less"' in response.data
 
 
+def test_statistics_page_renders_cpe_part_distribution_counts(client):
+    response = client.get("/statistics")
+
+    assert response.status_code == 200
+    assert b"<code>a</code>: 2" in response.data
+    assert b"<code>o</code>: 1" in response.data
+    assert b"built-in method count" not in response.data
+
+
 def test_statistics_api_returns_clean_dataset_summary(client):
     response = client.get("/api/statistics")
 
