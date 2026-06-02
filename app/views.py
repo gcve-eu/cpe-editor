@@ -1451,9 +1451,19 @@ def details():
 @bp.route("/vendors")
 def vendors():
     vendor_page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    vendor_q = (request.args.get("q") or "").strip()
     vendors_per_page = 25
 
-    vendor_query = Vendor.query.order_by(Vendor.name.asc())
+    vendor_query = Vendor.query
+    if vendor_q:
+        like = f"%{vendor_q.lower()}%"
+        vendor_query = vendor_query.filter(
+            or_(
+                func.lower(Vendor.name).like(like),
+                func.lower(Vendor.title).like(like),
+            )
+        )
+    vendor_query = vendor_query.order_by(Vendor.name.asc())
     vendor_total = vendor_query.count()
     vendor_total_pages = max((vendor_total + vendors_per_page - 1) // vendors_per_page, 1)
     if vendor_page > vendor_total_pages:
@@ -1468,6 +1478,8 @@ def vendors():
         vendor_total_pages=vendor_total_pages,
         vendor_has_prev=vendor_page > 1,
         vendor_has_next=vendor_page < vendor_total_pages,
+        vendor_q=vendor_q,
+        vendor_total=vendor_total,
     )
 
 

@@ -359,6 +359,30 @@
       justify-content: flex-end;
       margin-top: .9rem;
     }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .vendor-header-actions {
+      justify-content: flex-end;
+    }
+    .vendor-search-form {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: .5rem;
+    }
+    .vendor-search-form input[type="search"] {
+      width: min(100%, 18rem);
+    }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: .8rem .75rem; border-bottom: 1px solid #e6e9ef; vertical-align: top; }
     thead th {
