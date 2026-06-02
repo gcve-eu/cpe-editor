@@ -1,23 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Browse Vendors{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>Browse vendors</h1>
-    <div class="action-row vendor-header-actions">
-      <form method="get" class="vendor-search-form" role="search" aria-label="Search vendors">
-        <label class="visually-hidden" for="vendor-search">Search vendors</label>
-        <input id="vendor-search" name="q" type="search" value="{{ vendor_q }}" placeholder="Search vendors">
-        <button class="search-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Search</span></button>
-        {% if vendor_q %}
-          <a class="button secondary" href="{{ url_for('main.vendors') }}">Clear</a>
-        {% endif %}
-      </form>
-      <a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i>Propose vendor/product</a>
+<div class="card vendors-card">
+  <div class="page-header vendors-page-header">
+    <div>
+      <p class="eyebrow">Vendor directory</p>
+      <h1>Browse vendors</h1>
     </div>
+    <a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i>Propose vendor/product</a>
   </div>
+
+  <form method="get" class="vendor-search-form" role="search" aria-label="Search vendors">
+    <label for="vendor-search">Search vendors</label>
+    <div class="vendor-search-controls">
+      <input id="vendor-search" name="q" type="search" value="{{ vendor_q }}" placeholder="Search by vendor name">
+      <button class="search-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Search</span></button>
+      {% if vendor_q %}
+        <a class="button secondary" href="{{ url_for('main.vendors') }}">Clear</a>
+      {% endif %}
+    </div>
+  </form>
   {% if vendors %}
-    <div class="muted">
+    <div class="muted vendor-results-meta">
       <p>
         Page {{ vendor_page }} of {{ vendor_total_pages }}
         {% if vendor_q %}
@@ -38,10 +42,10 @@
       </div>
     </div>
   {% endif %}
-  <ul>
+  <ul class="vendor-list">
     {% for vendor in vendors %}
-      <li>
-        <a href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a>
+      <li class="vendor-list-item">
+        <a class="vendor-list-link" href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a>
         <button
           type="button"
           class="button secondary icon-button js-export-json"
@@ -54,11 +58,11 @@
         </button>
       </li>
     {% else %}
-      <li>No vendors found{% if vendor_q %} for <strong>{{ vendor_q }}</strong>{% endif %}.</li>
+      <li class="vendor-empty-state">No vendors found{% if vendor_q %} for <strong>{{ vendor_q }}</strong>{% endif %}.</li>
     {% endfor %}
   </ul>
   {% if vendors and (vendor_has_prev or vendor_has_next) %}
-    <div class="muted">
+    <div class="muted vendor-results-meta">
       <p>
         Page {{ vendor_page }} of {{ vendor_total_pages }}
         {% if vendor_q %}
