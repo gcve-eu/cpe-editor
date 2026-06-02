@@ -1501,10 +1501,7 @@ def statistics():
     top_vendor = vendor_product_counts_query.first()
     average_products_per_vendor = statistics_payload["averages"]["products_per_vendor"]
     vendors_without_products = statistics_payload["counts"]["vendors_without_products"]
-    cpe_part_counts = [
-        (item["part"], item["count"])
-        for item in statistics_payload["cpe_part_counts"]
-    ]
+    cpe_part_counts = statistics_payload["cpe_part_counts"]
 
     return render_template(
         "statistics.html",
