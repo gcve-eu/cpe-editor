@@ -1075,7 +1075,20 @@ def _proposal_focus_links(proposal: Proposal):
         seen.add(key)
         links.append({"label": label, "endpoint": endpoint, "kwargs": kwargs})
 
-    vendor_refs = [proposal.vendor, proposal.source_vendor, proposal.target_vendor]
+    linked_vendor = proposal.vendor
+    linked_product = proposal.product
+    linked_cpe = proposal.cpe_entry
+    if (
+        proposal.proposal_type == "new_vendor_product"
+        and (not linked_vendor or not linked_product)
+    ):
+        (
+            linked_vendor,
+            linked_product,
+            linked_cpe,
+        ) = _resolve_new_vendor_product_records(proposal)
+
+    vendor_refs = [linked_vendor, proposal.source_vendor, proposal.target_vendor]
     for vendor in vendor_refs:
         if vendor:
             add_entity_link(
@@ -1084,7 +1097,7 @@ def _proposal_focus_links(proposal: Proposal):
                 vendor_uuid=vendor.uuid,
             )
 
-    product_refs = [proposal.product, proposal.source_product, proposal.target_product]
+    product_refs = [linked_product, proposal.source_product, proposal.target_product]
     for product in product_refs:
         if product:
             add_entity_link(
@@ -1093,14 +1106,46 @@ def _proposal_focus_links(proposal: Proposal):
                 product_uuid=product.uuid,
             )
 
-    if proposal.cpe_entry:
+    if linked_cpe:
         add_entity_link(
-            f"CPE #{proposal.cpe_entry.id}",
+            f"CPE #{linked_cpe.id}",
             "main.cpe_detail",
-            cpe_id=proposal.cpe_entry.id,
+            cpe_id=linked_cpe.id,
         )
 
     return links
+
+
+def _resolve_new_vendor_product_records(proposal: Proposal):
+    vendor = proposal.vendor
+    product = proposal.product
+    cpe_entry = proposal.cpe_entry
+
+    if (
+        (not vendor or not product)
+        and proposal.proposed_vendor_name
+        and proposal.proposed_product_name
+    ):
+        normalized_vendor_name = normalize_token(proposal.proposed_vendor_name)
+        normalized_product_name = normalize_token(proposal.proposed_product_name)
+        vendor = vendor or Vendor.query.filter_by(name=normalized_vendor_name).first()
+        if vendor:
+            product = product or Product.query.filter_by(
+                vendor_id=vendor.id,
+                name=normalized_product_name,
+            ).first()
+
+    if not cpe_entry:
+        if proposal.proposed_cpe_uri:
+            cpe_entry = CPEEntry.query.filter_by(cpe_uri=proposal.proposed_cpe_uri).first()
+        elif vendor and product:
+            cpe_entry = CPEEntry.query.filter_by(
+                vendor_id=vendor.id,
+                product_id=product.id,
+                from_proposal=True,
+            ).first()
+
+    return vendor, product, cpe_entry
 
 
 def _proposal_summary(proposal: Proposal):
@@ -3154,7 +3199,11 @@ def apply_proposal(proposal: Proposal):
         db.session.add(product)
         db.session.flush()
 
-        create_proposal_cpe(vendor.id, product.id, proposal.proposed_cpe_uri)
+        cpe = create_proposal_cpe(vendor.id, product.id, proposal.proposed_cpe_uri)
+        db.session.flush()
+        proposal.vendor_id = vendor.id
+        proposal.product_id = product.id
+        proposal.cpe_entry_id = cpe.id
         return
 
     if proposal.proposal_type == "new_product":
@@ -3168,7 +3217,11 @@ def apply_proposal(proposal: Proposal):
         db.session.add(product)
         db.session.flush()
 
-        create_proposal_cpe(vendor.id, product.id, proposal.proposed_cpe_uri)
+        cpe = create_proposal_cpe(vendor.id, product.id, proposal.proposed_cpe_uri)
+        db.session.flush()
+        proposal.vendor_id = vendor.id
+        proposal.product_id = product.id
+        proposal.cpe_entry_id = cpe.id
         return
 
     if proposal.proposal_type == "new_cpe":
