@@ -3,12 +3,14 @@ from __future__ import annotations
 import io
 import json
 import tarfile
+import tempfile
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
 import click
-from sqlalchemy import inspect, schema, text
+from sqlalchemy import func, inspect, schema, text
+from sqlalchemy.orm import aliased
 
 from .models import (
     CPEEntry,
@@ -930,15 +932,16 @@ def register_cli(app):
         backfill_missing_uuids()
         db.session.commit()
 
-        dataset = build_app_dataset(include_proposals=include_proposals)
         output_path = Path(output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        write_dataset_archive(output_path, dataset)
+        counts = write_app_dataset_archive(
+            output_path, include_proposals=include_proposals
+        )
         click.echo(
             f"Exported dataset to {output_path} "
-            f"(vendors={len(dataset['vendors'])}, products={len(dataset['products'])}, "
-            f"cpes={len(dataset['cpes'])}, metadata={len(dataset['metadata'])}, relationships={len(dataset['relationships'])}, "
-            f"proposals={len(dataset['proposals'])})"
+            f"(vendors={counts['vendors']}, products={counts['products']}, "
+            f"cpes={counts['cpes']}, metadata={counts['metadata']}, relationships={counts['relationships']}, "
+            f"proposals={counts['proposals']})"
         )
 
     @app.cli.command("import-app-dataset")
@@ -1480,6 +1483,332 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
         "purl_mappings": purl_mappings,
         "proposals": proposals,
     }
+
+
+EXPORT_STREAM_BATCH_SIZE = 1000
+
+
+def _iter_query_rows(query, batch_size: int = EXPORT_STREAM_BATCH_SIZE):
+    yield from query.yield_per(batch_size)
+
+
+def _count_joined_purl_mappings() -> int:
+    return (
+        db.session.query(func.count(CPEPurlMapping.id))
+        .join(CPEEntry, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
+        .scalar()
+        or 0
+    )
+
+
+def _app_dataset_counts(include_proposals: bool) -> dict[str, int]:
+    return {
+        "vendors": Vendor.query.count(),
+        "products": Product.query.count(),
+        "cpes": CPEEntry.query.count(),
+        "metadata": EntityMetadata.query.count(),
+        "relationships": EntityRelationship.query.count(),
+        "proposals": Proposal.query.count() if include_proposals else 0,
+        "purl_mappings": _count_joined_purl_mappings(),
+    }
+
+
+def iter_vendor_dataset_rows():
+    query = Vendor.query.order_by(Vendor.id.asc())
+    for vendor in _iter_query_rows(query):
+        yield {
+            "uuid": vendor.uuid,
+            "name": vendor.name,
+            "title": vendor.title,
+            "notes": vendor.notes,
+            "created_at": isoformat_or_none(vendor.created_at),
+            "updated_at": isoformat_or_none(vendor.updated_at),
+        }
+
+
+def iter_product_dataset_rows():
+    query = (
+        db.session.query(Product, Vendor.uuid.label("vendor_uuid"))
+        .join(Vendor, Product.vendor_id == Vendor.id)
+        .order_by(Product.id.asc())
+    )
+    for product, vendor_uuid in _iter_query_rows(query):
+        yield {
+            "uuid": product.uuid,
+            "vendor_uuid": vendor_uuid,
+            "name": product.name,
+            "title": product.title,
+            "notes": product.notes,
+            "created_at": isoformat_or_none(product.created_at),
+            "updated_at": isoformat_or_none(product.updated_at),
+        }
+
+
+def iter_cpe_dataset_rows():
+    query = (
+        db.session.query(
+            CPEEntry,
+            Vendor.uuid.label("vendor_uuid"),
+            Product.uuid.label("product_uuid"),
+        )
+        .join(Vendor, CPEEntry.vendor_id == Vendor.id)
+        .join(Product, CPEEntry.product_id == Product.id)
+        .order_by(CPEEntry.id.asc())
+    )
+    for cpe, vendor_uuid, product_uuid in _iter_query_rows(query):
+        yield {
+            "cpe_uri": cpe.cpe_uri,
+            "cpe_name_id": cpe.cpe_name_id,
+            "vendor_uuid": vendor_uuid,
+            "product_uuid": product_uuid,
+            "deprecated": cpe.deprecated,
+            "deprecated_by": cpe.deprecated_by,
+            "part": cpe.part,
+            "version": cpe.version,
+            "update": cpe.update,
+            "edition": cpe.edition,
+            "language": cpe.language,
+            "sw_edition": cpe.sw_edition,
+            "target_sw": cpe.target_sw,
+            "target_hw": cpe.target_hw,
+            "other": cpe.other,
+            "title": cpe.title,
+            "notes": cpe.notes,
+            "from_proposal": cpe.from_proposal,
+            "created_at": isoformat_or_none(cpe.created_at),
+            "updated_at": isoformat_or_none(cpe.updated_at),
+        }
+
+
+def iter_relationship_dataset_rows():
+    source_vendor = aliased(Vendor)
+    source_product = aliased(Product)
+    target_vendor = aliased(Vendor)
+    target_product = aliased(Product)
+    query = (
+        db.session.query(
+            EntityRelationship,
+            source_vendor.uuid.label("source_vendor_uuid"),
+            source_product.uuid.label("source_product_uuid"),
+            target_vendor.uuid.label("target_vendor_uuid"),
+            target_product.uuid.label("target_product_uuid"),
+        )
+        .outerjoin(
+            source_vendor, EntityRelationship.source_vendor_id == source_vendor.id
+        )
+        .outerjoin(
+            source_product, EntityRelationship.source_product_id == source_product.id
+        )
+        .outerjoin(
+            target_vendor, EntityRelationship.target_vendor_id == target_vendor.id
+        )
+        .outerjoin(
+            target_product, EntityRelationship.target_product_id == target_product.id
+        )
+        .order_by(EntityRelationship.id.asc())
+    )
+    for (
+        relationship,
+        source_vendor_uuid,
+        source_product_uuid,
+        target_vendor_uuid,
+        target_product_uuid,
+    ) in _iter_query_rows(query):
+        yield {
+            "relationship_type": relationship.relationship_type,
+            "source_vendor_uuid": source_vendor_uuid,
+            "source_product_uuid": source_product_uuid,
+            "target_vendor_uuid": target_vendor_uuid,
+            "target_product_uuid": target_product_uuid,
+            "rationale": relationship.rationale,
+            "submitter_name": relationship.submitter_name,
+            "submitter_email": relationship.submitter_email,
+            "submitted_at": isoformat_or_none(relationship.submitted_at),
+            "approved_at": isoformat_or_none(relationship.approved_at),
+            "created_at": isoformat_or_none(relationship.created_at),
+            "updated_at": isoformat_or_none(relationship.updated_at),
+        }
+
+
+def iter_metadata_dataset_rows():
+    vendor = aliased(Vendor)
+    product = aliased(Product)
+    query = (
+        db.session.query(
+            EntityMetadata,
+            vendor.uuid.label("vendor_uuid"),
+            product.uuid.label("product_uuid"),
+        )
+        .outerjoin(vendor, EntityMetadata.vendor_id == vendor.id)
+        .outerjoin(product, EntityMetadata.product_id == product.id)
+        .order_by(EntityMetadata.id.asc())
+    )
+    for metadata_entry, vendor_uuid, product_uuid in _iter_query_rows(query):
+        yield {
+            "record_uuid": vendor_uuid if metadata_entry.vendor_id else product_uuid,
+            "record_type": "vendor" if metadata_entry.vendor_id else "product",
+            "metadata_key": metadata_entry.metadata_key,
+            "metadata_value": metadata_entry.metadata_value,
+            "submitter_name": metadata_entry.submitter_name,
+            "submitter_email": metadata_entry.submitter_email,
+            "submitted_at": isoformat_or_none(metadata_entry.submitted_at),
+            "approved_at": isoformat_or_none(metadata_entry.approved_at),
+            "created_at": isoformat_or_none(metadata_entry.created_at),
+            "updated_at": isoformat_or_none(metadata_entry.updated_at),
+        }
+
+
+def iter_purl_mapping_dataset_rows():
+    query = (
+        db.session.query(CPEPurlMapping, CPEEntry.cpe_uri)
+        .join(CPEEntry, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
+        .order_by(CPEPurlMapping.id.asc())
+    )
+    for mapping, cpe_uri in _iter_query_rows(query):
+        yield {
+            "cpe_uri": cpe_uri,
+            "cpe_name_id": mapping.cpe_name_id,
+            "purl": mapping.purl,
+            "source": mapping.source,
+            "created_at": isoformat_or_none(mapping.created_at),
+            "updated_at": isoformat_or_none(mapping.updated_at),
+        }
+
+
+def iter_proposal_dataset_rows():
+    vendor = aliased(Vendor)
+    product = aliased(Product)
+    cpe_entry = aliased(CPEEntry)
+    query = (
+        db.session.query(
+            Proposal,
+            vendor.uuid.label("vendor_uuid"),
+            product.uuid.label("product_uuid"),
+            cpe_entry.cpe_uri.label("cpe_uri"),
+        )
+        .outerjoin(vendor, Proposal.vendor_id == vendor.id)
+        .outerjoin(product, Proposal.product_id == product.id)
+        .outerjoin(cpe_entry, Proposal.cpe_entry_id == cpe_entry.id)
+        .order_by(Proposal.id.asc())
+    )
+    for proposal, vendor_uuid, product_uuid, cpe_uri in _iter_query_rows(query):
+        yield {
+            "proposal_type": proposal.proposal_type,
+            "status": proposal.status,
+            "submitter_name": proposal.submitter_name,
+            "submitter_email": proposal.submitter_email,
+            "submitter_ip": proposal.submitter_ip,
+            "submitter_user_agent": proposal.submitter_user_agent,
+            "rationale": proposal.rationale,
+            "vendor_uuid": vendor_uuid,
+            "product_uuid": product_uuid,
+            "cpe_uri": cpe_uri,
+            "proposed_vendor_name": proposal.proposed_vendor_name,
+            "proposed_vendor_title": proposal.proposed_vendor_title,
+            "proposed_product_name": proposal.proposed_product_name,
+            "proposed_product_title": proposal.proposed_product_title,
+            "proposed_part": proposal.proposed_part,
+            "proposed_version": proposal.proposed_version,
+            "proposed_update": proposal.proposed_update,
+            "proposed_edition": proposal.proposed_edition,
+            "proposed_language": proposal.proposed_language,
+            "proposed_sw_edition": proposal.proposed_sw_edition,
+            "proposed_target_sw": proposal.proposed_target_sw,
+            "proposed_target_hw": proposal.proposed_target_hw,
+            "proposed_other": proposal.proposed_other,
+            "proposed_title": proposal.proposed_title,
+            "proposed_notes": proposal.proposed_notes,
+            "proposed_cpe_uri": proposal.proposed_cpe_uri,
+            "proposed_metadata_key": proposal.proposed_metadata_key,
+            "proposed_metadata_value": proposal.proposed_metadata_value,
+            "proposed_vulnerability_source": proposal.proposed_vulnerability_source,
+            "proposed_vulnerability_id": proposal.proposed_vulnerability_id,
+            "proposed_cpe_applicability": proposal.proposed_cpe_applicability,
+            "review_comment": proposal.review_comment,
+            "reviewed_at": isoformat_or_none(proposal.reviewed_at),
+            "created_at": isoformat_or_none(proposal.created_at),
+            "updated_at": isoformat_or_none(proposal.updated_at),
+        }
+
+
+def _write_json_member_array(output_file, name: str, rows):
+    output_file.write(f',\n  "{name}": [')
+    first = True
+    for row in rows:
+        if first:
+            output_file.write("\n    ")
+            first = False
+        else:
+            output_file.write(",\n    ")
+        json.dump(row, output_file, sort_keys=True)
+    if first:
+        output_file.write("]")
+    else:
+        output_file.write("\n  ]")
+
+
+def write_app_dataset_json(
+    output_file, include_proposals: bool = False
+) -> dict[str, int]:
+    counts = _app_dataset_counts(include_proposals)
+    output_file.write("{\n")
+    json.dump("format", output_file)
+    output_file.write(": ")
+    json.dump("cpe-editor-dataset", output_file)
+    output_file.write(",\n  ")
+    json.dump("version", output_file)
+    output_file.write(": ")
+    json.dump(APP_DATASET_VERSION, output_file)
+    output_file.write(",\n  ")
+    json.dump("exported_at", output_file)
+    output_file.write(": ")
+    json.dump(datetime.now(timezone.utc).isoformat(), output_file)
+    output_file.write(",\n  ")
+    json.dump("counts", output_file)
+    output_file.write(": ")
+    json.dump(counts, output_file, sort_keys=True)
+
+    _write_json_member_array(output_file, "vendors", iter_vendor_dataset_rows())
+    _write_json_member_array(output_file, "products", iter_product_dataset_rows())
+    _write_json_member_array(output_file, "cpes", iter_cpe_dataset_rows())
+    _write_json_member_array(output_file, "metadata", iter_metadata_dataset_rows())
+    _write_json_member_array(
+        output_file, "relationships", iter_relationship_dataset_rows()
+    )
+    _write_json_member_array(
+        output_file, "purl_mappings", iter_purl_mapping_dataset_rows()
+    )
+    proposal_rows = iter_proposal_dataset_rows() if include_proposals else iter(())
+    _write_json_member_array(output_file, "proposals", proposal_rows)
+    output_file.write("\n}\n")
+    return counts
+
+
+def write_app_dataset_archive(
+    output_path: Path, include_proposals: bool = False
+) -> dict[str, int]:
+    dataset_json_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=output_path.parent,
+            prefix=f".{output_path.name}.",
+            suffix=".json",
+            delete=False,
+        ) as dataset_file:
+            dataset_json_path = Path(dataset_file.name)
+            counts = write_app_dataset_json(
+                dataset_file, include_proposals=include_proposals
+            )
+
+        with tarfile.open(output_path, mode="w:gz") as archive:
+            archive.add(dataset_json_path, arcname="dataset.json")
+    finally:
+        if dataset_json_path is not None:
+            dataset_json_path.unlink(missing_ok=True)
+
+    return counts
 
 
 def write_dataset_archive(output_path: Path, dataset: dict):

@@ -1,5 +1,6 @@
 import io
 import json
+import tarfile
 
 from app.models import CPEEntry, Product, Vendor, db
 from app import views
@@ -69,7 +70,11 @@ def test_cpe_listing_filters_and_detail(client):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["total"] >= 1
-    matching_items = [item for item in payload["items"] if item["part"] == "o" and "windows_11" in item["cpe_uri"]]
+    matching_items = [
+        item
+        for item in payload["items"]
+        if item["part"] == "o" and "windows_11" in item["cpe_uri"]
+    ]
     assert matching_items
     cpe = matching_items[0]
 
@@ -104,7 +109,9 @@ def test_vulnerability_reference_endpoints(client):
     assert by_cpe_payload["total"] == 1
     assert by_cpe_payload["items"][0]["vulnerability_source"] == "CVE"
 
-    listing_response = client.get("/api/vulnerability-references?vulnerability_source=CVE")
+    listing_response = client.get(
+        "/api/vulnerability-references?vulnerability_source=CVE"
+    )
     assert listing_response.status_code == 200
     listing_payload = listing_response.get_json()
     assert listing_payload["total"] == 1
@@ -177,6 +184,7 @@ def test_scoped_approved_change_feeds_and_discovery_links(client):
     assert f'href="/cpes/{cpe_id}/changes.rss"'.encode() in cpe_page.data
     assert f'href="/cpes/{cpe_id}/changes.atom"'.encode() in cpe_page.data
 
+
 def test_approved_changes_api_filters_proposal_type(client):
     response = client.get("/api/changes?proposal_type=new_cpe")
 
@@ -184,6 +192,7 @@ def test_approved_changes_api_filters_proposal_type(client):
     payload = response.get_json()
     assert payload["total"] == 0
     assert payload["items"] == []
+
 
 def test_approved_changes_api_can_include_bcp10_change_bundle(client):
     response = client.get("/api/changes?per_page=1&include=bcp10")
@@ -209,7 +218,9 @@ def test_approved_changes_api_can_include_bcp10_change_bundle(client):
     assert dataset["proposals"][0]["status"] == "accepted"
     assert "submitter_ip" not in dataset["proposals"][0]
 
-    detail_response = client.get(f"/api/changes/{payload['items'][0]['id']}?include=bcp10")
+    detail_response = client.get(
+        f"/api/changes/{payload['items'][0]['id']}?include=bcp10"
+    )
     assert detail_response.status_code == 200
     detail_payload = detail_response.get_json()
     assert detail_payload["bcp10_dataset"]["counts"]["cpes"] == 1
@@ -239,8 +250,8 @@ def test_vendor_page_bottom_pagination_and_search(client, app):
 
     assert search_response.status_code == 200
     assert b'value="extra_vendor_00"' in search_response.data
-    assert b'Extra Vendor 00' in search_response.data
-    assert b'Extra Vendor 01' not in search_response.data
+    assert b"Extra Vendor 00" in search_response.data
+    assert b"Extra Vendor 01" not in search_response.data
 
 
 def test_statistics_page_renders_cpe_part_distribution_counts(client):
@@ -301,7 +312,9 @@ def test_statistics_top_list_api_paginates_vendors_and_products(client):
         }
     ]
 
-    products_response = client.get("/api/statistics/top-list?entity=products&page=2&per_page=2")
+    products_response = client.get(
+        "/api/statistics/top-list?entity=products&page=2&per_page=2"
+    )
 
     assert products_response.status_code == 200
     products_payload = products_response.get_json()
@@ -350,7 +363,10 @@ def test_gcve_cpe_search_accepts_cvelistv5_payload(client, monkeypatch):
                 "containers": {
                     "cna": {
                         "descriptions": [
-                            {"lang": "en", "value": "Example vulnerability description."}
+                            {
+                                "lang": "en",
+                                "value": "Example vulnerability description.",
+                            }
                         ]
                     }
                 },
@@ -371,6 +387,28 @@ def test_gcve_cpe_search_accepts_cvelistv5_payload(client, monkeypatch):
     assert result["items"][0]["id"] == "CVE-2018-1083"
     assert result["items"][0]["source"] == "CVE"
     assert result["items"][0]["summary"] == "Example vulnerability description."
+
+
+def test_write_app_dataset_archive_streams_valid_dataset(app, tmp_path):
+    from app.cli import read_dataset_archive, write_app_dataset_archive
+
+    output_path = tmp_path / "cpe-editor-dataset.tar.gz"
+
+    with app.app_context():
+        counts = write_app_dataset_archive(output_path, include_proposals=True)
+
+    assert output_path.exists()
+    with tarfile.open(output_path, mode="r:gz") as archive:
+        assert "dataset.json" in archive.getnames()
+
+    dataset = read_dataset_archive(str(output_path))
+    assert dataset["format"] == "cpe-editor-dataset"
+    assert dataset["counts"] == counts
+    assert dataset["counts"]["vendors"] == len(dataset["vendors"])
+    assert dataset["counts"]["products"] == len(dataset["products"])
+    assert dataset["counts"]["cpes"] == len(dataset["cpes"])
+    assert dataset["counts"]["purl_mappings"] == len(dataset["purl_mappings"])
+    assert dataset["counts"]["proposals"] == len(dataset["proposals"])
 
 
 def test_build_app_dataset_skips_orphaned_purl_mappings(app):
