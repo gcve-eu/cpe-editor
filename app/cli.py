@@ -21,7 +21,14 @@ from .models import (
     Vendor,
     db,
 )
-from .utils import build_cpe_uri, new_uuid, parse_cpe23_uri, product_uuid_for_names, vendor_uuid_for_name
+from .utils import (
+    build_cpe_uri,
+    new_uuid,
+    normalize_token,
+    parse_cpe23_uri,
+    product_uuid_for_names,
+    vendor_uuid_for_name,
+)
 
 DEFAULT_NVD_CPE_FEED = "https://nvd.nist.gov/feeds/json/cpe/2.0/nvdcpe-2.0.tar.gz"
 DEFAULT_NVD_CPE_MATCH_FEED = (
@@ -29,6 +36,7 @@ DEFAULT_NVD_CPE_MATCH_FEED = (
 )
 APP_DATASET_VERSION = "1"
 DEFAULT_PURL2CPE_DIR = "../purl2cpe"
+DEFAULT_GCVE_ENRICHED_DUMPS_DIR = "../gcve-enriched-dumps"
 
 
 def _render_default_literal(value):
@@ -59,7 +67,9 @@ def _add_missing_columns(engine):
 
             if not column.nullable and column.server_default is None:
                 default = None
-                if column.default is not None and getattr(column.default, "is_scalar", False):
+                if column.default is not None and getattr(
+                    column.default, "is_scalar", False
+                ):
                     default = _render_default_literal(column.default.arg)
 
                 if default is None:
@@ -68,9 +78,13 @@ def _add_missing_columns(engine):
 
                 column_sql = f"{column.name} {column.type.compile(dialect=engine.dialect)} DEFAULT {default} NOT NULL"
             else:
-                column_sql = str(schema.CreateColumn(column).compile(dialect=engine.dialect)).strip()
+                column_sql = str(
+                    schema.CreateColumn(column).compile(dialect=engine.dialect)
+                ).strip()
 
-            db.session.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {column_sql}"))
+            db.session.execute(
+                text(f"ALTER TABLE {table.name} ADD COLUMN {column_sql}")
+            )
             added += 1
 
     if added:
@@ -81,7 +95,9 @@ def _add_missing_columns(engine):
 
 def register_cli(app):
     @app.cli.command("init-db")
-    @click.option("--drop", is_flag=True, help="Drop all tables before creating them again.")
+    @click.option(
+        "--drop", is_flag=True, help="Drop all tables before creating them again."
+    )
     @click.option(
         "--alter",
         is_flag=True,
@@ -276,7 +292,10 @@ def register_cli(app):
                 incoming_cpe_name_id = cpe_data.get("cpeNameId")
                 if incoming_cpe_name_id:
                     existing_cpe_row_id = cpe_name_id_to_id.get(incoming_cpe_name_id)
-                    if existing_cpe_row_id is not None and existing_cpe_row_id != existing.id:
+                    if (
+                        existing_cpe_row_id is not None
+                        and existing_cpe_row_id != existing.id
+                    ):
                         skipped += 1
                         skipped_uuid_conflicts += 1
                         continue
@@ -301,7 +320,10 @@ def register_cli(app):
                 updated += 1
             else:
                 incoming_cpe_name_id = cpe_data.get("cpeNameId")
-                if incoming_cpe_name_id and cpe_name_id_to_id.get(incoming_cpe_name_id) is not None:
+                if (
+                    incoming_cpe_name_id
+                    and cpe_name_id_to_id.get(incoming_cpe_name_id) is not None
+                ):
                     skipped += 1
                     skipped_uuid_conflicts += 1
                     continue
@@ -519,14 +541,20 @@ def register_cli(app):
 
     @app.cli.command("import-purl2cpe")
     @click.option("--source", default=DEFAULT_PURL2CPE_DIR, show_default=True)
-    @click.option("--replace", is_flag=True, help="Delete existing CPE↔PURL mappings before import.")
+    @click.option(
+        "--replace",
+        is_flag=True,
+        help="Delete existing CPE↔PURL mappings before import.",
+    )
     def import_purl2cpe(source: str, replace: bool):
         """Import CPE↔PURL mappings from a local purl2cpe repository clone."""
         db.create_all()
         root = Path(source).expanduser()
         data_dir = root / "data"
         if not data_dir.exists():
-            raise click.ClickException(f"Could not find purl2cpe data directory at {data_dir}.")
+            raise click.ClickException(
+                f"Could not find purl2cpe data directory at {data_dir}."
+            )
 
         if replace:
             CPEPurlMapping.query.delete()
@@ -536,12 +564,16 @@ def register_cli(app):
         product_cache = {(p.vendor_id, p.name): p for p in Product.query.all()}
         cpe_cache = {
             c.cpe_uri: c.cpe_name_id
-            for c in CPEEntry.query.with_entities(CPEEntry.cpe_uri, CPEEntry.cpe_name_id).all()
+            for c in CPEEntry.query.with_entities(
+                CPEEntry.cpe_uri, CPEEntry.cpe_name_id
+            ).all()
             if c.cpe_name_id
         }
         existing_pairs = {
             (row.cpe_name_id, row.purl)
-            for row in CPEPurlMapping.query.with_entities(CPEPurlMapping.cpe_name_id, CPEPurlMapping.purl).all()
+            for row in CPEPurlMapping.query.with_entities(
+                CPEPurlMapping.cpe_name_id, CPEPurlMapping.purl
+            ).all()
         }
         imported = 0
         imported_cpes = 0
@@ -660,7 +692,11 @@ def register_cli(app):
                         key = (cpe_name_id, purl)
                         if key in existing_pairs:
                             continue
-                        db.session.add(CPEPurlMapping(cpe_name_id=cpe_name_id, purl=purl, source="purl2cpe"))
+                        db.session.add(
+                            CPEPurlMapping(
+                                cpe_name_id=cpe_name_id, purl=purl, source="purl2cpe"
+                            )
+                        )
                         existing_pairs.add(key)
                         imported += 1
             if imported and imported % 5000 == 0:
@@ -670,6 +706,209 @@ def register_cli(app):
         click.echo(
             f"Imported {imported} CPE↔PURL mappings from {data_dir}. "
             f"new_cpes={imported_cpes} new_vendors={created_vendors} new_products={created_products} skipped={skipped}"
+        )
+
+    @app.cli.command("import-gcve-enriched-cves")
+    @click.option(
+        "--source", default=DEFAULT_GCVE_ENRICHED_DUMPS_DIR, show_default=True
+    )
+    @click.option(
+        "--batch-size",
+        default=2000,
+        show_default=True,
+        type=int,
+        help="Number of CVE files between commits.",
+    )
+    def import_gcve_enriched_cves(source: str, batch_size: int):
+        """Import CVE→CPE references from a local gcve-enriched-dumps clone."""
+        db.create_all()
+        source_root = Path(source).expanduser()
+        cves_dir = (
+            source_root / "cves" if (source_root / "cves").exists() else source_root
+        )
+        if not cves_dir.exists():
+            raise click.ClickException(
+                f"Could not find gcve-enriched-dumps CVE directory at {cves_dir}."
+            )
+
+        vendor_cache = {v.name: v for v in Vendor.query.all()}
+        product_cache = {(p.vendor_id, p.name): p for p in Product.query.all()}
+        cpe_cache = {c.cpe_uri: c for c in CPEEntry.query.all()}
+        cpe_name_id_to_id = {
+            c.cpe_name_id: c.id for c in cpe_cache.values() if c.cpe_name_id
+        }
+        existing_references = {
+            (
+                row.cpe_entry_id,
+                row.vulnerability_source,
+                row.vulnerability_id,
+                row.cpe_applicability,
+            )
+            for row in CPEVulnerabilityReference.query.with_entities(
+                CPEVulnerabilityReference.cpe_entry_id,
+                CPEVulnerabilityReference.vulnerability_source,
+                CPEVulnerabilityReference.vulnerability_id,
+                CPEVulnerabilityReference.cpe_applicability,
+            ).all()
+        }
+
+        imported_references = 0
+        imported_cpes = 0
+        created_vendors = 0
+        created_products = 0
+        updated_cpe_ids = 0
+        skipped = 0
+        processed_files = 0
+
+        def ensure_vendor_product(vendor_name: str, product_name: str):
+            nonlocal created_vendors, created_products
+            vendor_name = normalize_token(vendor_name)
+            product_name = normalize_token(product_name)
+            if (
+                not vendor_name
+                or not product_name
+                or vendor_name in {"*", "-"}
+                or product_name in {"*", "-"}
+            ):
+                return None, None
+
+            vendor = vendor_cache.get(vendor_name)
+            if vendor is None:
+                vendor = Vendor(
+                    uuid=vendor_uuid_for_name(vendor_name),
+                    name=vendor_name,
+                    title=titleize_token(vendor_name),
+                )
+                db.session.add(vendor)
+                db.session.flush()
+                vendor_cache[vendor_name] = vendor
+                created_vendors += 1
+
+            product_key = (vendor.id, product_name)
+            product = product_cache.get(product_key)
+            if product is None:
+                product = Product(
+                    uuid=product_uuid_for_names(vendor_name, product_name),
+                    vendor_id=vendor.id,
+                    name=product_name,
+                    title=titleize_token(product_name),
+                )
+                db.session.add(product)
+                db.session.flush()
+                product_cache[product_key] = product
+                created_products += 1
+            return vendor, product
+
+        def ensure_cpe(
+            cpe_uri: str,
+            vendor_hint: str | None = None,
+            product_hint: str | None = None,
+        ):
+            nonlocal imported_cpes, updated_cpe_ids, skipped
+            cpe_uri = (cpe_uri or "").strip()
+            cpe = cpe_cache.get(cpe_uri)
+            if cpe is not None:
+                if not cpe.cpe_name_id:
+                    cpe.cpe_name_id = new_uuid()
+                    cpe_name_id_to_id[cpe.cpe_name_id] = cpe.id
+                    updated_cpe_ids += 1
+                return cpe
+
+            parsed = parse_cpe23_uri(cpe_uri)
+            if not parsed:
+                skipped += 1
+                return None
+            vendor_name = parsed["vendor"] or vendor_hint
+            product_name = parsed["product"] or product_hint
+            vendor, product = ensure_vendor_product(vendor_name, product_name)
+            if vendor is None or product is None:
+                skipped += 1
+                return None
+
+            cpe_name_id = new_uuid()
+            cpe = CPEEntry(
+                vendor_id=vendor.id,
+                product_id=product.id,
+                cpe_uri=cpe_uri,
+                cpe_name_id=cpe_name_id,
+                deprecated=False,
+                part=parsed["part"],
+                version=parsed["version"],
+                update=parsed["update"],
+                edition=parsed["edition"],
+                language=parsed["language"],
+                sw_edition=parsed["sw_edition"],
+                target_sw=parsed["target_sw"],
+                target_hw=parsed["target_hw"],
+                other=parsed["other"],
+                title=titleize_token(product.name),
+                notes="Imported from gcve-enriched-dumps CVE data",
+            )
+            db.session.add(cpe)
+            db.session.flush()
+            cpe_cache[cpe_uri] = cpe
+            cpe_name_id_to_id[cpe.cpe_name_id] = cpe.id
+            imported_cpes += 1
+            return cpe
+
+        for cve_file in sorted(cves_dir.glob("**/*.json")):
+            processed_files += 1
+            try:
+                payload = json.loads(cve_file.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                skipped += 1
+                continue
+            cve_id = extract_gcve_cve_id(payload, cve_file)
+            if not cve_id:
+                skipped += 1
+                continue
+
+            for candidate in extract_gcve_cpe_candidates(payload):
+                cpe_uri = candidate.get("cpe_uri")
+                if not cpe_uri:
+                    vendor_name = candidate.get("vendor")
+                    product_name = candidate.get("product")
+                    if vendor_name and product_name:
+                        cpe_uri = build_cpe_uri("a", vendor_name, product_name)
+                    else:
+                        skipped += 1
+                        continue
+
+                cpe = ensure_cpe(
+                    cpe_uri, candidate.get("vendor"), candidate.get("product")
+                )
+                if cpe is None:
+                    continue
+
+                applicability = gcve_candidate_applicability(candidate)
+                key = (cpe.id, "CVE", cve_id, applicability)
+                if key in existing_references:
+                    continue
+                db.session.add(
+                    CPEVulnerabilityReference(
+                        cpe_entry_id=cpe.id,
+                        vulnerability_source="CVE",
+                        vulnerability_id=cve_id,
+                        cpe_applicability=applicability,
+                        rationale="Imported from gcve-enriched-dumps CVE data",
+                        approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    )
+                )
+                existing_references.add(key)
+                imported_references += 1
+
+            if processed_files % batch_size == 0:
+                db.session.commit()
+                click.echo(
+                    f"Processed {processed_files} CVE files | references={imported_references} "
+                    f"new_cpes={imported_cpes} vendors={created_vendors} products={created_products} skipped={skipped}"
+                )
+
+        db.session.commit()
+        click.echo(
+            f"Imported {imported_references} CVE→CPE references from {cves_dir}. "
+            f"new_cpes={imported_cpes} updated_cpe_ids={updated_cpe_ids} "
+            f"new_vendors={created_vendors} new_products={created_products} skipped={skipped}"
         )
 
     @app.cli.command("export-app-dataset")
@@ -760,8 +999,12 @@ def register_cli(app):
         proposal_rows = dataset.get("proposals") or []
 
         imported_vendors = upsert_vendors(vendor_rows, vendor_id_by_uuid)
-        imported_products = upsert_products(product_rows, vendor_id_by_uuid, product_id_by_uuid)
-        imported_cpes = upsert_cpes(cpe_rows, vendor_id_by_uuid, product_id_by_uuid, batch_size)
+        imported_products = upsert_products(
+            product_rows, vendor_id_by_uuid, product_id_by_uuid
+        )
+        imported_cpes = upsert_cpes(
+            cpe_rows, vendor_id_by_uuid, product_id_by_uuid, batch_size
+        )
         metadata_count = upsert_metadata(
             metadata_rows,
             vendor_id_by_uuid,
@@ -800,11 +1043,151 @@ def open_source_bytes(source: str) -> bytes:
     return Path(source).read_bytes()
 
 
+def extract_gcve_cve_id(payload: dict, path: Path | None = None) -> str | None:
+    metadata = payload.get("cveMetadata") if isinstance(payload, dict) else None
+    if isinstance(metadata, dict) and metadata.get("cveId"):
+        return str(metadata["cveId"]).strip().upper()
+    cve = payload.get("cve") if isinstance(payload, dict) else None
+    if isinstance(cve, dict) and cve.get("id"):
+        return str(cve["id"]).strip().upper()
+    if isinstance(payload, dict) and payload.get("id"):
+        return str(payload["id"]).strip().upper()
+    if path is not None and path.stem.upper().startswith("CVE-"):
+        return path.stem.upper()
+    return None
+
+
+def maybe_json(value):
+    if isinstance(value, str):
+        value = value.strip()
+        if value and value[0] in "[{":
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return value
+    return value
+
+
+def extract_gcve_cpe_candidates(payload: dict) -> list[dict[str, str | bool]]:
+    candidates: list[dict[str, str | bool]] = []
+    seen: set[tuple[str | None, str | None, str | None, str | None, bool | None]] = (
+        set()
+    )
+
+    def add_candidate(
+        cpe_uri: str | None = None,
+        vendor: str | None = None,
+        product: str | None = None,
+        status: str | None = None,
+        vulnerable: bool | None = None,
+    ):
+        cpe_uri = str(cpe_uri).strip() if cpe_uri else None
+        vendor = str(vendor).strip() if vendor else None
+        product = str(product).strip() if product else None
+        status = str(status).strip() if status else None
+        key = (cpe_uri, vendor, product, status, vulnerable)
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(
+            {
+                "cpe_uri": cpe_uri,
+                "vendor": vendor,
+                "product": product,
+                "status": status,
+                "vulnerable": vulnerable,
+            }
+        )
+
+    def walk(value):
+        value = maybe_json(value)
+        if isinstance(value, dict):
+            affected = value.get("affected")
+            if isinstance(affected, list):
+                for item in affected:
+                    if not isinstance(item, dict):
+                        continue
+                    vendor = item.get("vendor")
+                    product = item.get("product")
+                    cpes = item.get("cpes") or item.get("cpe") or []
+                    if isinstance(cpes, str):
+                        cpes = [cpes]
+                    versions = (
+                        item.get("versions")
+                        if isinstance(item.get("versions"), list)
+                        else []
+                    )
+                    statuses = [
+                        v.get("status")
+                        for v in versions
+                        if isinstance(v, dict) and v.get("status")
+                    ]
+                    status = statuses[0] if statuses else item.get("defaultStatus")
+                    if cpes:
+                        for cpe_uri in cpes:
+                            add_candidate(cpe_uri, vendor, product, status)
+                    elif vendor and product:
+                        add_candidate(None, vendor, product, status)
+
+            cpe_match = value.get("cpeMatch")
+            if isinstance(cpe_match, list):
+                for match in cpe_match:
+                    if not isinstance(match, dict):
+                        continue
+                    add_candidate(
+                        match.get("criteria")
+                        or match.get("cpe23Uri")
+                        or match.get("cpeName"),
+                        vulnerable=(
+                            match.get("vulnerable")
+                            if isinstance(match.get("vulnerable"), bool)
+                            else None
+                        ),
+                    )
+            elif isinstance(cpe_match, dict):
+                add_candidate(
+                    cpe_match.get("criteria")
+                    or cpe_match.get("cpe23Uri")
+                    or cpe_match.get("cpeName"),
+                    vulnerable=(
+                        cpe_match.get("vulnerable")
+                        if isinstance(cpe_match.get("vulnerable"), bool)
+                        else None
+                    ),
+                )
+
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(payload)
+    return candidates
+
+
+def gcve_candidate_applicability(candidate: dict) -> str:
+    if candidate.get("vulnerable") is True:
+        return "vulnerable"
+    if candidate.get("vulnerable") is False:
+        return "not_vulnerable"
+    status = str(candidate.get("status") or "").strip().lower()
+    if status in {"affected", "vulnerable"}:
+        return "vulnerable"
+    if status in {"unaffected", "not_affected", "not vulnerable", "not_vulnerable"}:
+        return "not_vulnerable"
+    if status in {"unknown", "under_investigation", "investigating"}:
+        return "under_investigation"
+    return "vulnerable"
+
+
 def iter_nvd_products(source: str):
     blob = open_source_bytes(source)
     imported_any = False
     with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as archive:
-        members = [m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")]
+        members = [
+            m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")
+        ]
         if not members:
             raise click.ClickException(
                 "Could not find a JSON file inside the NVD tar.gz feed."
@@ -832,7 +1215,9 @@ def iter_nvd_match_strings(source: str):
     blob = open_source_bytes(source)
     imported_any = False
     with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as archive:
-        members = [m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")]
+        members = [
+            m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")
+        ]
         if not members:
             raise click.ClickException(
                 "Could not find a JSON file inside the NVD CPE Match tar.gz feed."
@@ -967,10 +1352,22 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
     relationships = [
         {
             "relationship_type": relationship.relationship_type,
-            "source_vendor_uuid": relationship.source_vendor.uuid if relationship.source_vendor else None,
-            "source_product_uuid": relationship.source_product.uuid if relationship.source_product else None,
-            "target_vendor_uuid": relationship.target_vendor.uuid if relationship.target_vendor else None,
-            "target_product_uuid": relationship.target_product.uuid if relationship.target_product else None,
+            "source_vendor_uuid": (
+                relationship.source_vendor.uuid if relationship.source_vendor else None
+            ),
+            "source_product_uuid": (
+                relationship.source_product.uuid
+                if relationship.source_product
+                else None
+            ),
+            "target_vendor_uuid": (
+                relationship.target_vendor.uuid if relationship.target_vendor else None
+            ),
+            "target_product_uuid": (
+                relationship.target_product.uuid
+                if relationship.target_product
+                else None
+            ),
             "rationale": relationship.rationale,
             "submitter_name": relationship.submitter_name,
             "submitter_email": relationship.submitter_email,
@@ -979,11 +1376,17 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
             "created_at": isoformat_or_none(relationship.created_at),
             "updated_at": isoformat_or_none(relationship.updated_at),
         }
-        for relationship in EntityRelationship.query.order_by(EntityRelationship.id.asc()).all()
+        for relationship in EntityRelationship.query.order_by(
+            EntityRelationship.id.asc()
+        ).all()
     ]
     metadata = [
         {
-            "record_uuid": metadata_entry.vendor.uuid if metadata_entry.vendor else metadata_entry.product.uuid,
+            "record_uuid": (
+                metadata_entry.vendor.uuid
+                if metadata_entry.vendor
+                else metadata_entry.product.uuid
+            ),
             "record_type": "vendor" if metadata_entry.vendor_id else "product",
             "metadata_key": metadata_entry.metadata_key,
             "metadata_value": metadata_entry.metadata_value,
@@ -994,7 +1397,9 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
             "created_at": isoformat_or_none(metadata_entry.created_at),
             "updated_at": isoformat_or_none(metadata_entry.updated_at),
         }
-        for metadata_entry in EntityMetadata.query.order_by(EntityMetadata.id.asc()).all()
+        for metadata_entry in EntityMetadata.query.order_by(
+            EntityMetadata.id.asc()
+        ).all()
     ]
     purl_mappings = [
         {
@@ -1086,12 +1491,20 @@ def read_dataset_archive(source: str) -> dict:
     blob = open_source_bytes(source)
     with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as archive:
         member = next(
-            (m for m in archive.getmembers() if m.isfile() and m.name.endswith("dataset.json")),
+            (
+                m
+                for m in archive.getmembers()
+                if m.isfile() and m.name.endswith("dataset.json")
+            ),
             None,
         )
         if not member:
             member = next(
-                (m for m in archive.getmembers() if m.isfile() and m.name.endswith(".json")),
+                (
+                    m
+                    for m in archive.getmembers()
+                    if m.isfile() and m.name.endswith(".json")
+                ),
                 None,
             )
         if not member:
@@ -1100,13 +1513,17 @@ def read_dataset_archive(source: str) -> dict:
             )
         extracted = archive.extractfile(member)
         if extracted is None:
-            raise click.ClickException("Could not extract dataset.json from the archive.")
+            raise click.ClickException(
+                "Could not extract dataset.json from the archive."
+            )
         return json.load(extracted)
 
 
 def validate_app_dataset(dataset: dict):
     if dataset.get("format") != "cpe-editor-dataset":
-        raise click.ClickException("Unsupported dataset format. Expected 'cpe-editor-dataset'.")
+        raise click.ClickException(
+            "Unsupported dataset format. Expected 'cpe-editor-dataset'."
+        )
     if str(dataset.get("version")) != APP_DATASET_VERSION:
         raise click.ClickException(
             f"Unsupported dataset version {dataset.get('version')!r}. Expected {APP_DATASET_VERSION}."
@@ -1145,8 +1562,12 @@ def upsert_vendors(vendor_rows: list[dict], vendor_id_by_uuid: dict[str, int]) -
         vendor.name = row["name"]
         vendor.title = row.get("title")
         vendor.notes = row.get("notes")
-        vendor.created_at = parse_datetime_or_none(row.get("created_at")) or vendor.created_at
-        vendor.updated_at = parse_datetime_or_none(row.get("updated_at")) or vendor.updated_at
+        vendor.created_at = (
+            parse_datetime_or_none(row.get("created_at")) or vendor.created_at
+        )
+        vendor.updated_at = (
+            parse_datetime_or_none(row.get("updated_at")) or vendor.updated_at
+        )
         db.session.flush()
         vendor_id_by_uuid[imported_uuid] = vendor.id
         vendor_id_by_uuid[vendor.uuid] = vendor.id
@@ -1171,7 +1592,9 @@ def upsert_products(
             )
         product = Product.query.filter_by(uuid=imported_uuid).first()
         if product is None:
-            product = Product.query.filter_by(vendor_id=vendor_id, name=row["name"]).first()
+            product = Product.query.filter_by(
+                vendor_id=vendor_id, name=row["name"]
+            ).first()
         if product is None:
             product = Product(uuid=imported_uuid, vendor_id=vendor_id, name=row["name"])
             db.session.add(product)
@@ -1181,8 +1604,12 @@ def upsert_products(
         product.name = row["name"]
         product.title = row.get("title")
         product.notes = row.get("notes")
-        product.created_at = parse_datetime_or_none(row.get("created_at")) or product.created_at
-        product.updated_at = parse_datetime_or_none(row.get("updated_at")) or product.updated_at
+        product.created_at = (
+            parse_datetime_or_none(row.get("created_at")) or product.created_at
+        )
+        product.updated_at = (
+            parse_datetime_or_none(row.get("updated_at")) or product.updated_at
+        )
         db.session.flush()
         product_id_by_uuid[imported_uuid] = product.id
         product_id_by_uuid[product.uuid] = product.id
@@ -1209,7 +1636,12 @@ def upsert_cpes(
         if cpe is None and row.get("cpe_name_id"):
             cpe = CPEEntry.query.filter_by(cpe_name_id=row["cpe_name_id"]).first()
         if cpe is None:
-            cpe = CPEEntry(cpe_uri=row["cpe_uri"], vendor_id=vendor_id, product_id=product_id, part=row["part"])
+            cpe = CPEEntry(
+                cpe_uri=row["cpe_uri"],
+                vendor_id=vendor_id,
+                product_id=product_id,
+                part=row["part"],
+            )
             db.session.add(cpe)
         cpe.vendor_id = vendor_id
         cpe.product_id = product_id
@@ -1306,7 +1738,9 @@ def upsert_metadata(
             vendor_id = None
             product_id = product_id_by_uuid.get(record_uuid)
         else:
-            raise click.ClickException(f"Unsupported metadata record_type {record_type!r}.")
+            raise click.ClickException(
+                f"Unsupported metadata record_type {record_type!r}."
+            )
 
         if vendor_id is None and product_id is None:
             raise click.ClickException(
@@ -1320,7 +1754,8 @@ def upsert_metadata(
             metadata_value=row.get("metadata_value") or "",
             submitter_name=row.get("submitter_name"),
             submitter_email=row.get("submitter_email"),
-            submitted_at=parse_datetime_or_none(row.get("submitted_at")) or datetime.utcnow(),
+            submitted_at=parse_datetime_or_none(row.get("submitted_at"))
+            or datetime.utcnow(),
             approved_at=parse_datetime_or_none(row.get("approved_at")),
             created_at=parse_datetime_or_none(row.get("created_at")),
             updated_at=parse_datetime_or_none(row.get("updated_at")),
@@ -1337,7 +1772,9 @@ def upsert_purl_mappings(purl_mapping_rows: list[dict], batch_size: int) -> int:
     count = 0
     cpe_name_id_by_uri = {
         c.cpe_uri: c.cpe_name_id
-        for c in CPEEntry.query.with_entities(CPEEntry.cpe_uri, CPEEntry.cpe_name_id).all()
+        for c in CPEEntry.query.with_entities(
+            CPEEntry.cpe_uri, CPEEntry.cpe_name_id
+        ).all()
         if c.cpe_name_id
     }
     for row in purl_mapping_rows:
@@ -1350,13 +1787,19 @@ def upsert_purl_mappings(purl_mapping_rows: list[dict], batch_size: int) -> int:
             cpe_name_id = cpe_name_id_by_uri.get(cpe_uri)
         if not cpe_name_id:
             continue
-        mapping = CPEPurlMapping.query.filter_by(cpe_name_id=cpe_name_id, purl=purl).first()
+        mapping = CPEPurlMapping.query.filter_by(
+            cpe_name_id=cpe_name_id, purl=purl
+        ).first()
         if mapping is None:
             mapping = CPEPurlMapping(cpe_name_id=cpe_name_id, purl=purl)
             db.session.add(mapping)
         mapping.source = row.get("source") or "purl2cpe"
-        mapping.created_at = parse_datetime_or_none(row.get("created_at")) or mapping.created_at
-        mapping.updated_at = parse_datetime_or_none(row.get("updated_at")) or mapping.updated_at
+        mapping.created_at = (
+            parse_datetime_or_none(row.get("created_at")) or mapping.created_at
+        )
+        mapping.updated_at = (
+            parse_datetime_or_none(row.get("updated_at")) or mapping.updated_at
+        )
         count += 1
         if count % batch_size == 0:
             db.session.commit()
@@ -1370,7 +1813,10 @@ def upsert_proposals(
     product_id_by_uuid: dict[str, int],
     batch_size: int,
 ) -> int:
-    cpe_id_by_uri = {c.cpe_uri: c.id for c in CPEEntry.query.with_entities(CPEEntry.cpe_uri, CPEEntry.id).all()}
+    cpe_id_by_uri = {
+        c.cpe_uri: c.id
+        for c in CPEEntry.query.with_entities(CPEEntry.cpe_uri, CPEEntry.id).all()
+    }
     count = 0
     for row in proposal_rows:
         proposal = Proposal(
@@ -1381,9 +1827,19 @@ def upsert_proposals(
             submitter_ip=row.get("submitter_ip"),
             submitter_user_agent=row.get("submitter_user_agent"),
             rationale=row.get("rationale"),
-            vendor_id=vendor_id_by_uuid.get(row.get("vendor_uuid")) if row.get("vendor_uuid") else None,
-            product_id=product_id_by_uuid.get(row.get("product_uuid")) if row.get("product_uuid") else None,
-            cpe_entry_id=cpe_id_by_uri.get(row.get("cpe_uri")) if row.get("cpe_uri") else None,
+            vendor_id=(
+                vendor_id_by_uuid.get(row.get("vendor_uuid"))
+                if row.get("vendor_uuid")
+                else None
+            ),
+            product_id=(
+                product_id_by_uuid.get(row.get("product_uuid"))
+                if row.get("product_uuid")
+                else None
+            ),
+            cpe_entry_id=(
+                cpe_id_by_uri.get(row.get("cpe_uri")) if row.get("cpe_uri") else None
+            ),
             proposed_vendor_name=row.get("proposed_vendor_name"),
             proposed_vendor_title=row.get("proposed_vendor_title"),
             proposed_product_name=row.get("proposed_product_name"),

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
-
 GCVE_ROOT_NAMESPACE_URL = "GCVE-BCP-10"
 GCVE_ROOT_NAMESPACE = uuid5(NAMESPACE_URL, GCVE_ROOT_NAMESPACE_URL)
 VENDOR_UUID_NAMESPACE = uuid5(GCVE_ROOT_NAMESPACE, "vendor")
@@ -94,7 +93,6 @@ def new_uuid() -> str:
 
 def vendor_uuid_for_name(name: str) -> str:
     return str(uuid5(VENDOR_UUID_NAMESPACE, normalize_token(name)))
-
 
 
 def product_uuid_for_names(vendor_name: str, product_name: str) -> str:
