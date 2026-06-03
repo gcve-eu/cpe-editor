@@ -1403,14 +1403,17 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
     ]
     purl_mappings = [
         {
-            "cpe_uri": mapping.cpe_entry.cpe_uri,
+            "cpe_uri": cpe_uri,
             "cpe_name_id": mapping.cpe_name_id,
             "purl": mapping.purl,
             "source": mapping.source,
             "created_at": isoformat_or_none(mapping.created_at),
             "updated_at": isoformat_or_none(mapping.updated_at),
         }
-        for mapping in CPEPurlMapping.query.order_by(CPEPurlMapping.id.asc()).all()
+        for mapping, cpe_uri in db.session.query(CPEPurlMapping, CPEEntry.cpe_uri)
+        .join(CPEEntry, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
+        .order_by(CPEPurlMapping.id.asc())
+        .all()
     ]
 
     proposals = []

@@ -371,3 +371,26 @@ def test_gcve_cpe_search_accepts_cvelistv5_payload(client, monkeypatch):
     assert result["items"][0]["id"] == "CVE-2018-1083"
     assert result["items"][0]["source"] == "CVE"
     assert result["items"][0]["summary"] == "Example vulnerability description."
+
+
+def test_build_app_dataset_skips_orphaned_purl_mappings(app):
+    from app.cli import build_app_dataset
+    from app.models import CPEPurlMapping, db
+
+    with app.app_context():
+        db.session.add(
+            CPEPurlMapping(
+                cpe_name_id="00000000-0000-0000-0000-000000000000",
+                purl="pkg:generic/orphaned-mapping",
+                source="test",
+            )
+        )
+        db.session.commit()
+
+        dataset = build_app_dataset()
+
+    assert all(
+        mapping["purl"] != "pkg:generic/orphaned-mapping"
+        for mapping in dataset["purl_mappings"]
+    )
+    assert dataset["counts"]["purl_mappings"] == len(dataset["purl_mappings"])
