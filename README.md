@@ -246,6 +246,27 @@ Include proposals:
 python -m flask --app run export-app-dataset --include-proposals
 ```
 
+### Export dataset for git storage
+
+Convert a portable app export into a deterministic directory tree that can be
+committed to a git repository without rewriting one large JSON blob on every
+change:
+
+```bash
+python tools/export_dataset_to_git.py /path/to/cpe-editor-dataset.tar.gz /path/to/git-dataset
+```
+
+Overwrite an existing generated tree:
+
+```bash
+python tools/export_dataset_to_git.py /path/to/cpe-editor-dataset.tar.gz /path/to/git-dataset --replace
+```
+
+The generated layout includes `manifest.json`, one JSON file per vendor/product,
+sharded CPE JSON Lines files under `cpes/<vendor>/<product>/<part>.jsonl`, and
+separate JSON Lines shards for metadata, relationships, PURL mappings, and
+proposals.
+
 ### Import exported dataset
 
 ```bash
