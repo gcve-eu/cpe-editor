@@ -88,8 +88,7 @@ def test_export_dataset_to_git_tree_writes_deterministic_shards(tmp_path):
         / "a.jsonl"
     )
     cpe_rows = [
-        json.loads(line)
-        for line in cpe_shard.read_text(encoding="utf-8").splitlines()
+        json.loads(line) for line in cpe_shard.read_text(encoding="utf-8").splitlines()
     ]
     assert [row["version"] for row in cpe_rows] == ["1.0", "2.0"]
 
@@ -100,7 +99,7 @@ def test_export_dataset_to_git_tree_writes_deterministic_shards(tmp_path):
     assert list((output_dir / "purl-mappings").glob("*.jsonl"))
 
 
-def test_export_dataset_to_git_tree_refuses_existing_output_without_replace(tmp_path):
+def test_export_dataset_to_git_tree_updates_existing_output_directory(tmp_path):
     source = tmp_path / "dataset.json"
     source.write_text(
         json.dumps(
@@ -120,14 +119,23 @@ def test_export_dataset_to_git_tree_refuses_existing_output_without_replace(tmp_
     )
     output_dir = tmp_path / "git-dataset"
     output_dir.mkdir()
+    (output_dir / ".git").mkdir()
+    (output_dir / ".git" / "HEAD").write_text(
+        "ref: refs/heads/main\n", encoding="utf-8"
+    )
+    stale_vendor_dir = output_dir / "vendors"
+    stale_vendor_dir.mkdir()
+    stale_vendor = stale_vendor_dir / "stale.json"
+    stale_vendor.write_text("{}\n", encoding="utf-8")
+    unrelated_file = output_dir / "notes.txt"
+    unrelated_file.write_text("keep me\n", encoding="utf-8")
 
-    try:
-        export_dataset_to_git_tree(source, output_dir)
-    except SystemExit as exc:
-        assert "Use --replace" in str(exc)
-    else:
-        raise AssertionError("expected SystemExit for existing output directory")
+    counts = export_dataset_to_git_tree(source, output_dir)
 
-    counts = export_dataset_to_git_tree(source, output_dir, replace=True)
     assert counts["vendors"] == 0
     assert (output_dir / "manifest.json").exists()
+    assert not stale_vendor.exists()
+    assert (output_dir / ".git" / "HEAD").read_text(
+        encoding="utf-8"
+    ) == "ref: refs/heads/main\n"
+    assert unrelated_file.read_text(encoding="utf-8") == "keep me\n"

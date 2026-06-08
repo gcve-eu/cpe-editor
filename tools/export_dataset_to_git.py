@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import filecmp
 import json
 import re
 import shutil
@@ -55,7 +56,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--replace",
         action="store_true",
-        help="Delete output_dir before writing the generated structure.",
+        help=(
+            "Deprecated compatibility flag; existing output directories are "
+            "updated in place without deleting the directory."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -83,15 +87,12 @@ def export_dataset_to_git_tree(
     dataset = read_dataset(source)
     validate_dataset(dataset)
 
-    if output_dir.exists():
+    if output_dir.exists() and not output_dir.is_dir():
         if not replace:
             raise SystemExit(
-                f"Output directory already exists: {output_dir}. Use --replace to overwrite it."
+                f"Output path already exists and is not a directory: {output_dir}"
             )
-        if output_dir.is_dir():
-            shutil.rmtree(output_dir)
-        else:
-            output_dir.unlink()
+        output_dir.unlink()
 
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     temp_dir = Path(
@@ -99,11 +100,60 @@ def export_dataset_to_git_tree(
     )
     try:
         counts = write_git_tree(dataset, temp_dir)
-        temp_dir.replace(output_dir)
+        sync_git_tree(temp_dir, output_dir)
         return counts
-    except Exception:
+    finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
-        raise
+
+
+def sync_git_tree(source_dir: Path, output_dir: Path) -> None:
+    """Update ``output_dir`` from ``source_dir`` without replacing the root.
+
+    This preserves repository metadata such as ``.git`` while keeping generated
+    paths in sync with the latest export, including deleting stale generated
+    files when records disappear from the dataset.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    sync_paths = [
+        "manifest.json",
+        "README.md",
+        "vendors",
+        "products",
+        "cpes",
+        "metadata",
+        "relationships",
+        "purl-mappings",
+        "proposals",
+    ]
+    for relative_path in sync_paths:
+        sync_path(source_dir / relative_path, output_dir / relative_path)
+
+
+def sync_path(source: Path, destination: Path) -> None:
+    if source.is_dir():
+        if destination.exists() and not destination.is_dir():
+            destination.unlink()
+        destination.mkdir(parents=True, exist_ok=True)
+
+        source_entries = {item.name for item in source.iterdir()}
+        for destination_item in destination.iterdir():
+            if destination_item.name not in source_entries:
+                if destination_item.is_dir():
+                    shutil.rmtree(destination_item)
+                else:
+                    destination_item.unlink()
+
+        for source_item in source.iterdir():
+            sync_path(source_item, destination / source_item.name)
+        return
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        if destination.is_dir():
+            shutil.rmtree(destination)
+        elif filecmp.cmp(source, destination, shallow=False):
+            return
+    shutil.copy2(source, destination)
 
 
 def read_dataset(source: Path) -> dict[str, Any]:
@@ -167,9 +217,7 @@ def write_git_tree(dataset: dict[str, Any], output_dir: Path) -> dict[str, int]:
     products = sorted(
         dataset.get("products") or [], key=lambda item: item.get("uuid") or ""
     )
-    cpes = sorted(
-        dataset.get("cpes") or [], key=lambda item: item.get("cpe_uri") or ""
-    )
+    cpes = sorted(dataset.get("cpes") or [], key=lambda item: item.get("cpe_uri") or "")
     metadata_rows = sorted(
         dataset.get("metadata") or [],
         key=lambda item: (
@@ -205,9 +253,9 @@ def write_git_tree(dataset: dict[str, Any], output_dir: Path) -> dict[str, int]:
         ).as_posix()
 
     for product in products:
-        vendor_slug = vendor_slug_by_uuid.get(product.get("vendor_uuid")) or entity_slug(
-            product.get("vendor_uuid"), product.get("vendor_uuid")
-        )
+        vendor_slug = vendor_slug_by_uuid.get(
+            product.get("vendor_uuid")
+        ) or entity_slug(product.get("vendor_uuid"), product.get("vendor_uuid"))
         product_slug = entity_slug(product.get("name"), product.get("uuid"))
         product_slug_by_uuid[product.get("uuid")] = product_slug
         path = output_dir / "products" / vendor_slug / f"{product_slug}.json"
@@ -229,17 +277,13 @@ def write_git_tree(dataset: dict[str, Any], output_dir: Path) -> dict[str, int]:
         part = slugify(cpe.get("part") or "unknown")
         cpes_by_product_part[(vendor_slug, product_slug, part)].append(cpe)
 
-    for (vendor_slug, product_slug, part), rows in sorted(
-        cpes_by_product_part.items()
-    ):
+    for (vendor_slug, product_slug, part), rows in sorted(cpes_by_product_part.items()):
         write_jsonl(
             output_dir / "cpes" / vendor_slug / product_slug / f"{part}.jsonl",
             rows,
         )
 
-    metadata_by_record: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(
-        list
-    )
+    metadata_by_record: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in metadata_rows:
         metadata_by_record[
             (row.get("record_type") or "unknown", row.get("record_uuid") or "unknown")
