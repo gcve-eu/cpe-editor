@@ -256,11 +256,9 @@ change:
 python tools/export_dataset_to_git.py /path/to/cpe-editor-dataset.tar.gz /path/to/git-dataset
 ```
 
-Overwrite an existing generated tree:
-
-```bash
-python tools/export_dataset_to_git.py /path/to/cpe-editor-dataset.tar.gz /path/to/git-dataset --replace
-```
+If the destination already exists, the tool updates the generated files in place
+without deleting the destination directory, so repository metadata such as `.git`
+is preserved. Stale generated files are removed from the managed dataset paths.
 
 The generated layout includes `manifest.json`, one JSON file per vendor/product,
 sharded CPE JSON Lines files under `cpes/<vendor>/<product>/<part>.jsonl`, and
