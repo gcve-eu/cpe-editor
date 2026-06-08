@@ -3377,28 +3377,3 @@ def apply_proposal(proposal: Proposal):
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")
 
-
-# --- Sample data --------------------------------------------------------------
-@bp.route("/admin/bootstrap-sample-data", methods=["POST"])
-@admin_required
-def bootstrap_sample_data():
-    if Vendor.query.count() > 0:
-        flash("Sample data skipped because the database is not empty.", "info")
-        return redirect(url_for("main.admin_dashboard"))
-
-    vendor = Vendor(name="microsoft", title="Microsoft")
-    product = Product(vendor=vendor, name="exchange_server", title="Exchange Server")
-    cpe = CPEEntry(
-        vendor=vendor,
-        product=product,
-        part="a",
-        version="2019",
-        cpe_uri="cpe:2.3:a:microsoft:exchange_server:2019:*:*:*:*:*:*:*",
-        title="Microsoft Exchange Server 2019",
-        notes="Bootstrap sample entry",
-    )
-    db.session.add_all([vendor, product, cpe])
-    db.session.commit()
-
-    flash("Sample data created.", "success")
-    return redirect(url_for("main.admin_dashboard"))
