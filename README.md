@@ -232,6 +232,28 @@ Replace existing CPE↔PURL mappings first:
 python -m flask --app run import-purl2cpe --replace
 ```
 
+### Import GCVE enriched CVE dumps
+
+Import CVE→CPE vulnerability references from a local clone of [`CVEProject/gcve-enriched-dumps`](https://github.com/CVEProject/gcve-enriched-dumps).
+By default, the command expects the repository at `../gcve-enriched-dumps` relative to `cpe-editor`. The source can point either at the repository root or directly at its `cves` directory.
+If an imported CPE does not exist locally yet, the importer will create the vendor, product, and CPE entry first. Existing CVE→CPE references are left in place and duplicate references are skipped.
+
+```bash
+python -m flask --app run import-gcve-enriched-cves
+```
+
+Use a custom clone or `cves` directory path:
+
+```bash
+python -m flask --app run import-gcve-enriched-cves --source /path/to/gcve-enriched-dumps
+```
+
+Commit progress after a custom number of CVE files:
+
+```bash
+python -m flask --app run import-gcve-enriched-cves --batch-size 1000
+```
+
 ### Export dataset
 
 Export vendors, products, relationships, and CPE entries:
