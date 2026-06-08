@@ -69,7 +69,13 @@ Then open the local URL printed by Flask.
 Use the dedicated WSGI entry point with a production WSGI server instead of the Flask debug server:
 
 ```bash
-gunicorn --bind 0.0.0.0:8000 wsgi:app
+./start.py
+```
+
+The start script runs Gunicorn against `wsgi:app` and binds to all IPv4 and IPv6 addresses on `PORT` (default `8000`). You can pass additional Gunicorn options after the script name:
+
+```bash
+PORT=8000 ./start.py --workers 4
 ```
 
 The `wsgi.py` entry point creates the Flask application without enabling debug mode.
