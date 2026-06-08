@@ -3,10 +3,6 @@
 {% block content %}
 <div class="card">
   <h1>Admin dashboard</h1>
-  <form method="post" action="{{ url_for('main.bootstrap_sample_data') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="secondary"><i class="fa-solid fa-flask" aria-hidden="true"></i>Create sample data</button>
-  </form>
   <form method="post" action="{{ url_for('main.admin_reindex') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="secondary"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>Reindex database</button>
