@@ -30,11 +30,24 @@
     <tr><th>Vendor ref</th><td>{{ render_reference(proposal.vendor_id, proposal.vendor.name if proposal.vendor else None, proposal.vendor.title if proposal.vendor else None) }}</td></tr>
     <tr><th>Product ref</th><td>{{ render_reference(proposal.product_id, proposal.product.name if proposal.product else None, proposal.product.title if proposal.product else None) }}</td></tr>
     <tr><th>CPE ref</th><td>{{ render_reference(proposal.cpe_entry_id, proposal.cpe_entry.cpe_uri if proposal.cpe_entry else None, proposal.cpe_entry.title if proposal.cpe_entry else None) }}</td></tr>
+    <tr><th>Alias ref</th><td>{{ render_reference(proposal.product_alias_id, proposal.product_alias.name if proposal.product_alias else None) }}</td></tr>
     <tr><th>Vendor token</th><td>{{ proposal.proposed_vendor_name or '—' }}</td></tr>
     <tr><th>Vendor title</th><td>{{ proposal.proposed_vendor_title or '—' }}</td></tr>
     <tr><th>Product token</th><td>{{ proposal.proposed_product_name or '—' }}</td></tr>
     <tr><th>Product title</th><td>{{ proposal.proposed_product_title or '—' }}</td></tr>
     <tr><th>Generated CPE</th><td><code>{{ proposal.proposed_cpe_uri or '—' }}</code></td></tr>
+    <tr><th>Alias name</th><td>{{ proposal.proposed_alias_name or '—' }}</td></tr>
+    <tr><th>Alias description</th><td>{{ proposal.proposed_alias_description or '—' }}</td></tr>
+    <tr><th>Alias members</th><td>
+      {% if proposal.proposed_alias_members %}
+        <ul>
+        {% for member in proposal.proposed_alias_members %}
+          {% set product = product_by_id(member.product_id) %}
+          <li>{% if product %}{{ product.vendor.title or product.vendor.name }} / {{ product.title or product.name }}{% else %}Vendor #{{ member.vendor_id }} / Product #{{ member.product_id }}{% endif %}</li>
+        {% endfor %}
+        </ul>
+      {% else %}—{% endif %}
+    </td></tr>
     <tr><th>Relationship type</th><td>{{ proposal.proposed_relationship_type or '—' }}</td></tr>
     <tr><th>Source vendor ref</th><td>{{ render_reference(proposal.source_vendor_id, proposal.source_vendor.name if proposal.source_vendor else None, proposal.source_vendor.title if proposal.source_vendor else None) }}</td></tr>
     <tr><th>Source product ref</th><td>{{ render_reference(proposal.source_product_id, proposal.source_product.name if proposal.source_product else None, proposal.source_product.title if proposal.source_product else None) }}</td></tr>

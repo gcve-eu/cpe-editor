@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Alias {{ alias.name }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="page-header">
+    <h1>{{ alias.name }}</h1>
+    <div class="action-row">
+      <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Propose update</a>
+      <button class="secondary copy-json" type="button" data-export-url="{{ url_for('main.api_alias_detail', alias_uuid=alias.uuid) }}"><i class="fa-solid fa-copy" aria-hidden="true"></i>Copy JSON</button>
+    </div>
+  </div>
+  <p>{{ alias.description or 'No description provided.' }}</p>
+  <p class="muted">Approved {{ alias.approved_at or alias.created_at }} · {{ alias.members|length }} member(s)</p>
+</div>
+
+<div class="card">
+  <h2>Vendor/product tuples</h2>
+  <table>
+    <thead><tr><th>Vendor</th><th>Product</th></tr></thead>
+    <tbody>
+      {% for member in alias.members %}
+        <tr>
+          <td><a href="{{ url_for('main.vendor_detail', vendor_uuid=member.vendor.uuid) }}">{{ member.vendor.title or member.vendor.name }}</a></td>
+          <td><a href="{{ url_for('main.product_detail', product_uuid=member.product.uuid) }}">{{ member.product.title or member.product.name }}</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="2">This alias has no members.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

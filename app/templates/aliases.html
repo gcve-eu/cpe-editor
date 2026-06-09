@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Product aliases{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="page-header">
+    <h1>Product aliases</h1>
+    <div class="action-row">
+      <a class="button" href="{{ url_for('main.alias_proposal_new') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Propose alias</a>
+    </div>
+  </div>
+  <p class="muted">Aliases are independently reviewed groups of one or more CPE vendor/product tuples.</p>
+  <form method="get" class="search-form">
+    <label for="q">Search aliases</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="Alias name">
+    <button type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search</button>
+  </form>
+</div>
+
+<div class="card">
+  <table>
+    <thead><tr><th>Alias</th><th>Members</th><th>Description</th><th></th></tr></thead>
+    <tbody>
+      {% for alias in aliases %}
+        <tr>
+          <td><a href="{{ url_for('main.alias_detail', alias_uuid=alias.uuid) }}">{{ alias.name }}</a></td>
+          <td>{{ alias.members|length }}</td>
+          <td>{{ alias.description or '—' }}</td>
+          <td><a class="button secondary" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Propose update</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4">No approved aliases yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
