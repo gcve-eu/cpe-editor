@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Submit alias proposal{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="page-header">
+    <h1>{% if alias %}Propose alias update{% else %}Propose new product alias{% endif %}</h1>
+    <button type="submit" form="alias-proposal-form"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit alias proposal</button>
+  </div>
+  <p class="muted">Create or update an independently reviewed alias by selecting one or more existing CPE vendor/product tuples.</p>
+</div>
+
+<div class="card">
+  <form method="get" class="search-form">
+    {% if alias %}<input type="hidden" name="alias_id" value="{{ alias.id }}">{% endif %}
+    {% for product in selected_products %}
+      <input type="hidden" name="product_ids" value="{{ product.id }}">
+    {% endfor %}
+    <label for="q">Find vendor/product tuples</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="Search vendor or product name">
+    <button type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search</button>
+  </form>
+</div>
+
+<form method="post" id="alias-proposal-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if alias %}<input type="hidden" name="alias_id" value="{{ alias.id }}">{% endif %}
+  <input type="hidden" name="q" value="{{ q }}">
+  <div class="card">
+    <label for="proposed_alias_name">Alias name</label>
+    <input id="proposed_alias_name" name="proposed_alias_name" required value="{{ alias.name if alias else '' }}" placeholder="Example: Microsoft Windows">
+
+    <label for="proposed_alias_description">Description</label>
+    <textarea id="proposed_alias_description" name="proposed_alias_description" placeholder="Optional context for users and reviewers">{{ alias.description if alias else '' }}</textarea>
+
+    <label for="rationale">Rationale for reviewers</label>
+    <textarea id="rationale" name="rationale" placeholder="Explain why these tuples belong together or why the alias should change"></textarea>
+
+    <div class="form-grid">
+      <div>
+        <label for="submitter_name">Your name</label>
+        <input id="submitter_name" name="submitter_name" autocomplete="name">
+      </div>
+      <div>
+        <label for="submitter_email">Your email</label>
+        <input id="submitter_email" name="submitter_email" type="email" autocomplete="email">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Selected tuples</h2>
+    <p class="muted">Checked rows below will be included in the proposal. Search again to add more tuples; current selections are preserved.</p>
+    <table>
+      <thead><tr><th>Include</th><th>Vendor</th><th>Product</th></tr></thead>
+      <tbody>
+        {% set rendered_ids = [] %}
+        {% for product in selected_products %}
+          {% set _ = rendered_ids.append(product.id) %}
+          <tr>
+            <td><input type="checkbox" name="product_ids" value="{{ product.id }}" checked></td>
+            <td>{{ product.vendor.title or product.vendor.name }}</td>
+            <td>{{ product.title or product.name }}</td>
+          </tr>
+        {% endfor %}
+        {% for product in products %}
+          {% if product.id not in rendered_ids %}
+            <tr>
+              <td><input type="checkbox" name="product_ids" value="{{ product.id }}" {% if product.id in selected_product_ids %}checked{% endif %}></td>
+              <td>{{ product.vendor.title or product.vendor.name }}</td>
+              <td>{{ product.title or product.name }}</td>
+            </tr>
+          {% endif %}
+        {% else %}
+          {% if not selected_products %}<tr><td colspan="3">No products found. Search by vendor or product name.</td></tr>{% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% endblock %}

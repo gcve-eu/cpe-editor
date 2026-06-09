@@ -4,7 +4,6 @@ from flask_sqlalchemy import SQLAlchemy
 
 from .utils import new_uuid
 
-
 db = SQLAlchemy()
 
 
@@ -17,12 +16,19 @@ class TimestampMixin:
 
 class Vendor(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    uuid = db.Column(db.String(36), unique=True, nullable=False, default=new_uuid, index=True)
+    uuid = db.Column(
+        db.String(36), unique=True, nullable=False, default=new_uuid, index=True
+    )
     name = db.Column(db.String(255), unique=True, nullable=False, index=True)
     title = db.Column(db.String(255), nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
-    products = db.relationship("Product", back_populates="vendor", cascade="all, delete-orphan")
+    products = db.relationship(
+        "Product", back_populates="vendor", cascade="all, delete-orphan"
+    )
+    alias_memberships = db.relationship(
+        "ProductAliasMember", back_populates="vendor", cascade="all, delete-orphan"
+    )
     note_entries = db.relationship(
         "EntityNote",
         back_populates="vendor",
@@ -58,14 +64,23 @@ class Vendor(TimestampMixin, db.Model):
 
 class Product(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    uuid = db.Column(db.String(36), unique=True, nullable=False, default=new_uuid, index=True)
-    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True)
+    uuid = db.Column(
+        db.String(36), unique=True, nullable=False, default=new_uuid, index=True
+    )
+    vendor_id = db.Column(
+        db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True
+    )
     name = db.Column(db.String(255), nullable=False, index=True)
     title = db.Column(db.String(255), nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
     vendor = db.relationship("Vendor", back_populates="products")
-    cpes = db.relationship("CPEEntry", back_populates="product", cascade="all, delete-orphan")
+    cpes = db.relationship(
+        "CPEEntry", back_populates="product", cascade="all, delete-orphan"
+    )
+    alias_memberships = db.relationship(
+        "ProductAliasMember", back_populates="product", cascade="all, delete-orphan"
+    )
     note_entries = db.relationship(
         "EntityNote",
         back_populates="product",
@@ -101,10 +116,72 @@ class Product(TimestampMixin, db.Model):
     )
 
 
+class ProductAlias(TimestampMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    uuid = db.Column(
+        db.String(36), unique=True, nullable=False, default=new_uuid, index=True
+    )
+    name = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    description = db.Column(db.Text, nullable=True)
+    proposal_id = db.Column(
+        db.Integer,
+        db.ForeignKey("proposal.id", use_alter=True),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    submitter_name = db.Column(db.String(255), nullable=True)
+    submitter_email = db.Column(db.String(255), nullable=True)
+    submitted_at = db.Column(
+        db.DateTime, default=datetime.utcnow, nullable=False, index=True
+    )
+    approved_at = db.Column(db.DateTime, nullable=True, index=True)
+
+    members = db.relationship(
+        "ProductAliasMember",
+        back_populates="alias",
+        cascade="all, delete-orphan",
+        order_by="ProductAliasMember.id.asc()",
+    )
+    proposal = db.relationship(
+        "Proposal", back_populates="product_alias_entry", foreign_keys=[proposal_id]
+    )
+
+    __table_args__ = (db.Index("ix_product_alias_name_lower", db.func.lower(name)),)
+
+
+class ProductAliasMember(TimestampMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    alias_id = db.Column(
+        db.Integer, db.ForeignKey("product_alias.id"), nullable=False, index=True
+    )
+    vendor_id = db.Column(
+        db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True
+    )
+    product_id = db.Column(
+        db.Integer, db.ForeignKey("product.id"), nullable=False, index=True
+    )
+
+    alias = db.relationship("ProductAlias", back_populates="members")
+    vendor = db.relationship("Vendor", back_populates="alias_memberships")
+    product = db.relationship("Product", back_populates="alias_memberships")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "alias_id", "vendor_id", "product_id", name="uq_product_alias_member"
+        ),
+        db.Index("ix_product_alias_member_product", "product_id", "alias_id"),
+    )
+
+
 class CPEEntry(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False, index=True)
+    vendor_id = db.Column(
+        db.Integer, db.ForeignKey("vendor.id"), nullable=False, index=True
+    )
+    product_id = db.Column(
+        db.Integer, db.ForeignKey("product.id"), nullable=False, index=True
+    )
 
     cpe_uri = db.Column(db.String(1024), unique=True, nullable=False, index=True)
     cpe_name_id = db.Column(db.String(36), unique=True, nullable=True, index=True)
@@ -158,6 +235,9 @@ class Proposal(TimestampMixin, db.Model):
     vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True)
     product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True)
     cpe_entry_id = db.Column(db.Integer, db.ForeignKey("cpe_entry.id"), nullable=True)
+    product_alias_id = db.Column(
+        db.Integer, db.ForeignKey("product_alias.id", use_alter=True), nullable=True
+    )
 
     proposed_vendor_name = db.Column(db.String(255), nullable=True)
     proposed_vendor_title = db.Column(db.String(255), nullable=True)
@@ -176,16 +256,27 @@ class Proposal(TimestampMixin, db.Model):
     proposed_title = db.Column(db.String(255), nullable=True)
     proposed_notes = db.Column(db.Text, nullable=True)
     proposed_cpe_uri = db.Column(db.String(1024), nullable=True)
+    proposed_alias_name = db.Column(db.String(255), nullable=True)
+    proposed_alias_description = db.Column(db.Text, nullable=True)
+    proposed_alias_members = db.Column(db.JSON, nullable=True)
     proposed_relationship_type = db.Column(db.String(64), nullable=True)
     proposed_metadata_key = db.Column(db.String(128), nullable=True)
     proposed_metadata_value = db.Column(db.Text, nullable=True)
     proposed_vulnerability_id = db.Column(db.String(64), nullable=True, index=True)
     proposed_vulnerability_source = db.Column(db.String(16), nullable=True, index=True)
     proposed_cpe_applicability = db.Column(db.String(64), nullable=True)
-    source_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
-    source_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
-    target_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
-    target_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
+    source_vendor_id = db.Column(
+        db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True
+    )
+    source_product_id = db.Column(
+        db.Integer, db.ForeignKey("product.id"), nullable=True, index=True
+    )
+    target_vendor_id = db.Column(
+        db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True
+    )
+    target_product_id = db.Column(
+        db.Integer, db.ForeignKey("product.id"), nullable=True, index=True
+    )
 
     review_comment = db.Column(db.Text, nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
@@ -193,6 +284,7 @@ class Proposal(TimestampMixin, db.Model):
     vendor = db.relationship("Vendor", foreign_keys=[vendor_id])
     product = db.relationship("Product", foreign_keys=[product_id])
     cpe_entry = db.relationship("CPEEntry", foreign_keys=[cpe_entry_id])
+    product_alias = db.relationship("ProductAlias", foreign_keys=[product_alias_id])
     note_entry = db.relationship("EntityNote", back_populates="proposal", uselist=False)
     source_vendor = db.relationship("Vendor", foreign_keys=[source_vendor_id])
     source_product = db.relationship("Product", foreign_keys=[source_product_id])
@@ -201,23 +293,37 @@ class Proposal(TimestampMixin, db.Model):
     relationship_entry = db.relationship(
         "EntityRelationship", back_populates="proposal", uselist=False
     )
-    metadata_entry = db.relationship("EntityMetadata", back_populates="proposal", uselist=False)
+    metadata_entry = db.relationship(
+        "EntityMetadata", back_populates="proposal", uselist=False
+    )
     vulnerability_reference_entry = db.relationship(
         "CPEVulnerabilityReference", back_populates="proposal", uselist=False
+    )
+    product_alias_entry = db.relationship(
+        "ProductAlias",
+        back_populates="proposal",
+        uselist=False,
+        foreign_keys="ProductAlias.proposal_id",
     )
 
 
 class EntityNote(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
+    vendor_id = db.Column(
+        db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True
+    )
+    product_id = db.Column(
+        db.Integer, db.ForeignKey("product.id"), nullable=True, index=True
+    )
     proposal_id = db.Column(
         db.Integer, db.ForeignKey("proposal.id"), nullable=True, unique=True, index=True
     )
     note_text = db.Column(db.Text, nullable=False)
     submitter_name = db.Column(db.String(255), nullable=True)
     submitter_email = db.Column(db.String(255), nullable=True)
-    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    submitted_at = db.Column(
+        db.DateTime, default=datetime.utcnow, nullable=False, index=True
+    )
     approved_at = db.Column(db.DateTime, nullable=True, index=True)
 
     vendor = db.relationship("Vendor", back_populates="note_entries")
@@ -227,10 +333,18 @@ class EntityNote(TimestampMixin, db.Model):
 
 class EntityRelationship(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    source_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
-    source_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
-    target_vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
-    target_product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
+    source_vendor_id = db.Column(
+        db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True
+    )
+    source_product_id = db.Column(
+        db.Integer, db.ForeignKey("product.id"), nullable=True, index=True
+    )
+    target_vendor_id = db.Column(
+        db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True
+    )
+    target_product_id = db.Column(
+        db.Integer, db.ForeignKey("product.id"), nullable=True, index=True
+    )
     relationship_type = db.Column(db.String(64), nullable=False, index=True)
     proposal_id = db.Column(
         db.Integer, db.ForeignKey("proposal.id"), nullable=True, unique=True, index=True
@@ -238,20 +352,30 @@ class EntityRelationship(TimestampMixin, db.Model):
     rationale = db.Column(db.Text, nullable=True)
     submitter_name = db.Column(db.String(255), nullable=True)
     submitter_email = db.Column(db.String(255), nullable=True)
-    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    submitted_at = db.Column(
+        db.DateTime, default=datetime.utcnow, nullable=False, index=True
+    )
     approved_at = db.Column(db.DateTime, nullable=True, index=True)
 
     source_vendor = db.relationship(
-        "Vendor", foreign_keys=[source_vendor_id], back_populates="outgoing_relationships"
+        "Vendor",
+        foreign_keys=[source_vendor_id],
+        back_populates="outgoing_relationships",
     )
     source_product = db.relationship(
-        "Product", foreign_keys=[source_product_id], back_populates="outgoing_relationships"
+        "Product",
+        foreign_keys=[source_product_id],
+        back_populates="outgoing_relationships",
     )
     target_vendor = db.relationship(
-        "Vendor", foreign_keys=[target_vendor_id], back_populates="incoming_relationships"
+        "Vendor",
+        foreign_keys=[target_vendor_id],
+        back_populates="incoming_relationships",
     )
     target_product = db.relationship(
-        "Product", foreign_keys=[target_product_id], back_populates="incoming_relationships"
+        "Product",
+        foreign_keys=[target_product_id],
+        back_populates="incoming_relationships",
     )
     proposal = db.relationship("Proposal", back_populates="relationship_entry")
 
@@ -273,8 +397,12 @@ class EntityRelationship(TimestampMixin, db.Model):
 
 class EntityMetadata(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=True, index=True)
+    vendor_id = db.Column(
+        db.Integer, db.ForeignKey("vendor.id"), nullable=True, index=True
+    )
+    product_id = db.Column(
+        db.Integer, db.ForeignKey("product.id"), nullable=True, index=True
+    )
     proposal_id = db.Column(
         db.Integer, db.ForeignKey("proposal.id"), nullable=True, unique=True, index=True
     )
@@ -282,7 +410,9 @@ class EntityMetadata(TimestampMixin, db.Model):
     metadata_value = db.Column(db.Text, nullable=False)
     submitter_name = db.Column(db.String(255), nullable=True)
     submitter_email = db.Column(db.String(255), nullable=True)
-    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    submitted_at = db.Column(
+        db.DateTime, default=datetime.utcnow, nullable=False, index=True
+    )
     approved_at = db.Column(db.DateTime, nullable=True, index=True)
 
     vendor = db.relationship("Vendor", back_populates="metadata_entries")
@@ -297,7 +427,9 @@ class EntityMetadata(TimestampMixin, db.Model):
 
 class CPEVulnerabilityReference(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    cpe_entry_id = db.Column(db.Integer, db.ForeignKey("cpe_entry.id"), nullable=False, index=True)
+    cpe_entry_id = db.Column(
+        db.Integer, db.ForeignKey("cpe_entry.id"), nullable=False, index=True
+    )
     proposal_id = db.Column(
         db.Integer, db.ForeignKey("proposal.id"), nullable=True, unique=True, index=True
     )
@@ -307,11 +439,15 @@ class CPEVulnerabilityReference(TimestampMixin, db.Model):
     rationale = db.Column(db.Text, nullable=True)
     submitter_name = db.Column(db.String(255), nullable=True)
     submitter_email = db.Column(db.String(255), nullable=True)
-    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    submitted_at = db.Column(
+        db.DateTime, default=datetime.utcnow, nullable=False, index=True
+    )
     approved_at = db.Column(db.DateTime, nullable=True, index=True)
 
     cpe_entry = db.relationship("CPEEntry", back_populates="vulnerability_links")
-    proposal = db.relationship("Proposal", back_populates="vulnerability_reference_entry")
+    proposal = db.relationship(
+        "Proposal", back_populates="vulnerability_reference_entry"
+    )
 
     __table_args__ = (
         db.UniqueConstraint(

@@ -33,6 +33,8 @@ from .models import (
     EntityNote,
     EntityRelationship,
     Product,
+    ProductAlias,
+    ProductAliasMember,
     Proposal,
     Vendor,
     db,
@@ -62,6 +64,7 @@ PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES = {
 }
 ALLOWED_METADATA_KEYS = {"gcve:description", "gcve:url"}
 VULNERABILITY_REFERENCE_SOURCES = {"CVE", "GCVE", "GHSA"}
+ALIAS_PROPOSAL_TYPES = {"new_product_alias", "edit_product_alias"}
 ALLOWED_CPE_APPLICABILITY_STATUSES = {
     "vulnerable",
     "not_vulnerable",
@@ -100,9 +103,9 @@ def _fetch_gcve_vulnerability(reference):
     api_base_url = (
         current_app.config.get("GCVE_API_BASE_URL") or "https://db.gcve.eu/api"
     ).rstrip("/")
-    web_base_url = (current_app.config.get("GCVE_WEB_BASE_URL") or "https://db.gcve.eu").rstrip(
-        "/"
-    )
+    web_base_url = (
+        current_app.config.get("GCVE_WEB_BASE_URL") or "https://db.gcve.eu"
+    ).rstrip("/")
     endpoint = f"{api_base_url}/vulnerability/{quote(vulnerability_id, safe='')}"
     request_obj = Request(
         endpoint,
@@ -143,8 +146,12 @@ def _fetch_gcve_vulnerability(reference):
             "error": "db.gcve.eu returned an unexpected format.",
         }
 
-    cve_metadata = record.get("cveMetadata") if isinstance(record.get("cveMetadata"), dict) else {}
-    containers = record.get("containers") if isinstance(record.get("containers"), dict) else {}
+    cve_metadata = (
+        record.get("cveMetadata") if isinstance(record.get("cveMetadata"), dict) else {}
+    )
+    containers = (
+        record.get("containers") if isinstance(record.get("containers"), dict) else {}
+    )
     cna = containers.get("cna") if isinstance(containers.get("cna"), dict) else {}
 
     title = cna.get("title") if isinstance(cna.get("title"), str) else None
@@ -217,9 +224,12 @@ def _fetch_gcve_cpe_matches(cpe_value):
         return {"ok": False, "error": "Missing CPE value."}
 
     api_base_url = (
-        current_app.config.get("GCVE_API_BASE_URL") or "https://vulnerability.circl.lu/api"
+        current_app.config.get("GCVE_API_BASE_URL")
+        or "https://vulnerability.circl.lu/api"
     ).rstrip("/")
-    endpoint = f"{api_base_url}/vulnerability/cpesearch/{quote(normalized_cpe, safe='')}"
+    endpoint = (
+        f"{api_base_url}/vulnerability/cpesearch/{quote(normalized_cpe, safe='')}"
+    )
     request_obj = Request(
         endpoint,
         headers={
@@ -246,15 +256,31 @@ def _fetch_gcve_cpe_matches(cpe_value):
     for record in records[:100]:
         if not isinstance(record, dict):
             continue
-        cve_metadata = record.get("cveMetadata") if isinstance(record.get("cveMetadata"), dict) else {}
-        containers = record.get("containers") if isinstance(record.get("containers"), dict) else {}
-        cna_container = containers.get("cna") if isinstance(containers.get("cna"), dict) else {}
-        descriptions = cna_container.get("descriptions") if isinstance(cna_container.get("descriptions"), list) else []
+        cve_metadata = (
+            record.get("cveMetadata")
+            if isinstance(record.get("cveMetadata"), dict)
+            else {}
+        )
+        containers = (
+            record.get("containers")
+            if isinstance(record.get("containers"), dict)
+            else {}
+        )
+        cna_container = (
+            containers.get("cna") if isinstance(containers.get("cna"), dict) else {}
+        )
+        descriptions = (
+            cna_container.get("descriptions")
+            if isinstance(cna_container.get("descriptions"), list)
+            else []
+        )
         first_description = next(
             (
                 item.get("value")
                 for item in descriptions
-                if isinstance(item, dict) and isinstance(item.get("value"), str) and item.get("value").strip()
+                if isinstance(item, dict)
+                and isinstance(item.get("value"), str)
+                and item.get("value").strip()
             ),
             None,
         )
@@ -265,15 +291,26 @@ def _fetch_gcve_cpe_matches(cpe_value):
             or ""
         ).strip()
         source = str(record.get("source") or "").strip().upper() or "CVE"
-        summary = str(record.get("summary") or record.get("description") or first_description or "").strip() or None
+        summary = (
+            str(
+                record.get("summary")
+                or record.get("description")
+                or first_description
+                or ""
+            ).strip()
+            or None
+        )
         severity = str(record.get("severity") or "").strip() or None
-        updated_at = str(
-            record.get("updated_at")
-            or record.get("modified")
-            or record.get("dateUpdated")
-            or cve_metadata.get("dateUpdated")
-            or ""
-        ).strip() or None
+        updated_at = (
+            str(
+                record.get("updated_at")
+                or record.get("modified")
+                or record.get("dateUpdated")
+                or cve_metadata.get("dateUpdated")
+                or ""
+            ).strip()
+            or None
+        )
 
         if not vuln_id:
             continue
@@ -311,6 +348,7 @@ def _build_product_level_cpe(cpe_uri):
         other="*",
     )
 
+
 def _get_csrf_token():
     token = session.get("_csrf_token")
     if not token:
@@ -335,10 +373,13 @@ def validate_csrf_token():
         form_token = payload.get("csrf_token")
     if not form_token:
         form_token = request.headers.get("X-CSRF-Token")
-    if not session_token or not form_token or not compare_digest(session_token, form_token):
+    if (
+        not session_token
+        or not form_token
+        or not compare_digest(session_token, form_token)
+    ):
         abort(400, description="Invalid or missing CSRF token.")
     return None
-
 
 
 def admin_required(view_func):
@@ -366,7 +407,10 @@ def _serialize_vendor(vendor):
             _serialize_entity_note(note)
             for note in sorted(
                 vendor.note_entries,
-                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                key=lambda entry: (
+                    entry.approved_at or datetime.min,
+                    entry.submitted_at,
+                ),
                 reverse=True,
             )
         ],
@@ -374,7 +418,10 @@ def _serialize_vendor(vendor):
             _serialize_entity_metadata(metadata)
             for metadata in sorted(
                 vendor.metadata_entries,
-                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                key=lambda entry: (
+                    entry.approved_at or datetime.min,
+                    entry.submitted_at,
+                ),
                 reverse=True,
             )
         ],
@@ -382,7 +429,10 @@ def _serialize_vendor(vendor):
             _serialize_entity_relationship(relationship)
             for relationship in sorted(
                 vendor.outgoing_relationships,
-                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                key=lambda entry: (
+                    entry.approved_at or datetime.min,
+                    entry.submitted_at,
+                ),
                 reverse=True,
             )
         ],
@@ -405,7 +455,10 @@ def _serialize_product(product):
             _serialize_entity_note(note)
             for note in sorted(
                 product.note_entries,
-                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                key=lambda entry: (
+                    entry.approved_at or datetime.min,
+                    entry.submitted_at,
+                ),
                 reverse=True,
             )
         ],
@@ -413,7 +466,10 @@ def _serialize_product(product):
             _serialize_entity_metadata(metadata)
             for metadata in sorted(
                 product.metadata_entries,
-                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                key=lambda entry: (
+                    entry.approved_at or datetime.min,
+                    entry.submitted_at,
+                ),
                 reverse=True,
             )
         ],
@@ -421,7 +477,10 @@ def _serialize_product(product):
             _serialize_entity_relationship(relationship)
             for relationship in sorted(
                 product.outgoing_relationships,
-                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                key=lambda entry: (
+                    entry.approved_at or datetime.min,
+                    entry.submitted_at,
+                ),
                 reverse=True,
             )
         ],
@@ -533,7 +592,8 @@ def _build_statistics_payload():
     total_cpes = db.session.query(func.count(CPEEntry.id)).scalar() or 0
     total_purl_mappings = db.session.query(func.count(CPEPurlMapping.id)).scalar() or 0
     cpes_with_purl_mappings = (
-        db.session.query(func.count(func.distinct(CPEPurlMapping.cpe_name_id))).scalar() or 0
+        db.session.query(func.count(func.distinct(CPEPurlMapping.cpe_name_id))).scalar()
+        or 0
     )
     vendors_with_products = (
         db.session.query(func.count(func.distinct(Vendor.id)))
@@ -561,13 +621,16 @@ def _build_statistics_payload():
             "vendors_without_products": vendors_without_products,
         },
         "averages": {
-            "purls_per_cpe": round(total_purl_mappings / total_cpes, 2) if total_cpes else 0,
-            "products_per_vendor": round(total_products / total_vendors, 2) if total_vendors else 0,
+            "purls_per_cpe": (
+                round(total_purl_mappings / total_cpes, 2) if total_cpes else 0
+            ),
+            "products_per_vendor": (
+                round(total_products / total_vendors, 2) if total_vendors else 0
+            ),
         },
         "top_vendor": _serialize_top_vendor(top_vendor, rank=1) if top_vendor else None,
         "cpe_part_counts": [
-            {"part": part, "count": count}
-            for part, count in cpe_part_counts
+            {"part": part, "count": count} for part, count in cpe_part_counts
         ],
     }
 
@@ -596,8 +659,12 @@ def _serialize_entity_metadata(metadata):
         "metadata_value": metadata.metadata_value,
         "submitter_name": metadata.submitter_name,
         "submitter_email": metadata.submitter_email,
-        "submitted_at": metadata.submitted_at.isoformat() if metadata.submitted_at else None,
-        "approved_at": metadata.approved_at.isoformat() if metadata.approved_at else None,
+        "submitted_at": (
+            metadata.submitted_at.isoformat() if metadata.submitted_at else None
+        ),
+        "approved_at": (
+            metadata.approved_at.isoformat() if metadata.approved_at else None
+        ),
     }
 
 
@@ -634,11 +701,116 @@ def _serialize_entity_relationship(relationship):
         "rationale": relationship.rationale,
         "submitter_name": relationship.submitter_name,
         "submitter_email": relationship.submitter_email,
-        "submitted_at": relationship.submitted_at.isoformat() if relationship.submitted_at else None,
-        "approved_at": relationship.approved_at.isoformat() if relationship.approved_at else None,
-        "source": _record_label(relationship.source_vendor, relationship.source_product),
-        "target": _record_label(relationship.target_vendor, relationship.target_product),
+        "submitted_at": (
+            relationship.submitted_at.isoformat() if relationship.submitted_at else None
+        ),
+        "approved_at": (
+            relationship.approved_at.isoformat() if relationship.approved_at else None
+        ),
+        "source": _record_label(
+            relationship.source_vendor, relationship.source_product
+        ),
+        "target": _record_label(
+            relationship.target_vendor, relationship.target_product
+        ),
     }
+
+
+def _serialize_product_alias(alias):
+    return {
+        "id": alias.id,
+        "uuid": alias.uuid,
+        "name": alias.name,
+        "description": alias.description,
+        "proposal_id": alias.proposal_id,
+        "submitter_name": alias.submitter_name,
+        "submitter_email": alias.submitter_email,
+        "submitted_at": alias.submitted_at.isoformat() if alias.submitted_at else None,
+        "approved_at": alias.approved_at.isoformat() if alias.approved_at else None,
+        "created_at": alias.created_at.isoformat() if alias.created_at else None,
+        "updated_at": alias.updated_at.isoformat() if alias.updated_at else None,
+        "members": [
+            _serialize_product_alias_member(member) for member in alias.members
+        ],
+    }
+
+
+def _serialize_product_alias_member(member):
+    return {
+        "id": member.id,
+        "vendor_id": member.vendor_id,
+        "vendor_uuid": member.vendor.uuid if member.vendor else None,
+        "vendor_name": member.vendor.name if member.vendor else None,
+        "vendor_title": (
+            (member.vendor.title or member.vendor.name) if member.vendor else None
+        ),
+        "product_id": member.product_id,
+        "product_uuid": member.product.uuid if member.product else None,
+        "product_name": member.product.name if member.product else None,
+        "product_title": (
+            (member.product.title or member.product.name) if member.product else None
+        ),
+    }
+
+
+def _alias_member_label(member):
+    vendor = member.vendor
+    product = member.product
+    if not vendor or not product:
+        return "Unknown vendor/product"
+    return f"{vendor.title or vendor.name} / {product.title or product.name}"
+
+
+def _normalize_alias_member_ids(raw_ids):
+    member_ids = []
+    seen = set()
+    for raw_id in raw_ids:
+        try:
+            product_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if product_id in seen:
+            continue
+        product = Product.query.get(product_id)
+        if not product:
+            continue
+        seen.add(product_id)
+        member_ids.append({"vendor_id": product.vendor_id, "product_id": product.id})
+    return member_ids
+
+
+def _alias_members_from_proposal(proposal):
+    members = proposal.proposed_alias_members or []
+    if not isinstance(members, list):
+        return []
+    cleaned = []
+    seen = set()
+    for item in members:
+        if not isinstance(item, dict):
+            continue
+        vendor_id = item.get("vendor_id")
+        product_id = item.get("product_id")
+        key = (vendor_id, product_id)
+        if not vendor_id or not product_id or key in seen:
+            continue
+        product = Product.query.get(product_id)
+        if not product or product.vendor_id != vendor_id:
+            continue
+        seen.add(key)
+        cleaned.append({"vendor_id": vendor_id, "product_id": product_id})
+    return cleaned
+
+
+def _apply_alias_members(alias, members):
+    alias.members.clear()
+    db.session.flush()
+    for member in members:
+        alias.members.append(
+            ProductAliasMember(
+                vendor_id=member["vendor_id"],
+                product_id=member["product_id"],
+            )
+        )
 
 
 def _get_request_ip():
@@ -700,12 +872,21 @@ def _serialize_cpe(cpe):
                 "vulnerability_id": reference.vulnerability_id,
                 "cpe_applicability": reference.cpe_applicability,
                 "rationale": reference.rationale,
-                "approved_at": reference.approved_at.isoformat() if reference.approved_at else None,
-                "submitted_at": reference.submitted_at.isoformat() if reference.submitted_at else None,
+                "approved_at": (
+                    reference.approved_at.isoformat() if reference.approved_at else None
+                ),
+                "submitted_at": (
+                    reference.submitted_at.isoformat()
+                    if reference.submitted_at
+                    else None
+                ),
             }
             for reference in sorted(
                 cpe.vulnerability_links,
-                key=lambda entry: (entry.approved_at or datetime.min, entry.submitted_at),
+                key=lambda entry: (
+                    entry.approved_at or datetime.min,
+                    entry.submitted_at,
+                ),
                 reverse=True,
             )
         ],
@@ -715,8 +896,12 @@ def _serialize_cpe(cpe):
                 "cpe_name_id": mapping.cpe_name_id,
                 "purl": mapping.purl,
                 "source": mapping.source,
-                "created_at": mapping.created_at.isoformat() if mapping.created_at else None,
-                "updated_at": mapping.updated_at.isoformat() if mapping.updated_at else None,
+                "created_at": (
+                    mapping.created_at.isoformat() if mapping.created_at else None
+                ),
+                "updated_at": (
+                    mapping.updated_at.isoformat() if mapping.updated_at else None
+                ),
             }
             for mapping in cpe.purl_mappings
         ],
@@ -734,10 +919,18 @@ def _serialize_cpe_vulnerability_reference(reference):
         "rationale": reference.rationale,
         "submitter_name": reference.submitter_name,
         "submitter_email": reference.submitter_email,
-        "submitted_at": reference.submitted_at.isoformat() if reference.submitted_at else None,
-        "approved_at": reference.approved_at.isoformat() if reference.approved_at else None,
-        "created_at": reference.created_at.isoformat() if reference.created_at else None,
-        "updated_at": reference.updated_at.isoformat() if reference.updated_at else None,
+        "submitted_at": (
+            reference.submitted_at.isoformat() if reference.submitted_at else None
+        ),
+        "approved_at": (
+            reference.approved_at.isoformat() if reference.approved_at else None
+        ),
+        "created_at": (
+            reference.created_at.isoformat() if reference.created_at else None
+        ),
+        "updated_at": (
+            reference.updated_at.isoformat() if reference.updated_at else None
+        ),
     }
 
 
@@ -782,12 +975,22 @@ def _serialize_approved_change(proposal: Proposal):
     if proposal.note_entry:
         applied_records["note"] = _serialize_entity_note(proposal.note_entry)
     if proposal.metadata_entry:
-        applied_records["metadata"] = _serialize_entity_metadata(proposal.metadata_entry)
+        applied_records["metadata"] = _serialize_entity_metadata(
+            proposal.metadata_entry
+        )
     if proposal.relationship_entry:
-        applied_records["relationship"] = _serialize_entity_relationship(proposal.relationship_entry)
+        applied_records["relationship"] = _serialize_entity_relationship(
+            proposal.relationship_entry
+        )
     if proposal.vulnerability_reference_entry:
-        applied_records["vulnerability_reference"] = _serialize_cpe_vulnerability_reference(
-            proposal.vulnerability_reference_entry
+        applied_records["vulnerability_reference"] = (
+            _serialize_cpe_vulnerability_reference(
+                proposal.vulnerability_reference_entry
+            )
+        )
+    if proposal.product_alias_entry:
+        applied_records["product_alias"] = _serialize_product_alias(
+            proposal.product_alias_entry
         )
 
     return {
@@ -798,7 +1001,9 @@ def _serialize_approved_change(proposal: Proposal):
         "approved_at": approved_at.isoformat() if approved_at else None,
         "created_at": proposal.created_at.isoformat() if proposal.created_at else None,
         "updated_at": proposal.updated_at.isoformat() if proposal.updated_at else None,
-        "reviewed_at": proposal.reviewed_at.isoformat() if proposal.reviewed_at else None,
+        "reviewed_at": (
+            proposal.reviewed_at.isoformat() if proposal.reviewed_at else None
+        ),
         "review_comment": proposal.review_comment,
         "rationale": proposal.rationale,
         "submitter_name": proposal.submitter_name,
@@ -831,6 +1036,9 @@ def _serialize_approved_change(proposal: Proposal):
             "vulnerability_id": proposal.proposed_vulnerability_id,
             "vulnerability_source": proposal.proposed_vulnerability_source,
             "cpe_applicability": proposal.proposed_cpe_applicability,
+            "alias_name": proposal.proposed_alias_name,
+            "alias_description": proposal.proposed_alias_description,
+            "alias_members": proposal.proposed_alias_members,
         },
         "applied_records": applied_records,
         "links": {
@@ -906,7 +1114,9 @@ def _serialize_bcp10_cpe(cpe: CPEEntry):
 
 def _serialize_bcp10_metadata(metadata: EntityMetadata):
     return {
-        "record_uuid": metadata.vendor.uuid if metadata.vendor else metadata.product.uuid,
+        "record_uuid": (
+            metadata.vendor.uuid if metadata.vendor else metadata.product.uuid
+        ),
         "record_type": "vendor" if metadata.vendor_id else "product",
         "metadata_key": metadata.metadata_key,
         "metadata_value": metadata.metadata_value,
@@ -1078,9 +1288,8 @@ def _proposal_focus_links(proposal: Proposal):
     linked_vendor = proposal.vendor
     linked_product = proposal.product
     linked_cpe = proposal.cpe_entry
-    if (
-        proposal.proposal_type == "new_vendor_product"
-        and (not linked_vendor or not linked_product)
+    if proposal.proposal_type == "new_vendor_product" and (
+        not linked_vendor or not linked_product
     ):
         (
             linked_vendor,
@@ -1130,14 +1339,19 @@ def _resolve_new_vendor_product_records(proposal: Proposal):
         normalized_product_name = normalize_token(proposal.proposed_product_name)
         vendor = vendor or Vendor.query.filter_by(name=normalized_vendor_name).first()
         if vendor:
-            product = product or Product.query.filter_by(
-                vendor_id=vendor.id,
-                name=normalized_product_name,
-            ).first()
+            product = (
+                product
+                or Product.query.filter_by(
+                    vendor_id=vendor.id,
+                    name=normalized_product_name,
+                ).first()
+            )
 
     if not cpe_entry:
         if proposal.proposed_cpe_uri:
-            cpe_entry = CPEEntry.query.filter_by(cpe_uri=proposal.proposed_cpe_uri).first()
+            cpe_entry = CPEEntry.query.filter_by(
+                cpe_uri=proposal.proposed_cpe_uri
+            ).first()
         elif vendor and product:
             cpe_entry = CPEEntry.query.filter_by(
                 vendor_id=vendor.id,
@@ -1171,10 +1385,15 @@ def _proposal_summary(proposal: Proposal):
     if proposal.proposal_type == "new_record_relationship":
         relationship_label = proposal.proposed_relationship_type or "relationship"
         return f"Approved a {relationship_label} relationship."
+
     if proposal.proposal_type == "new_cpe_vulnerability_reference":
         vuln_source = proposal.proposed_vulnerability_source or "vulnerability"
         vuln_id = proposal.proposed_vulnerability_id or "id"
         return f"Approved {vuln_source} reference {vuln_id} for a CPE."
+    if proposal.proposal_type == "new_product_alias":
+        return f"Approved new product alias '{proposal.proposed_alias_name or 'unnamed alias'}'."
+    if proposal.proposal_type == "edit_product_alias":
+        return f"Approved updates to product alias '{proposal.proposed_alias_name or 'unnamed alias'}'."
     return "Approved proposal."
 
 
@@ -1186,7 +1405,9 @@ def _proposal_feed_timestamp(proposal: Proposal):
 def _build_change_feed_entries(changes: list[Proposal]):
     entries = []
     for proposal in changes:
-        change_url = url_for("main.approved_change_detail", proposal_id=proposal.id, _external=True)
+        change_url = url_for(
+            "main.approved_change_detail", proposal_id=proposal.id, _external=True
+        )
         published = _proposal_feed_timestamp(proposal)
         entries.append(
             {
@@ -1239,7 +1460,11 @@ def _product_change_criterion(product: Product):
 
 def _build_rss_feed(changes, feed_url, site_url, title, description):
     entries = _build_change_feed_entries(changes)
-    updated_at = entries[0]["published_rfc822"] if entries else format_datetime(datetime.now(timezone.utc))
+    updated_at = (
+        entries[0]["published_rfc822"]
+        if entries
+        else format_datetime(datetime.now(timezone.utc))
+    )
     items = "".join(
         (
             "<item>"
@@ -1306,17 +1531,15 @@ def _collect_related_products_for_combined_view(product: Product):
     vendor_queue = [product.vendor_id]
     while vendor_queue:
         current_vendor_id = vendor_queue.pop(0)
-        vendor_relationships = (
-            EntityRelationship.query.filter(
-                EntityRelationship.relationship_type.in_(
-                    PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
-                ),
-                or_(
-                    EntityRelationship.source_vendor_id == current_vendor_id,
-                    EntityRelationship.target_vendor_id == current_vendor_id,
-                ),
-            ).all()
-        )
+        vendor_relationships = EntityRelationship.query.filter(
+            EntityRelationship.relationship_type.in_(
+                PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+            ),
+            or_(
+                EntityRelationship.source_vendor_id == current_vendor_id,
+                EntityRelationship.target_vendor_id == current_vendor_id,
+            ),
+        ).all()
         for relationship in vendor_relationships:
             vendor_neighbor_ids = [
                 relationship.source_vendor_id,
@@ -1332,12 +1555,10 @@ def _collect_related_products_for_combined_view(product: Product):
     queue = [product.id]
 
     if related_vendor_ids:
-        vendor_related_products = (
-            Product.query.filter(
-                Product.vendor_id.in_(related_vendor_ids),
-                func.lower(Product.name) == product.name.lower(),
-            ).all()
-        )
+        vendor_related_products = Product.query.filter(
+            Product.vendor_id.in_(related_vendor_ids),
+            func.lower(Product.name) == product.name.lower(),
+        ).all()
         for vendor_related_product in vendor_related_products:
             if vendor_related_product.id in related_product_ids:
                 continue
@@ -1346,17 +1567,15 @@ def _collect_related_products_for_combined_view(product: Product):
 
     while queue:
         current_product_id = queue.pop(0)
-        relationships = (
-            EntityRelationship.query.filter(
-                EntityRelationship.relationship_type.in_(
-                    PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
-                ),
-                or_(
-                    EntityRelationship.source_product_id == current_product_id,
-                    EntityRelationship.target_product_id == current_product_id,
-                ),
-            ).all()
-        )
+        relationships = EntityRelationship.query.filter(
+            EntityRelationship.relationship_type.in_(
+                PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+            ),
+            or_(
+                EntityRelationship.source_product_id == current_product_id,
+                EntityRelationship.target_product_id == current_product_id,
+            ),
+        ).all()
         for relationship in relationships:
             neighbor_ids = [
                 relationship.source_product_id,
@@ -1380,17 +1599,15 @@ def _collect_related_vendors_for_combined_view(vendor: Vendor):
     vendor_queue = [vendor.id]
     while vendor_queue:
         current_vendor_id = vendor_queue.pop(0)
-        vendor_relationships = (
-            EntityRelationship.query.filter(
-                EntityRelationship.relationship_type.in_(
-                    PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
-                ),
-                or_(
-                    EntityRelationship.source_vendor_id == current_vendor_id,
-                    EntityRelationship.target_vendor_id == current_vendor_id,
-                ),
-            ).all()
-        )
+        vendor_relationships = EntityRelationship.query.filter(
+            EntityRelationship.relationship_type.in_(
+                PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+            ),
+            or_(
+                EntityRelationship.source_vendor_id == current_vendor_id,
+                EntityRelationship.target_vendor_id == current_vendor_id,
+            ),
+        ).all()
         for relationship in vendor_relationships:
             vendor_neighbor_ids = [
                 relationship.source_vendor_id,
@@ -1464,7 +1681,9 @@ def index():
     if part:
         query = query.filter(CPEEntry.part == part)
 
-    ordered_query = query.order_by(Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc())
+    ordered_query = query.order_by(
+        Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc()
+    )
     total_results = ordered_query.count()
     total_pages = max((total_results + per_page - 1) // per_page, 1)
     if page > total_pages:
@@ -1510,7 +1729,9 @@ def vendors():
         )
     vendor_query = vendor_query.order_by(Vendor.name.asc())
     vendor_total = vendor_query.count()
-    vendor_total_pages = max((vendor_total + vendors_per_page - 1) // vendors_per_page, 1)
+    vendor_total_pages = max(
+        (vendor_total + vendors_per_page - 1) // vendors_per_page, 1
+    )
     if vendor_page > vendor_total_pages:
         vendor_page = vendor_total_pages
     vendor_offset = (vendor_page - 1) * vendors_per_page
@@ -1525,6 +1746,130 @@ def vendors():
         vendor_has_next=vendor_page < vendor_total_pages,
         vendor_q=vendor_q,
         vendor_total=vendor_total,
+    )
+
+
+@bp.route("/aliases")
+def aliases():
+    q = (request.args.get("q") or "").strip()
+    query = ProductAlias.query
+    if q:
+        alias_like = f"%{q.lower()}%"
+        query = query.filter(func.lower(ProductAlias.name).like(alias_like))
+    alias_rows = query.order_by(ProductAlias.name.asc()).all()
+    return render_template("aliases.html", aliases=alias_rows, q=q)
+
+
+@bp.route("/aliases/<string:alias_uuid>")
+def alias_detail(alias_uuid):
+    alias = ProductAlias.query.filter_by(uuid=alias_uuid).first_or_404()
+    return render_template("alias_detail.html", alias=alias)
+
+
+@bp.route("/api/aliases/<string:alias_uuid>")
+def api_alias_detail(alias_uuid):
+    alias = ProductAlias.query.filter_by(uuid=alias_uuid).first_or_404()
+    return jsonify(_serialize_product_alias(alias))
+
+
+@bp.route("/aliases/proposals/new", methods=["GET", "POST"])
+def alias_proposal_new():
+    alias_id = request.args.get("alias_id", type=int)
+    alias = ProductAlias.query.get(alias_id) if alias_id else None
+    q = (request.values.get("q") or "").strip()
+    selected_product_ids = request.values.getlist("product_ids")
+
+    if alias and request.method == "GET" and not selected_product_ids:
+        selected_product_ids = [str(member.product_id) for member in alias.members]
+
+    product_query = Product.query.join(Vendor)
+    if q:
+        product_like = f"%{q.lower()}%"
+        product_query = product_query.filter(
+            or_(
+                func.lower(Product.name).like(product_like),
+                func.lower(Product.title).like(product_like),
+                func.lower(Vendor.name).like(product_like),
+                func.lower(Vendor.title).like(product_like),
+            )
+        )
+    products = (
+        product_query.order_by(Vendor.name.asc(), Product.name.asc()).limit(100).all()
+    )
+
+    selected_products = []
+    if selected_product_ids:
+        selected_members = _normalize_alias_member_ids(selected_product_ids)
+        selected_products = [
+            Product.query.get(member["product_id"])
+            for member in selected_members
+            if Product.query.get(member["product_id"])
+        ]
+
+    if request.method == "POST":
+        submitter_ip = _get_request_ip()
+        if _is_rate_limited_for_ip(submitter_ip):
+            limit = current_app.config.get("PROPOSAL_RATE_LIMIT_PER_HOUR", 10)
+            flash(
+                f"Rate limit reached for your IP address. Please wait before submitting more proposals (limit: {limit} per hour).",
+                "danger",
+            )
+            return redirect(url_for("main.alias_proposal_new", alias_id=alias_id))
+
+        proposal_type = "edit_product_alias" if alias else "new_product_alias"
+        alias_name = (request.form.get("proposed_alias_name") or "").strip()
+        alias_description = (
+            request.form.get("proposed_alias_description") or ""
+        ).strip() or None
+        selected_members = _normalize_alias_member_ids(
+            request.form.getlist("product_ids")
+        )
+
+        if not alias_name:
+            flash("Please provide an alias name.", "danger")
+            return redirect(url_for("main.alias_proposal_new", alias_id=alias_id, q=q))
+        if not selected_members:
+            flash(
+                "Please select at least one vendor/product tuple for the alias.",
+                "danger",
+            )
+            return redirect(url_for("main.alias_proposal_new", alias_id=alias_id, q=q))
+
+        conflicting_alias = ProductAlias.query.filter(
+            func.lower(ProductAlias.name) == alias_name.lower()
+        ).first()
+        if conflicting_alias and (not alias or conflicting_alias.id != alias.id):
+            flash("Another alias already uses that name.", "danger")
+            return redirect(url_for("main.alias_proposal_new", alias_id=alias_id, q=q))
+
+        proposal = Proposal(
+            proposal_type=proposal_type,
+            product_alias_id=alias.id if alias else None,
+            submitter_name=request.form.get("submitter_name"),
+            submitter_email=request.form.get("submitter_email"),
+            submitter_ip=submitter_ip,
+            submitter_user_agent=_get_request_user_agent(),
+            rationale=request.form.get("rationale"),
+            proposed_alias_name=alias_name,
+            proposed_alias_description=alias_description,
+            proposed_alias_members=selected_members,
+        )
+        db.session.add(proposal)
+        db.session.commit()
+        flash("Alias proposal submitted. An admin will review it.", "success")
+        return redirect(url_for("main.aliases"))
+
+    return render_template(
+        "alias_proposal_form.html",
+        alias=alias,
+        q=q,
+        products=products,
+        selected_product_ids={
+            int(product_id)
+            for product_id in selected_product_ids
+            if str(product_id).isdigit()
+        },
+        selected_products=selected_products,
     )
 
 
@@ -1544,15 +1889,14 @@ def statistics():
     vendor_product_counts_query = _statistics_top_vendors_query()
 
     vendor_product_total = vendor_product_counts_query.count()
-    vendor_product_total_pages = max((vendor_product_total + vendors_per_page - 1) // vendors_per_page, 1)
+    vendor_product_total_pages = max(
+        (vendor_product_total + vendors_per_page - 1) // vendors_per_page, 1
+    )
     if vendor_page > vendor_product_total_pages:
         vendor_page = vendor_product_total_pages
     vendor_offset = (vendor_page - 1) * vendors_per_page
     vendor_product_counts = (
-        vendor_product_counts_query
-        .offset(vendor_offset)
-        .limit(vendors_per_page)
-        .all()
+        vendor_product_counts_query.offset(vendor_offset).limit(vendors_per_page).all()
     )
 
     top_vendor = vendor_product_counts_query.first()
@@ -1601,18 +1945,31 @@ def vendor_detail(vendor_uuid):
                 EntityRelationship.target_vendor_id == vendor.id,
             )
         )
-        .order_by(EntityRelationship.approved_at.desc(), EntityRelationship.submitted_at.desc())
+        .order_by(
+            EntityRelationship.approved_at.desc(),
+            EntityRelationship.submitted_at.desc(),
+        )
         .all()
     )
     combined_view_vendors = _collect_related_vendors_for_combined_view(vendor)
     combined_view_products = (
-        Product.query.filter(Product.vendor_id.in_([related_vendor.id for related_vendor in combined_view_vendors]))
+        Product.query.filter(
+            Product.vendor_id.in_(
+                [related_vendor.id for related_vendor in combined_view_vendors]
+            )
+        )
         .order_by(Product.name.asc(), Product.id.asc())
         .all()
     )
     product_purl_mappings = (
-        CPEPurlMapping.query.join(CPEEntry, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
-        .filter(CPEEntry.product_id.in_([related_product.id for related_product in combined_view_products]))
+        CPEPurlMapping.query.join(
+            CPEEntry, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id
+        )
+        .filter(
+            CPEEntry.product_id.in_(
+                [related_product.id for related_product in combined_view_products]
+            )
+        )
         .order_by(CPEPurlMapping.purl.asc(), CPEEntry.version.asc(), CPEEntry.id.asc())
         .all()
     )
@@ -1624,7 +1981,9 @@ def vendor_detail(vendor_uuid):
         vendor_relationships=vendor_relationships,
         combined_view_vendors=combined_view_vendors,
         combined_view_products=combined_view_products,
-        combined_view_relationship_types=sorted(PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES),
+        combined_view_relationship_types=sorted(
+            PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+        ),
         product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
     )
@@ -1650,22 +2009,35 @@ def product_detail(product_uuid):
                 EntityRelationship.target_product_id == product.id,
             )
         )
-        .order_by(EntityRelationship.approved_at.desc(), EntityRelationship.submitted_at.desc())
+        .order_by(
+            EntityRelationship.approved_at.desc(),
+            EntityRelationship.submitted_at.desc(),
+        )
         .all()
     )
     combined_view_products = _collect_related_products_for_combined_view(product)
     combined_view_cpes = (
         CPEEntry.query.filter(
-            CPEEntry.product_id.in_([related_product.id for related_product in combined_view_products])
+            CPEEntry.product_id.in_(
+                [related_product.id for related_product in combined_view_products]
+            )
         )
         .order_by(CPEEntry.cpe_uri.asc())
+        .all()
+    )
+    product_aliases = (
+        ProductAlias.query.join(ProductAliasMember)
+        .filter(ProductAliasMember.product_id == product.id)
+        .order_by(ProductAlias.name.asc())
         .all()
     )
     product_level_cpe = None
     if product.cpes:
         product_level_cpe = _build_product_level_cpe(product.cpes[0].cpe_uri)
     product_purl_mappings = (
-        CPEPurlMapping.query.join(CPEEntry, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
+        CPEPurlMapping.query.join(
+            CPEEntry, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id
+        )
         .filter(CPEEntry.product_id == product.id)
         .order_by(CPEPurlMapping.purl.asc(), CPEEntry.version.asc(), CPEEntry.id.asc())
         .all()
@@ -1676,10 +2048,13 @@ def product_detail(product_uuid):
         product_notes=product_notes,
         product_metadata=product_metadata,
         product_relationships=product_relationships,
+        product_aliases=product_aliases,
         combined_view_products=combined_view_products,
         combined_view_cpes=combined_view_cpes,
         product_level_cpe=product_level_cpe,
-        combined_view_relationship_types=sorted(PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES),
+        combined_view_relationship_types=sorted(
+            PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+        ),
         product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
     )
@@ -1735,7 +2110,9 @@ def api_statistics():
 def api_statistics_top_list():
     entity = (request.args.get("entity") or "vendors").strip().lower()
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
-    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+    per_page = min(
+        max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
+    )
 
     if entity in {"vendor", "vendors"}:
         normalized_entity = "vendors"
@@ -1771,7 +2148,9 @@ def api_statistics_top_list():
 def api_vendors():
     q = (request.args.get("q") or "").strip()
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
-    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+    per_page = min(
+        max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
+    )
 
     query = Vendor.query
     if q:
@@ -1859,7 +2238,9 @@ def api_product_suggestions():
         .limit(limit)
         .all()
     )
-    return jsonify({"items": [_serialize_product_option(product) for product in results]})
+    return jsonify(
+        {"items": [_serialize_product_option(product) for product in results]}
+    )
 
 
 @bp.route("/api/cpes/<int:cpe_id>")
@@ -1891,18 +2272,26 @@ def api_cpe_vulnerability_references(cpe_id):
 @bp.route("/api/vulnerability-references")
 def api_vulnerability_references():
     vulnerability_id = (request.args.get("vulnerability_id") or "").strip()
-    vulnerability_source = (request.args.get("vulnerability_source") or "").strip().upper()
+    vulnerability_source = (
+        (request.args.get("vulnerability_source") or "").strip().upper()
+    )
     cpe_id = request.args.get("cpe_id", type=int)
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
-    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+    per_page = min(
+        max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
+    )
 
     query = CPEVulnerabilityReference.query
     if vulnerability_id:
         query = query.filter(
-            func.lower(CPEVulnerabilityReference.vulnerability_id).like(f"%{vulnerability_id.lower()}%")
+            func.lower(CPEVulnerabilityReference.vulnerability_id).like(
+                f"%{vulnerability_id.lower()}%"
+            )
         )
     if vulnerability_source:
-        query = query.filter(CPEVulnerabilityReference.vulnerability_source == vulnerability_source)
+        query = query.filter(
+            CPEVulnerabilityReference.vulnerability_source == vulnerability_source
+        )
     if cpe_id:
         query = query.filter(CPEVulnerabilityReference.cpe_entry_id == cpe_id)
 
@@ -1931,7 +2320,9 @@ def api_vulnerability_references():
 @bp.route("/api/changes")
 def api_changes():
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
-    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+    per_page = min(
+        max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
+    )
     proposal_type = (request.args.get("proposal_type") or "").strip()
 
     query = Proposal.query.filter_by(status="accepted")
@@ -1940,7 +2331,9 @@ def api_changes():
 
     total = query.count()
     changes = (
-        query.order_by(Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc())
+        query.order_by(
+            Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc()
+        )
         .offset((page - 1) * per_page)
         .limit(per_page)
         .all()
@@ -1959,7 +2352,9 @@ def api_changes():
 
 @bp.route("/api/changes/<int:proposal_id>")
 def api_change_detail(proposal_id):
-    proposal = Proposal.query.filter_by(id=proposal_id, status="accepted").first_or_404()
+    proposal = Proposal.query.filter_by(
+        id=proposal_id, status="accepted"
+    ).first_or_404()
     payload = _serialize_approved_change(proposal)
     if (request.args.get("include") or "").strip().lower() == "bcp10":
         payload["bcp10_dataset"] = _build_bcp10_change_dataset([proposal])
@@ -1974,7 +2369,9 @@ def api_cpes():
     purl_q = (request.args.get("purl_q") or "").strip()
     part = (request.args.get("part") or "").strip()
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
-    per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 100)
+    per_page = min(
+        max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
+    )
 
     query = CPEEntry.query.join(Vendor).join(Product)
     if purl_q:
@@ -2108,38 +2505,57 @@ def proposal_new():
             proposed_title=request.form.get("proposed_title"),
             proposed_notes=request.form.get("proposed_notes"),
             proposed_relationship_type=request.form.get("proposed_relationship_type"),
-            proposed_vulnerability_id=(request.form.get("proposed_vulnerability_id") or "").strip()
+            proposed_vulnerability_id=(
+                request.form.get("proposed_vulnerability_id") or ""
+            ).strip()
             or None,
             proposed_vulnerability_source=(
                 request.form.get("proposed_vulnerability_source") or ""
             ).strip()
             or None,
-            proposed_cpe_applicability=(request.form.get("proposed_cpe_applicability") or "").strip()
+            proposed_cpe_applicability=(
+                request.form.get("proposed_cpe_applicability") or ""
+            ).strip()
             or None,
-            source_vendor_id=int(request.form.get("source_vendor_id"))
-            if request.form.get("source_vendor_id")
-            else None,
-            source_product_id=int(request.form.get("source_product_id"))
-            if request.form.get("source_product_id")
-            else None,
-            target_vendor_id=int(request.form.get("target_vendor_id"))
-            if request.form.get("target_vendor_id")
-            else None,
-            target_product_id=int(request.form.get("target_product_id"))
-            if request.form.get("target_product_id")
-            else None,
+            source_vendor_id=(
+                int(request.form.get("source_vendor_id"))
+                if request.form.get("source_vendor_id")
+                else None
+            ),
+            source_product_id=(
+                int(request.form.get("source_product_id"))
+                if request.form.get("source_product_id")
+                else None
+            ),
+            target_vendor_id=(
+                int(request.form.get("target_vendor_id"))
+                if request.form.get("target_vendor_id")
+                else None
+            ),
+            target_product_id=(
+                int(request.form.get("target_product_id"))
+                if request.form.get("target_product_id")
+                else None
+            ),
         )
 
         vendor_name = (request.form.get("proposed_vendor_name") or "").strip()
         product_name = (request.form.get("proposed_product_name") or "").strip()
         part_value = request.form.get("proposed_part") or "a"
-        if proposal_type in {"new_cpe", "edit_cpe", "new_vendor_product", "new_product"}:
+        if proposal_type in {
+            "new_cpe",
+            "edit_cpe",
+            "new_vendor_product",
+            "new_product",
+        }:
             if vendor_id and not vendor_name:
                 existing_vendor = Vendor.query.get(int(vendor_id))
                 vendor_name = existing_vendor.name if existing_vendor else vendor_name
             if product_id and not product_name:
                 existing_product = Product.query.get(int(product_id))
-                product_name = existing_product.name if existing_product else product_name
+                product_name = (
+                    existing_product.name if existing_product else product_name
+                )
             proposal.proposed_cpe_uri = build_cpe_uri(
                 part_value,
                 vendor_name,
@@ -2157,9 +2573,14 @@ def proposal_new():
         if proposal_type == "new_record_relationship":
             source_kind = (request.form.get("source_entity_kind") or "").strip().lower()
             target_kind = (request.form.get("target_entity_kind") or "").strip().lower()
-            if source_kind not in {"vendor", "product"} or target_kind not in {"vendor", "product"}:
+            if source_kind not in {"vendor", "product"} or target_kind not in {
+                "vendor",
+                "product",
+            }:
                 flash("Please choose valid source and target record types.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+                return redirect(
+                    url_for("main.proposal_new", proposal_type=proposal_type)
+                )
             if source_kind == "vendor":
                 proposal.source_product_id = None
             else:
@@ -2168,44 +2589,85 @@ def proposal_new():
                 proposal.target_product_id = None
             else:
                 proposal.target_vendor_id = None
-            if proposal.proposed_relationship_type not in RELATIONSHIP_TYPE_DESCRIPTIONS:
+            if (
+                proposal.proposed_relationship_type
+                not in RELATIONSHIP_TYPE_DESCRIPTIONS
+            ):
                 flash("Please choose a valid relationship type.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
-            source_count = int(bool(proposal.source_vendor_id)) + int(bool(proposal.source_product_id))
-            target_count = int(bool(proposal.target_vendor_id)) + int(bool(proposal.target_product_id))
+                return redirect(
+                    url_for("main.proposal_new", proposal_type=proposal_type)
+                )
+            source_count = int(bool(proposal.source_vendor_id)) + int(
+                bool(proposal.source_product_id)
+            )
+            target_count = int(bool(proposal.target_vendor_id)) + int(
+                bool(proposal.target_product_id)
+            )
             if source_count != 1 or target_count != 1:
-                flash("Please choose exactly one source record and one target record.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+                flash(
+                    "Please choose exactly one source record and one target record.",
+                    "danger",
+                )
+                return redirect(
+                    url_for("main.proposal_new", proposal_type=proposal_type)
+                )
             source_ref = (
-                "vendor",
-                proposal.source_vendor_id,
-            ) if proposal.source_vendor_id else (
-                "product",
-                proposal.source_product_id,
+                (
+                    "vendor",
+                    proposal.source_vendor_id,
+                )
+                if proposal.source_vendor_id
+                else (
+                    "product",
+                    proposal.source_product_id,
+                )
             )
             target_ref = (
-                "vendor",
-                proposal.target_vendor_id,
-            ) if proposal.target_vendor_id else (
-                "product",
-                proposal.target_product_id,
+                (
+                    "vendor",
+                    proposal.target_vendor_id,
+                )
+                if proposal.target_vendor_id
+                else (
+                    "product",
+                    proposal.target_product_id,
+                )
             )
             if source_ref == target_ref:
                 flash("Source and target records must be different.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+                return redirect(
+                    url_for("main.proposal_new", proposal_type=proposal_type)
+                )
         if proposal_type == "new_cpe_vulnerability_reference":
             if not proposal.cpe_entry_id:
-                flash("Please provide a target CPE entry ID for vulnerability references.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
-            if proposal.proposed_vulnerability_source not in VULNERABILITY_REFERENCE_SOURCES:
+                flash(
+                    "Please provide a target CPE entry ID for vulnerability references.",
+                    "danger",
+                )
+                return redirect(
+                    url_for("main.proposal_new", proposal_type=proposal_type)
+                )
+            if (
+                proposal.proposed_vulnerability_source
+                not in VULNERABILITY_REFERENCE_SOURCES
+            ):
                 flash("Please choose a supported vulnerability source.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+                return redirect(
+                    url_for("main.proposal_new", proposal_type=proposal_type)
+                )
             if not proposal.proposed_vulnerability_id:
                 flash("Please provide a vulnerability identifier.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
-            if proposal.proposed_cpe_applicability not in ALLOWED_CPE_APPLICABILITY_STATUSES:
+                return redirect(
+                    url_for("main.proposal_new", proposal_type=proposal_type)
+                )
+            if (
+                proposal.proposed_cpe_applicability
+                not in ALLOWED_CPE_APPLICABILITY_STATUSES
+            ):
                 flash("Please choose a valid cpeApplicability status.", "danger")
-                return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
+                return redirect(
+                    url_for("main.proposal_new", proposal_type=proposal_type)
+                )
         db.session.add(proposal)
         db.session.commit()
         flash("Proposal submitted. An admin will review it.", "success")
@@ -2234,8 +2696,12 @@ def note_proposal_new():
     preselected_vendor_id = request.args.get("vendor_id", type=int)
     preselected_product_id = request.args.get("product_id", type=int)
 
-    preselected_vendor = Vendor.query.get(preselected_vendor_id) if preselected_vendor_id else None
-    preselected_product = Product.query.get(preselected_product_id) if preselected_product_id else None
+    preselected_vendor = (
+        Vendor.query.get(preselected_vendor_id) if preselected_vendor_id else None
+    )
+    preselected_product = (
+        Product.query.get(preselected_product_id) if preselected_product_id else None
+    )
     if preselected_vendor_id and not preselected_vendor:
         preselected_vendor_id = None
     if preselected_product_id and not preselected_product:
@@ -2268,13 +2734,18 @@ def note_proposal_new():
         note_text = (request.form.get("proposed_notes") or "").strip()
 
         if bool(vendor_id) == bool(product_id):
-            flash("Please submit a note for exactly one record (vendor or product).", "danger")
+            flash(
+                "Please submit a note for exactly one record (vendor or product).",
+                "danger",
+            )
             return redirect(url_for("main.note_proposal_new"))
 
         if not note_text:
             flash("Please provide the proposed note text.", "danger")
             return redirect(
-                url_for("main.note_proposal_new", vendor_id=vendor_id, product_id=product_id)
+                url_for(
+                    "main.note_proposal_new", vendor_id=vendor_id, product_id=product_id
+                )
             )
 
         proposal = Proposal(
@@ -2306,8 +2777,12 @@ def metadata_proposal_new():
     preselected_vendor_id = request.args.get("vendor_id", type=int)
     preselected_product_id = request.args.get("product_id", type=int)
 
-    preselected_vendor = Vendor.query.get(preselected_vendor_id) if preselected_vendor_id else None
-    preselected_product = Product.query.get(preselected_product_id) if preselected_product_id else None
+    preselected_vendor = (
+        Vendor.query.get(preselected_vendor_id) if preselected_vendor_id else None
+    )
+    preselected_product = (
+        Product.query.get(preselected_product_id) if preselected_product_id else None
+    )
     if preselected_vendor_id and not preselected_vendor:
         preselected_vendor_id = None
     if preselected_product_id and not preselected_product:
@@ -2341,23 +2816,36 @@ def metadata_proposal_new():
         metadata_value = (request.form.get("metadata_value") or "").strip()
 
         if bool(vendor_id) == bool(product_id):
-            flash("Please submit metadata for exactly one record (vendor or product).", "danger")
+            flash(
+                "Please submit metadata for exactly one record (vendor or product).",
+                "danger",
+            )
             return redirect(url_for("main.metadata_proposal_new"))
 
         if metadata_key not in ALLOWED_METADATA_KEYS:
             flash("Please choose a valid metadata key.", "danger")
             return redirect(
-                url_for("main.metadata_proposal_new", vendor_id=vendor_id, product_id=product_id)
+                url_for(
+                    "main.metadata_proposal_new",
+                    vendor_id=vendor_id,
+                    product_id=product_id,
+                )
             )
 
         if not metadata_value:
             flash("Please provide a metadata value.", "danger")
             return redirect(
-                url_for("main.metadata_proposal_new", vendor_id=vendor_id, product_id=product_id)
+                url_for(
+                    "main.metadata_proposal_new",
+                    vendor_id=vendor_id,
+                    product_id=product_id,
+                )
             )
 
         proposal = Proposal(
-            proposal_type="edit_vendor_metadata" if vendor_id else "edit_product_metadata",
+            proposal_type=(
+                "edit_vendor_metadata" if vendor_id else "edit_product_metadata"
+            ),
             submitter_name=request.form.get("submitter_name"),
             submitter_email=request.form.get("submitter_email"),
             submitter_ip=submitter_ip,
@@ -2460,7 +2948,9 @@ def vendor_changes_atom(vendor_uuid):
 @bp.route("/products/<string:product_uuid>/changes.rss")
 def product_changes_rss(product_uuid):
     product = Product.query.filter_by(uuid=product_uuid).first_or_404()
-    changes = _approved_changes_query(_product_change_criterion(product)).limit(20).all()
+    changes = (
+        _approved_changes_query(_product_change_criterion(product)).limit(20).all()
+    )
     product_label = product.title or product.name
     return _build_rss_feed(
         changes,
@@ -2474,7 +2964,9 @@ def product_changes_rss(product_uuid):
 @bp.route("/products/<string:product_uuid>/changes.atom")
 def product_changes_atom(product_uuid):
     product = Product.query.filter_by(uuid=product_uuid).first_or_404()
-    changes = _approved_changes_query(_product_change_criterion(product)).limit(20).all()
+    changes = (
+        _approved_changes_query(_product_change_criterion(product)).limit(20).all()
+    )
     product_label = product.title or product.name
     return _build_atom_feed(
         changes,
@@ -2513,16 +3005,22 @@ def cpe_changes_atom(cpe_id):
 
 @bp.route("/changes/<int:proposal_id>")
 def approved_change_detail(proposal_id):
-    proposal = Proposal.query.filter_by(id=proposal_id, status="accepted").first_or_404()
+    proposal = Proposal.query.filter_by(
+        id=proposal_id, status="accepted"
+    ).first_or_404()
     ordered_ids = [
         row.id
         for row in Proposal.query.filter_by(status="accepted")
-        .order_by(Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc())
+        .order_by(
+            Proposal.reviewed_at.desc(), Proposal.created_at.desc(), Proposal.id.desc()
+        )
         .all()
     ]
     current_index = ordered_ids.index(proposal.id)
     previous_change_id = ordered_ids[current_index - 1] if current_index > 0 else None
-    next_change_id = ordered_ids[current_index + 1] if current_index < len(ordered_ids) - 1 else None
+    next_change_id = (
+        ordered_ids[current_index + 1] if current_index < len(ordered_ids) - 1 else None
+    )
 
     return render_template(
         "approved_change_detail.html",
@@ -2562,7 +3060,11 @@ def admin_logout():
 @bp.route("/admin")
 @admin_required
 def admin_dashboard():
-    pending = Proposal.query.filter_by(status="pending").order_by(Proposal.created_at.asc()).all()
+    pending = (
+        Proposal.query.filter_by(status="pending")
+        .order_by(Proposal.created_at.asc())
+        .all()
+    )
     recent = Proposal.query.order_by(Proposal.created_at.desc()).limit(20).all()
     return render_template("admin/dashboard.html", pending=pending, recent=recent)
 
@@ -2583,14 +3085,19 @@ def admin_bulk_delete_proposals():
     if status not in {"pending", "all"}:
         status = "pending"
 
-    column = Proposal.submitter_ip if source_type == "ip" else Proposal.submitter_user_agent
+    column = (
+        Proposal.submitter_ip if source_type == "ip" else Proposal.submitter_user_agent
+    )
     query = Proposal.query.filter(column == source_value)
     if status == "pending":
         query = query.filter(Proposal.status == "pending")
 
     deleted = query.delete(synchronize_session=False)
     db.session.commit()
-    flash(f"Deleted {deleted} proposal(s) for {source_type} source '{source_value}'.", "success")
+    flash(
+        f"Deleted {deleted} proposal(s) for {source_type} source '{source_value}'.",
+        "success",
+    )
     return redirect(url_for("main.admin_dashboard"))
 
 
@@ -2632,7 +3139,9 @@ def _resolve_product_for_ingest(payload):
         return None
 
     if product_name:
-        product = Product.query.filter_by(vendor_id=vendor.id, name=normalize_token(product_name)).first()
+        product = Product.query.filter_by(
+            vendor_id=vendor.id, name=normalize_token(product_name)
+        ).first()
     if product is None and product_name:
         normalized_product_name = normalize_token(product_name)
         product = Product(
@@ -2664,7 +3173,9 @@ def admin_ingest_json():
         flash("The payload must be a single JSON object.", "danger")
         return redirect(url_for("main.admin_dashboard"))
 
-    object_type = (payload.get("type") or payload.get("entity_type") or "").strip().lower()
+    object_type = (
+        (payload.get("type") or payload.get("entity_type") or "").strip().lower()
+    )
     if not object_type:
         if "relationship_type" in payload:
             object_type = "relationship"
@@ -2730,9 +3241,16 @@ def admin_ingest_json():
 
             cpe = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
             if cpe is None and payload.get("cpe_name_id"):
-                cpe = CPEEntry.query.filter_by(cpe_name_id=payload.get("cpe_name_id")).first()
+                cpe = CPEEntry.query.filter_by(
+                    cpe_name_id=payload.get("cpe_name_id")
+                ).first()
             if cpe is None:
-                cpe = CPEEntry(cpe_uri=cpe_uri, vendor_id=vendor.id, product_id=product.id, part=parsed["part"])
+                cpe = CPEEntry(
+                    cpe_uri=cpe_uri,
+                    vendor_id=vendor.id,
+                    product_id=product.id,
+                    part=parsed["part"],
+                )
                 db.session.add(cpe)
 
             cpe.vendor_id = vendor.id
@@ -2765,7 +3283,9 @@ def admin_ingest_json():
                     purl=purl_value,
                 ).first()
                 if mapping is None:
-                    mapping = CPEPurlMapping(cpe_name_id=cpe.cpe_name_id, purl=purl_value)
+                    mapping = CPEPurlMapping(
+                        cpe_name_id=cpe.cpe_name_id, purl=purl_value
+                    )
                     db.session.add(mapping)
                 mapping.source = mapping_payload.get("source") or "purl2cpe"
             flash(f"CPE upserted: {cpe.cpe_uri}.", "success")
@@ -2779,13 +3299,19 @@ def admin_ingest_json():
 
             cpe = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
             if cpe is None and payload.get("cpe_name_id"):
-                cpe = CPEEntry.query.filter_by(cpe_name_id=payload.get("cpe_name_id")).first()
+                cpe = CPEEntry.query.filter_by(
+                    cpe_name_id=payload.get("cpe_name_id")
+                ).first()
             if cpe is None:
                 raise ValueError("Unable to resolve CPE for PURL mapping ingest.")
             if not cpe.cpe_name_id:
-                raise ValueError("Resolved CPE does not have a cpe_name_id; cannot create PURL mapping.")
+                raise ValueError(
+                    "Resolved CPE does not have a cpe_name_id; cannot create PURL mapping."
+                )
 
-            mapping = CPEPurlMapping.query.filter_by(cpe_name_id=cpe.cpe_name_id, purl=purl_value).first()
+            mapping = CPEPurlMapping.query.filter_by(
+                cpe_name_id=cpe.cpe_name_id, purl=purl_value
+            ).first()
             if mapping is None:
                 mapping = CPEPurlMapping(cpe_name_id=cpe.cpe_name_id, purl=purl_value)
                 db.session.add(mapping)
@@ -2794,7 +3320,9 @@ def admin_ingest_json():
         elif object_type == "metadata":
             record_type = (payload.get("record_type") or "").strip().lower()
             if record_type not in {"vendor", "product"}:
-                raise ValueError("metadata ingest requires record_type of 'vendor' or 'product'.")
+                raise ValueError(
+                    "metadata ingest requires record_type of 'vendor' or 'product'."
+                )
             if payload.get("metadata_key") not in ALLOWED_METADATA_KEYS:
                 raise ValueError(
                     f"metadata_key must be one of: {', '.join(sorted(ALLOWED_METADATA_KEYS))}."
@@ -2802,7 +3330,8 @@ def admin_ingest_json():
             if record_type == "vendor":
                 vendor = _resolve_vendor_for_ingest(
                     {
-                        "vendor_uuid": payload.get("record_uuid") or payload.get("vendor_uuid"),
+                        "vendor_uuid": payload.get("record_uuid")
+                        or payload.get("vendor_uuid"),
                         "vendor_name": payload.get("vendor_name"),
                         "title": payload.get("vendor_title"),
                     }
@@ -2815,13 +3344,15 @@ def admin_ingest_json():
                     metadata_value=payload.get("metadata_value") or "",
                     submitter_name=payload.get("submitter_name"),
                     submitter_email=payload.get("submitter_email"),
-                    submitted_at=_coerce_datetime(payload.get("submitted_at")) or datetime.utcnow(),
+                    submitted_at=_coerce_datetime(payload.get("submitted_at"))
+                    or datetime.utcnow(),
                     approved_at=_coerce_datetime(payload.get("approved_at")),
                 )
             else:
                 product = _resolve_product_for_ingest(
                     {
-                        "product_uuid": payload.get("record_uuid") or payload.get("product_uuid"),
+                        "product_uuid": payload.get("record_uuid")
+                        or payload.get("product_uuid"),
                         "product_name": payload.get("product_name"),
                         "vendor_uuid": payload.get("vendor_uuid"),
                         "vendor_name": payload.get("vendor_name"),
@@ -2836,7 +3367,8 @@ def admin_ingest_json():
                     metadata_value=payload.get("metadata_value") or "",
                     submitter_name=payload.get("submitter_name"),
                     submitter_email=payload.get("submitter_email"),
-                    submitted_at=_coerce_datetime(payload.get("submitted_at")) or datetime.utcnow(),
+                    submitted_at=_coerce_datetime(payload.get("submitted_at"))
+                    or datetime.utcnow(),
                     approved_at=_coerce_datetime(payload.get("approved_at")),
                 )
             db.session.add(metadata_entry)
@@ -2844,7 +3376,9 @@ def admin_ingest_json():
         elif object_type == "relationship":
             relationship_type = (payload.get("relationship_type") or "").strip()
             if not relationship_type:
-                raise ValueError("relationship_type is required for relationship ingest.")
+                raise ValueError(
+                    "relationship_type is required for relationship ingest."
+                )
 
             source_vendor_id = None
             source_product_id = None
@@ -2856,13 +3390,15 @@ def admin_ingest_json():
             if not source_kind:
                 source_kind = (
                     "product"
-                    if payload.get("source_product_uuid") or payload.get("source_product_name")
+                    if payload.get("source_product_uuid")
+                    or payload.get("source_product_name")
                     else "vendor"
                 )
             if not target_kind:
                 target_kind = (
                     "product"
-                    if payload.get("target_product_uuid") or payload.get("target_product_name")
+                    if payload.get("target_product_uuid")
+                    or payload.get("target_product_name")
                     else "vendor"
                 )
             if source_kind == "product":
@@ -2904,9 +3440,13 @@ def admin_ingest_json():
                 target_vendor_id = target_vendor.id if target_vendor else None
 
             if (int(bool(source_vendor_id)) + int(bool(source_product_id))) != 1:
-                raise ValueError("Source reference is invalid; specify exactly one source record.")
+                raise ValueError(
+                    "Source reference is invalid; specify exactly one source record."
+                )
             if (int(bool(target_vendor_id)) + int(bool(target_product_id))) != 1:
-                raise ValueError("Target reference is invalid; specify exactly one target record.")
+                raise ValueError(
+                    "Target reference is invalid; specify exactly one target record."
+                )
 
             relationship = EntityRelationship.query.filter_by(
                 source_vendor_id=source_vendor_id,
@@ -2927,7 +3467,9 @@ def admin_ingest_json():
             relationship.rationale = payload.get("rationale")
             relationship.submitter_name = payload.get("submitter_name")
             relationship.submitter_email = payload.get("submitter_email")
-            relationship.submitted_at = _coerce_datetime(payload.get("submitted_at")) or datetime.utcnow()
+            relationship.submitted_at = (
+                _coerce_datetime(payload.get("submitted_at")) or datetime.utcnow()
+            )
             relationship.approved_at = _coerce_datetime(payload.get("approved_at"))
             flash("Relationship ingested.", "success")
         else:
@@ -2990,7 +3532,13 @@ def admin_proposal_review(proposal_id):
             flash("Proposal accepted and applied.", "success")
             return redirect(url_for("main.admin_dashboard"))
 
-    return render_template("admin/review_proposal.html", proposal=proposal)
+    return render_template(
+        "admin/review_proposal.html",
+        proposal=proposal,
+        product_by_id=lambda product_id: (
+            Product.query.get(product_id) if product_id else None
+        ),
+    )
 
 
 @bp.route("/admin/notes/<int:note_id>/delete", methods=["POST"])
@@ -3012,14 +3560,22 @@ def admin_delete_note(note_id):
     if product:
         latest_note = (
             EntityNote.query.filter_by(product_id=product.id)
-            .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc(), EntityNote.id.desc())
+            .order_by(
+                EntityNote.approved_at.desc(),
+                EntityNote.submitted_at.desc(),
+                EntityNote.id.desc(),
+            )
             .first()
         )
         product.notes = latest_note.note_text if latest_note else None
     elif vendor:
         latest_note = (
             EntityNote.query.filter_by(vendor_id=vendor.id)
-            .order_by(EntityNote.approved_at.desc(), EntityNote.submitted_at.desc(), EntityNote.id.desc())
+            .order_by(
+                EntityNote.approved_at.desc(),
+                EntityNote.submitted_at.desc(),
+                EntityNote.id.desc(),
+            )
             .first()
         )
         vendor.notes = latest_note.note_text if latest_note else None
@@ -3027,7 +3583,6 @@ def admin_delete_note(note_id):
     db.session.commit()
     flash("Note deleted.", "success")
     return redirect(redirect_target)
-
 
 
 @bp.route("/admin/metadata/new", methods=["GET", "POST"])
@@ -3089,9 +3644,13 @@ def admin_delete_metadata(metadata_id):
     metadata = EntityMetadata.query.get_or_404(metadata_id)
     redirect_target = url_for("main.index")
     if metadata.product:
-        redirect_target = url_for("main.product_detail", product_uuid=metadata.product.uuid)
+        redirect_target = url_for(
+            "main.product_detail", product_uuid=metadata.product.uuid
+        )
     elif metadata.vendor:
-        redirect_target = url_for("main.vendor_detail", vendor_uuid=metadata.vendor.uuid)
+        redirect_target = url_for(
+            "main.vendor_detail", vendor_uuid=metadata.vendor.uuid
+        )
 
     db.session.delete(metadata)
     db.session.commit()
@@ -3105,9 +3664,13 @@ def admin_edit_metadata(metadata_id):
     metadata = EntityMetadata.query.get_or_404(metadata_id)
     redirect_target = url_for("main.index")
     if metadata.product:
-        redirect_target = url_for("main.product_detail", product_uuid=metadata.product.uuid)
+        redirect_target = url_for(
+            "main.product_detail", product_uuid=metadata.product.uuid
+        )
     elif metadata.vendor:
-        redirect_target = url_for("main.vendor_detail", vendor_uuid=metadata.vendor.uuid)
+        redirect_target = url_for(
+            "main.vendor_detail", vendor_uuid=metadata.vendor.uuid
+        )
 
     if request.method == "POST":
         metadata_key = (request.form.get("metadata_key") or "").strip()
@@ -3115,11 +3678,15 @@ def admin_edit_metadata(metadata_id):
 
         if metadata_key not in ALLOWED_METADATA_KEYS:
             flash("Please choose a valid metadata key.", "danger")
-            return redirect(url_for("main.admin_edit_metadata", metadata_id=metadata.id))
+            return redirect(
+                url_for("main.admin_edit_metadata", metadata_id=metadata.id)
+            )
 
         if not metadata_value:
             flash("Please provide a metadata value.", "danger")
-            return redirect(url_for("main.admin_edit_metadata", metadata_id=metadata.id))
+            return redirect(
+                url_for("main.admin_edit_metadata", metadata_id=metadata.id)
+            )
 
         metadata.metadata_key = metadata_key
         metadata.metadata_value = metadata_value
@@ -3142,13 +3709,21 @@ def admin_delete_relationship(relationship_id):
     redirect_target = url_for("main.index")
 
     if relationship.source_product:
-        redirect_target = url_for("main.product_detail", product_uuid=relationship.source_product.uuid)
+        redirect_target = url_for(
+            "main.product_detail", product_uuid=relationship.source_product.uuid
+        )
     elif relationship.target_product:
-        redirect_target = url_for("main.product_detail", product_uuid=relationship.target_product.uuid)
+        redirect_target = url_for(
+            "main.product_detail", product_uuid=relationship.target_product.uuid
+        )
     elif relationship.source_vendor:
-        redirect_target = url_for("main.vendor_detail", vendor_uuid=relationship.source_vendor.uuid)
+        redirect_target = url_for(
+            "main.vendor_detail", vendor_uuid=relationship.source_vendor.uuid
+        )
     elif relationship.target_vendor:
-        redirect_target = url_for("main.vendor_detail", vendor_uuid=relationship.target_vendor.uuid)
+        redirect_target = url_for(
+            "main.vendor_detail", vendor_uuid=relationship.target_vendor.uuid
+        )
 
     db.session.delete(relationship)
     db.session.commit()
@@ -3280,7 +3855,9 @@ def apply_proposal(proposal: Proposal):
 
     if proposal.proposal_type == "edit_product_note":
         if not product:
-            raise ValueError("A target product is required for a product note proposal.")
+            raise ValueError(
+                "A target product is required for a product note proposal."
+            )
         product.notes = proposal.proposed_notes
         note = EntityNote(
             product_id=product.id,
@@ -3296,7 +3873,9 @@ def apply_proposal(proposal: Proposal):
 
     if proposal.proposal_type == "edit_vendor_metadata":
         if not vendor:
-            raise ValueError("A target vendor is required for a vendor metadata proposal.")
+            raise ValueError(
+                "A target vendor is required for a vendor metadata proposal."
+            )
         if proposal.proposed_metadata_key not in ALLOWED_METADATA_KEYS:
             raise ValueError("Unsupported metadata key for vendor metadata proposal.")
         metadata_entry = EntityMetadata(
@@ -3314,7 +3893,9 @@ def apply_proposal(proposal: Proposal):
 
     if proposal.proposal_type == "edit_product_metadata":
         if not product:
-            raise ValueError("A target product is required for a product metadata proposal.")
+            raise ValueError(
+                "A target product is required for a product metadata proposal."
+            )
         if proposal.proposed_metadata_key not in ALLOWED_METADATA_KEYS:
             raise ValueError("Unsupported metadata key for product metadata proposal.")
         metadata_entry = EntityMetadata(
@@ -3331,10 +3912,16 @@ def apply_proposal(proposal: Proposal):
         return
 
     if proposal.proposal_type == "new_record_relationship":
-        source_count = int(bool(proposal.source_vendor_id)) + int(bool(proposal.source_product_id))
-        target_count = int(bool(proposal.target_vendor_id)) + int(bool(proposal.target_product_id))
+        source_count = int(bool(proposal.source_vendor_id)) + int(
+            bool(proposal.source_product_id)
+        )
+        target_count = int(bool(proposal.target_vendor_id)) + int(
+            bool(proposal.target_product_id)
+        )
         if source_count != 1 or target_count != 1:
-            raise ValueError("Relationship proposals require exactly one source and one target record.")
+            raise ValueError(
+                "Relationship proposals require exactly one source and one target record."
+            )
         relationship = EntityRelationship(
             source_vendor_id=proposal.source_vendor_id,
             source_product_id=proposal.source_product_id,
@@ -3351,14 +3938,67 @@ def apply_proposal(proposal: Proposal):
         db.session.add(relationship)
         return
 
+    if proposal.proposal_type in ALIAS_PROPOSAL_TYPES:
+        members = _alias_members_from_proposal(proposal)
+        if not proposal.proposed_alias_name:
+            raise ValueError("An alias name is required for alias proposals.")
+        if not members:
+            raise ValueError(
+                "Alias proposals require at least one vendor/product tuple."
+            )
+
+        conflicting_alias = ProductAlias.query.filter(
+            func.lower(ProductAlias.name)
+            == proposal.proposed_alias_name.strip().lower()
+        ).first()
+        if conflicting_alias and (
+            proposal.proposal_type == "new_product_alias"
+            or conflicting_alias.id != proposal.product_alias_id
+        ):
+            raise ValueError("Another alias already uses that name.")
+
+        if proposal.proposal_type == "new_product_alias":
+            alias = ProductAlias(
+                name=proposal.proposed_alias_name.strip(),
+                description=proposal.proposed_alias_description,
+                proposal_id=proposal.id,
+                submitter_name=proposal.submitter_name,
+                submitter_email=proposal.submitter_email,
+                submitted_at=proposal.created_at or datetime.utcnow(),
+                approved_at=proposal.reviewed_at or datetime.utcnow(),
+            )
+            db.session.add(alias)
+            db.session.flush()
+            proposal.product_alias_id = alias.id
+        else:
+            alias = proposal.product_alias
+            if not alias:
+                raise ValueError(
+                    "A target alias is required for alias update proposals."
+                )
+            alias.name = proposal.proposed_alias_name.strip()
+            alias.description = proposal.proposed_alias_description
+            alias.approved_at = proposal.reviewed_at or datetime.utcnow()
+
+        _apply_alias_members(alias, members)
+        return
+
     if proposal.proposal_type == "new_cpe_vulnerability_reference":
         if not proposal.cpe_entry_id:
-            raise ValueError("A target CPE entry is required for vulnerability reference proposals.")
-        if proposal.proposed_vulnerability_source not in VULNERABILITY_REFERENCE_SOURCES:
+            raise ValueError(
+                "A target CPE entry is required for vulnerability reference proposals."
+            )
+        if (
+            proposal.proposed_vulnerability_source
+            not in VULNERABILITY_REFERENCE_SOURCES
+        ):
             raise ValueError("Unsupported vulnerability source.")
         if not proposal.proposed_vulnerability_id:
             raise ValueError("A vulnerability identifier is required.")
-        if proposal.proposed_cpe_applicability not in ALLOWED_CPE_APPLICABILITY_STATUSES:
+        if (
+            proposal.proposed_cpe_applicability
+            not in ALLOWED_CPE_APPLICABILITY_STATUSES
+        ):
             raise ValueError("Unsupported cpeApplicability status.")
         vulnerability_reference = CPEVulnerabilityReference(
             cpe_entry_id=proposal.cpe_entry_id,
@@ -3376,4 +4016,3 @@ def apply_proposal(proposal: Proposal):
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")
-

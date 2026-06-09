@@ -32,6 +32,7 @@ _RECORD_ARRAYS = (
     "metadata",
     "relationships",
     "purl_mappings",
+    "aliases",
     "proposals",
 )
 
@@ -123,6 +124,7 @@ def sync_git_tree(source_dir: Path, output_dir: Path) -> None:
         "metadata",
         "relationships",
         "purl-mappings",
+        "aliases",
         "proposals",
     ]
     for relative_path in sync_paths:
@@ -207,6 +209,7 @@ def write_git_tree(dataset: dict[str, Any], output_dir: Path) -> dict[str, int]:
         "metadata/products",
         "relationships",
         "purl-mappings",
+        "aliases",
         "proposals",
     ):
         (output_dir / directory).mkdir(parents=True, exist_ok=True)
@@ -233,6 +236,9 @@ def write_git_tree(dataset: dict[str, Any], output_dir: Path) -> dict[str, int]:
     purl_mappings = sorted(
         dataset.get("purl_mappings") or [],
         key=lambda item: (item.get("cpe_uri") or "", item.get("purl") or ""),
+    )
+    aliases = sorted(
+        dataset.get("aliases") or [], key=lambda item: item.get("uuid") or ""
     )
     proposals = sorted(
         dataset.get("proposals") or [], key=lambda item: json_sort_key(item)
@@ -309,6 +315,7 @@ def write_git_tree(dataset: dict[str, Any], output_dir: Path) -> dict[str, int]:
             rows,
         )
 
+    write_jsonl(output_dir / "aliases" / "aliases.jsonl", aliases)
     write_jsonl(output_dir / "proposals" / "proposals.jsonl", proposals)
 
     counts = {name: len(dataset.get(name) or []) for name in _RECORD_ARRAYS}

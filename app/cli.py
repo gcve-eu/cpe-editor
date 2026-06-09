@@ -19,6 +19,7 @@ from .models import (
     EntityMetadata,
     EntityRelationship,
     Product,
+    ProductAlias,
     Proposal,
     Vendor,
     db,
@@ -1419,6 +1420,28 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
         .all()
     ]
 
+    aliases = [
+        {
+            "uuid": alias.uuid,
+            "name": alias.name,
+            "description": alias.description,
+            "submitter_name": alias.submitter_name,
+            "submitter_email": alias.submitter_email,
+            "submitted_at": isoformat_or_none(alias.submitted_at),
+            "approved_at": isoformat_or_none(alias.approved_at),
+            "created_at": isoformat_or_none(alias.created_at),
+            "updated_at": isoformat_or_none(alias.updated_at),
+            "members": [
+                {
+                    "vendor_uuid": member.vendor.uuid if member.vendor else None,
+                    "product_uuid": member.product.uuid if member.product else None,
+                }
+                for member in alias.members
+            ],
+        }
+        for alias in ProductAlias.query.order_by(ProductAlias.id.asc()).all()
+    ]
+
     proposals = []
     if include_proposals:
         proposals = [
@@ -1449,6 +1472,12 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
                 "proposed_title": proposal.proposed_title,
                 "proposed_notes": proposal.proposed_notes,
                 "proposed_cpe_uri": proposal.proposed_cpe_uri,
+                "proposed_alias_name": proposal.proposed_alias_name,
+                "proposed_alias_description": proposal.proposed_alias_description,
+                "proposed_alias_members": proposal.proposed_alias_members,
+                "product_alias_uuid": (
+                    proposal.product_alias.uuid if proposal.product_alias else None
+                ),
                 "proposed_metadata_key": proposal.proposed_metadata_key,
                 "proposed_metadata_value": proposal.proposed_metadata_value,
                 "proposed_vulnerability_source": proposal.proposed_vulnerability_source,
@@ -1474,6 +1503,7 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
             "relationships": len(relationships),
             "proposals": len(proposals),
             "purl_mappings": len(purl_mappings),
+            "aliases": len(aliases),
         },
         "vendors": vendors,
         "products": products,
@@ -1481,6 +1511,7 @@ def build_app_dataset(include_proposals: bool = False) -> dict:
         "metadata": metadata,
         "relationships": relationships,
         "purl_mappings": purl_mappings,
+        "aliases": aliases,
         "proposals": proposals,
     }
 
@@ -1510,6 +1541,7 @@ def _app_dataset_counts(include_proposals: bool) -> dict[str, int]:
         "relationships": EntityRelationship.query.count(),
         "proposals": Proposal.query.count() if include_proposals else 0,
         "purl_mappings": _count_joined_purl_mappings(),
+        "aliases": ProductAlias.query.count(),
     }
 
 
@@ -1675,6 +1707,29 @@ def iter_purl_mapping_dataset_rows():
         }
 
 
+def iter_alias_dataset_rows():
+    query = ProductAlias.query.order_by(ProductAlias.id.asc())
+    for alias in _iter_query_rows(query):
+        yield {
+            "uuid": alias.uuid,
+            "name": alias.name,
+            "description": alias.description,
+            "submitter_name": alias.submitter_name,
+            "submitter_email": alias.submitter_email,
+            "submitted_at": isoformat_or_none(alias.submitted_at),
+            "approved_at": isoformat_or_none(alias.approved_at),
+            "created_at": isoformat_or_none(alias.created_at),
+            "updated_at": isoformat_or_none(alias.updated_at),
+            "members": [
+                {
+                    "vendor_uuid": member.vendor.uuid if member.vendor else None,
+                    "product_uuid": member.product.uuid if member.product else None,
+                }
+                for member in alias.members
+            ],
+        }
+
+
 def iter_proposal_dataset_rows():
     vendor = aliased(Vendor)
     product = aliased(Product)
@@ -1703,6 +1758,9 @@ def iter_proposal_dataset_rows():
             "vendor_uuid": vendor_uuid,
             "product_uuid": product_uuid,
             "cpe_uri": cpe_uri,
+            "product_alias_uuid": (
+                proposal.product_alias.uuid if proposal.product_alias else None
+            ),
             "proposed_vendor_name": proposal.proposed_vendor_name,
             "proposed_vendor_title": proposal.proposed_vendor_title,
             "proposed_product_name": proposal.proposed_product_name,
@@ -1719,6 +1777,9 @@ def iter_proposal_dataset_rows():
             "proposed_title": proposal.proposed_title,
             "proposed_notes": proposal.proposed_notes,
             "proposed_cpe_uri": proposal.proposed_cpe_uri,
+            "proposed_alias_name": proposal.proposed_alias_name,
+            "proposed_alias_description": proposal.proposed_alias_description,
+            "proposed_alias_members": proposal.proposed_alias_members,
             "proposed_metadata_key": proposal.proposed_metadata_key,
             "proposed_metadata_value": proposal.proposed_metadata_value,
             "proposed_vulnerability_source": proposal.proposed_vulnerability_source,
@@ -1778,6 +1839,7 @@ def write_app_dataset_json(
     _write_json_member_array(
         output_file, "purl_mappings", iter_purl_mapping_dataset_rows()
     )
+    _write_json_member_array(output_file, "aliases", iter_alias_dataset_rows())
     proposal_rows = iter_proposal_dataset_rows() if include_proposals else iter(())
     _write_json_member_array(output_file, "proposals", proposal_rows)
     output_file.write("\n}\n")
