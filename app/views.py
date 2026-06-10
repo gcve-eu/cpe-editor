@@ -460,9 +460,7 @@ def _serialize_product(product):
         "created_at": product.created_at.isoformat() if product.created_at else None,
         "updated_at": product.updated_at.isoformat() if product.updated_at else None,
         "cpe_count": len(product.cpes),
-        "aliases": [
-            _serialize_product_alias_summary(alias) for alias in aliases
-        ],
+        "aliases": [_serialize_product_alias_summary(alias) for alias in aliases],
         "approved_notes": [
             _serialize_entity_note(note)
             for note in sorted(
@@ -659,7 +657,9 @@ def _build_statistics_payload():
             EntityMetadata.metadata_key, func.count(EntityMetadata.id).label("count")
         )
         .group_by(EntityMetadata.metadata_key)
-        .order_by(func.count(EntityMetadata.id).desc(), EntityMetadata.metadata_key.asc())
+        .order_by(
+            func.count(EntityMetadata.id).desc(), EntityMetadata.metadata_key.asc()
+        )
         .all()
     )
     relationship_type_counts = (
@@ -1407,6 +1407,14 @@ def _proposal_focus_links(proposal: Proposal):
                 product_uuid=product.uuid,
             )
 
+    linked_alias = _resolve_product_alias_record(proposal)
+    if linked_alias:
+        add_entity_link(
+            f"Alias: {linked_alias.name}",
+            "main.alias_detail",
+            alias_uuid=linked_alias.uuid,
+        )
+
     if linked_cpe:
         add_entity_link(
             f"CPE #{linked_cpe.id}",
@@ -1415,6 +1423,20 @@ def _proposal_focus_links(proposal: Proposal):
         )
 
     return links
+
+
+def _resolve_product_alias_record(proposal: Proposal):
+    alias = proposal.product_alias or proposal.product_alias_entry
+    if alias:
+        return alias
+    if (
+        proposal.proposal_type not in ALIAS_PROPOSAL_TYPES
+        or not proposal.proposed_alias_name
+    ):
+        return None
+    return ProductAlias.query.filter(
+        func.lower(ProductAlias.name) == proposal.proposed_alias_name.strip().lower()
+    ).first()
 
 
 def _resolve_new_vendor_product_records(proposal: Proposal):
@@ -2019,9 +2041,7 @@ def statistics():
     product_aliases = statistics_payload["counts"]["product_aliases"]
     product_alias_members = statistics_payload["counts"]["product_alias_members"]
     notes = statistics_payload["counts"]["notes"]
-    vulnerability_references = statistics_payload["counts"][
-        "vulnerability_references"
-    ]
+    vulnerability_references = statistics_payload["counts"]["vulnerability_references"]
     average_purls_per_cpe = statistics_payload["averages"]["purls_per_cpe"]
 
     vendor_product_counts_query = _statistics_top_vendors_query()

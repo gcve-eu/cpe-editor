@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.models import CPEEntry, Product, Proposal, Vendor, db
+from app.models import CPEEntry, Product, ProductAlias, Proposal, Vendor, db
 from app.views import apply_proposal
 
 
@@ -56,7 +56,9 @@ def test_new_vendor_product_links_can_resolve_legacy_accepted_proposal(app, clie
         vendor = Vendor(name="legacy_vendor", title="Legacy Vendor")
         db.session.add(vendor)
         db.session.flush()
-        product = Product(vendor_id=vendor.id, name="legacy_product", title="Legacy Product")
+        product = Product(
+            vendor_id=vendor.id, name="legacy_product", title="Legacy Product"
+        )
         db.session.add(product)
         db.session.flush()
         cpe = CPEEntry(
@@ -98,3 +100,38 @@ def test_new_vendor_product_links_can_resolve_legacy_accepted_proposal(app, clie
     assert response.status_code == 200
     assert f'href="/vendors/{vendor_uuid}"'.encode() in response.data
     assert f'href="/products/{product_uuid}"'.encode() in response.data
+
+
+def test_product_alias_approved_change_links_to_alias(app, client):
+    with app.app_context():
+        products = Product.query.order_by(Product.id.asc()).limit(2).all()
+        proposal = Proposal(
+            proposal_type="new_product_alias",
+            status="pending",
+            proposed_alias_name="Approved change alias",
+            proposed_alias_description="Alias linked from the approved changes list.",
+            proposed_alias_members=[
+                {"vendor_id": product.vendor_id, "product_id": product.id}
+                for product in products
+            ],
+            reviewed_at=datetime(2024, 2, 5, 4, 5, 6),
+        )
+        db.session.add(proposal)
+        db.session.flush()
+        apply_proposal(proposal)
+        proposal.status = "accepted"
+        db.session.commit()
+
+        alias = ProductAlias.query.filter_by(name="Approved change alias").one()
+        alias_uuid = alias.uuid
+        proposal_id = proposal.id
+
+    list_response = client.get("/changes")
+    assert list_response.status_code == 200
+    assert f'href="/aliases/{alias_uuid}"'.encode() in list_response.data
+    assert b"Alias: Approved change alias" in list_response.data
+
+    detail_response = client.get(f"/changes/{proposal_id}")
+    assert detail_response.status_code == 200
+    assert f'href="/aliases/{alias_uuid}"'.encode() in detail_response.data
+    assert b"Alias: Approved change alias" in detail_response.data
