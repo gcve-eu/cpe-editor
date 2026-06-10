@@ -20,6 +20,7 @@ from .models import (
     EntityRelationship,
     Product,
     ProductAlias,
+    ProductAliasMember,
     Proposal,
     Vendor,
     db,
@@ -942,6 +943,7 @@ def register_cli(app):
             f"Exported dataset to {output_path} "
             f"(vendors={counts['vendors']}, products={counts['products']}, "
             f"cpes={counts['cpes']}, metadata={counts['metadata']}, relationships={counts['relationships']}, "
+            f"purl_mappings={counts['purl_mappings']}, aliases={counts['aliases']}, "
             f"proposals={counts['proposals']})"
         )
 
@@ -979,7 +981,11 @@ def register_cli(app):
             click.echo("Deleting existing proposal, CPE, product and vendor rows...")
             CPEVulnerabilityReference.query.delete()
             EntityMetadata.query.delete()
+            Proposal.query.update({Proposal.product_alias_id: None})
+            ProductAlias.query.update({ProductAlias.proposal_id: None})
             Proposal.query.delete()
+            ProductAliasMember.query.delete()
+            ProductAlias.query.delete()
             EntityRelationship.query.delete()
             CPEEntry.query.delete()
             Product.query.delete()
@@ -1000,6 +1006,7 @@ def register_cli(app):
         relationship_rows = dataset.get("relationships") or []
         metadata_rows = dataset.get("metadata") or []
         purl_mapping_rows = dataset.get("purl_mappings") or []
+        alias_rows = dataset.get("aliases") or []
         proposal_rows = dataset.get("proposals") or []
 
         imported_vendors = upsert_vendors(vendor_rows, vendor_id_by_uuid)
@@ -1022,12 +1029,21 @@ def register_cli(app):
             product_id_by_uuid,
             batch_size,
         )
+        alias_id_by_uuid: dict[str, int] = {}
+        alias_count = upsert_aliases(
+            alias_rows,
+            vendor_id_by_uuid,
+            product_id_by_uuid,
+            alias_id_by_uuid,
+            batch_size,
+        )
 
         if include_proposals and proposal_rows:
             proposal_count = upsert_proposals(
                 proposal_rows,
                 vendor_id_by_uuid,
                 product_id_by_uuid,
+                alias_id_by_uuid,
                 batch_size,
             )
 
@@ -1036,7 +1052,7 @@ def register_cli(app):
         click.echo(
             f"Imported dataset from {source} "
             f"(vendors={imported_vendors}, products={imported_products}, cpes={imported_cpes}, metadata={metadata_count}, "
-            f"purl_mappings={purl_mapping_count}, relationships={relationship_count}, proposals={proposal_count})"
+            f"purl_mappings={purl_mapping_count}, relationships={relationship_count}, aliases={alias_count}, proposals={proposal_count})"
         )
 
 
@@ -2201,10 +2217,74 @@ def upsert_purl_mappings(purl_mapping_rows: list[dict], batch_size: int) -> int:
     return count
 
 
+def upsert_aliases(
+    alias_rows: list[dict],
+    vendor_id_by_uuid: dict[str, int],
+    product_id_by_uuid: dict[str, int],
+    alias_id_by_uuid: dict[str, int],
+    batch_size: int,
+) -> int:
+    count = 0
+    for row in alias_rows:
+        imported_uuid = row["uuid"]
+        alias = ProductAlias.query.filter_by(uuid=imported_uuid).first()
+        if alias is None:
+            alias = ProductAlias.query.filter_by(name=row["name"]).first()
+        if alias is None:
+            alias = ProductAlias(uuid=imported_uuid, name=row["name"])
+            db.session.add(alias)
+        if not alias.uuid:
+            alias.uuid = imported_uuid
+        alias.name = row["name"]
+        alias.description = row.get("description")
+        alias.submitter_name = row.get("submitter_name")
+        alias.submitter_email = row.get("submitter_email")
+        alias.submitted_at = (
+            parse_datetime_or_none(row.get("submitted_at")) or alias.submitted_at
+        )
+        alias.approved_at = parse_datetime_or_none(row.get("approved_at"))
+        alias.created_at = (
+            parse_datetime_or_none(row.get("created_at")) or alias.created_at
+        )
+        alias.updated_at = (
+            parse_datetime_or_none(row.get("updated_at")) or alias.updated_at
+        )
+        db.session.flush()
+
+        ProductAliasMember.query.filter_by(alias_id=alias.id).delete(
+            synchronize_session=False
+        )
+        for member_row in row.get("members") or []:
+            vendor_uuid = member_row.get("vendor_uuid")
+            product_uuid = member_row.get("product_uuid")
+            vendor_id = vendor_id_by_uuid.get(vendor_uuid) if vendor_uuid else None
+            product_id = product_id_by_uuid.get(product_uuid) if product_uuid else None
+            if vendor_id is None or product_id is None:
+                raise click.ClickException(
+                    f"Dataset alias {imported_uuid!r} references unknown "
+                    f"vendor/product UUID pair {vendor_uuid!r}/{product_uuid!r}."
+                )
+            db.session.add(
+                ProductAliasMember(
+                    alias_id=alias.id, vendor_id=vendor_id, product_id=product_id
+                )
+            )
+
+        db.session.flush()
+        alias_id_by_uuid[imported_uuid] = alias.id
+        alias_id_by_uuid[alias.uuid] = alias.id
+        count += 1
+        if count % batch_size == 0:
+            db.session.commit()
+    db.session.commit()
+    return count
+
+
 def upsert_proposals(
     proposal_rows: list[dict],
     vendor_id_by_uuid: dict[str, int],
     product_id_by_uuid: dict[str, int],
+    alias_id_by_uuid: dict[str, int],
     batch_size: int,
 ) -> int:
     cpe_id_by_uri = {
@@ -2233,6 +2313,11 @@ def upsert_proposals(
             ),
             cpe_entry_id=(
                 cpe_id_by_uri.get(row.get("cpe_uri")) if row.get("cpe_uri") else None
+            ),
+            product_alias_id=(
+                alias_id_by_uuid.get(row.get("product_alias_uuid"))
+                if row.get("product_alias_uuid")
+                else None
             ),
             proposed_vendor_name=row.get("proposed_vendor_name"),
             proposed_vendor_title=row.get("proposed_vendor_title"),
