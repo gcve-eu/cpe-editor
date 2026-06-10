@@ -57,7 +57,7 @@ def test_alias_proposal_submission_requires_member(client):
     assert b"Please select at least one vendor/product tuple" in response.data
 
 
-def test_alias_api_detail(client, app):
+def test_alias_api_list_and_detail(client, app):
     with app.app_context():
         product = Product.query.first()
         product_name = product.name
@@ -70,8 +70,52 @@ def test_alias_api_detail(client, app):
         db.session.commit()
         alias_uuid = alias.uuid
 
+    list_response = client.get("/api/aliases?q=fixture&per_page=1")
+    assert list_response.status_code == 200
+    list_payload = list_response.get_json()
+    assert list_payload["total"] == 1
+    assert list_payload["items"][0]["uuid"] == alias_uuid
+    assert list_payload["items"][0]["member_count"] == 1
+
     response = client.get(f"/api/aliases/{alias_uuid}")
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["name"] == "Fixture alias"
+    assert payload["member_count"] == 1
     assert payload["members"][0]["product_name"] == product_name
+
+
+def test_product_api_detail_includes_aliases(client, app):
+    with app.app_context():
+        product = Product.query.first()
+        alias = ProductAlias(name="Product detail alias")
+        db.session.add(alias)
+        db.session.flush()
+        alias.members.append(
+            ProductAliasMember(vendor_id=product.vendor_id, product_id=product.id)
+        )
+        db.session.commit()
+        product_uuid = product.uuid
+        alias_id = alias.id
+        alias_uuid = alias.uuid
+        alias_submitted_at = alias.submitted_at.isoformat()
+        alias_created_at = alias.created_at.isoformat()
+        alias_updated_at = alias.updated_at.isoformat()
+
+    response = client.get(f"/api/products/{product_uuid}")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["aliases"] == [
+        {
+            "id": alias_id,
+            "uuid": alias_uuid,
+            "name": "Product detail alias",
+            "description": None,
+            "proposal_id": None,
+            "member_count": 1,
+            "submitted_at": alias_submitted_at,
+            "approved_at": None,
+            "created_at": alias_created_at,
+            "updated_at": alias_updated_at,
+        }
+    ]

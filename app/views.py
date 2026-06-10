@@ -440,6 +440,15 @@ def _serialize_vendor(vendor):
 
 
 def _serialize_product(product):
+    aliases = [
+        membership.alias
+        for membership in sorted(
+            product.alias_memberships,
+            key=lambda entry: (entry.alias.name.lower(), entry.alias.id),
+        )
+        if membership.alias
+    ]
+
     return {
         "id": product.id,
         "uuid": product.uuid,
@@ -451,6 +460,9 @@ def _serialize_product(product):
         "created_at": product.created_at.isoformat() if product.created_at else None,
         "updated_at": product.updated_at.isoformat() if product.updated_at else None,
         "cpe_count": len(product.cpes),
+        "aliases": [
+            _serialize_product_alias_summary(alias) for alias in aliases
+        ],
         "approved_notes": [
             _serialize_entity_note(note)
             for note in sorted(
@@ -716,23 +728,33 @@ def _serialize_entity_relationship(relationship):
     }
 
 
-def _serialize_product_alias(alias):
+def _serialize_product_alias_summary(alias):
     return {
         "id": alias.id,
         "uuid": alias.uuid,
         "name": alias.name,
         "description": alias.description,
         "proposal_id": alias.proposal_id,
-        "submitter_name": alias.submitter_name,
-        "submitter_email": alias.submitter_email,
+        "member_count": len(alias.members),
         "submitted_at": alias.submitted_at.isoformat() if alias.submitted_at else None,
         "approved_at": alias.approved_at.isoformat() if alias.approved_at else None,
         "created_at": alias.created_at.isoformat() if alias.created_at else None,
         "updated_at": alias.updated_at.isoformat() if alias.updated_at else None,
-        "members": [
-            _serialize_product_alias_member(member) for member in alias.members
-        ],
     }
+
+
+def _serialize_product_alias(alias):
+    payload = _serialize_product_alias_summary(alias)
+    payload.update(
+        {
+            "submitter_name": alias.submitter_name,
+            "submitter_email": alias.submitter_email,
+            "members": [
+                _serialize_product_alias_member(member) for member in alias.members
+            ],
+        }
+    )
+    return payload
 
 
 def _serialize_product_alias_member(member):
@@ -1764,6 +1786,42 @@ def aliases():
 def alias_detail(alias_uuid):
     alias = ProductAlias.query.filter_by(uuid=alias_uuid).first_or_404()
     return render_template("alias_detail.html", alias=alias)
+
+
+@bp.route("/api/aliases")
+def api_aliases():
+    q = (request.args.get("q") or "").strip()
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = min(
+        max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
+    )
+
+    query = ProductAlias.query
+    if q:
+        like = f"%{q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(ProductAlias.name).like(like),
+                func.lower(ProductAlias.description).like(like),
+            )
+        )
+
+    total = query.count()
+    results = (
+        query.order_by(ProductAlias.name.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return jsonify(
+        {
+            "items": [_serialize_product_alias_summary(alias) for alias in results],
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": max((total + per_page - 1) // per_page, 1),
+        }
+    )
 
 
 @bp.route("/api/aliases/<string:alias_uuid>")
