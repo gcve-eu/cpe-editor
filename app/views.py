@@ -598,11 +598,44 @@ def _statistics_top_products_query():
     )
 
 
+def _count_model_rows(model):
+    return db.session.query(func.count(model.id)).scalar() or 0
+
+
+def _count_proposals_by_status():
+    rows = (
+        db.session.query(Proposal.status, func.count(Proposal.id).label("count"))
+        .group_by(Proposal.status)
+        .all()
+    )
+    return {status or "unknown": count for status, count in rows}
+
+
 def _build_statistics_payload():
     total_vendors = db.session.query(func.count(Vendor.id)).scalar() or 0
     total_products = db.session.query(func.count(Product.id)).scalar() or 0
     total_cpes = db.session.query(func.count(CPEEntry.id)).scalar() or 0
     total_purl_mappings = db.session.query(func.count(CPEPurlMapping.id)).scalar() or 0
+    total_metadata_entries = _count_model_rows(EntityMetadata)
+    total_relationships = _count_model_rows(EntityRelationship)
+    total_product_aliases = _count_model_rows(ProductAlias)
+    total_product_alias_members = _count_model_rows(ProductAliasMember)
+    total_notes = _count_model_rows(EntityNote)
+    total_vulnerability_references = _count_model_rows(CPEVulnerabilityReference)
+    contributed_cpes = (
+        db.session.query(func.count(CPEEntry.id))
+        .filter(CPEEntry.from_proposal.is_(True))
+        .scalar()
+        or 0
+    )
+    contribution_total = (
+        contributed_cpes
+        + total_metadata_entries
+        + total_relationships
+        + total_product_aliases
+        + total_notes
+        + total_vulnerability_references
+    )
     cpes_with_purl_mappings = (
         db.session.query(func.count(func.distinct(CPEPurlMapping.cpe_name_id))).scalar()
         or 0
@@ -621,6 +654,26 @@ def _build_statistics_payload():
         .order_by(func.count(CPEEntry.id).desc(), CPEEntry.part.asc())
         .all()
     )
+    metadata_key_counts = (
+        db.session.query(
+            EntityMetadata.metadata_key, func.count(EntityMetadata.id).label("count")
+        )
+        .group_by(EntityMetadata.metadata_key)
+        .order_by(func.count(EntityMetadata.id).desc(), EntityMetadata.metadata_key.asc())
+        .all()
+    )
+    relationship_type_counts = (
+        db.session.query(
+            EntityRelationship.relationship_type,
+            func.count(EntityRelationship.id).label("count"),
+        )
+        .group_by(EntityRelationship.relationship_type)
+        .order_by(
+            func.count(EntityRelationship.id).desc(),
+            EntityRelationship.relationship_type.asc(),
+        )
+        .all()
+    )
 
     return {
         "counts": {
@@ -631,6 +684,14 @@ def _build_statistics_payload():
             "cpes_with_purl_mappings": cpes_with_purl_mappings,
             "vendors_with_products": vendors_with_products,
             "vendors_without_products": vendors_without_products,
+            "contributed_inputs": contribution_total,
+            "contributed_cpes": contributed_cpes,
+            "metadata_entries": total_metadata_entries,
+            "relationships": total_relationships,
+            "product_aliases": total_product_aliases,
+            "product_alias_members": total_product_alias_members,
+            "notes": total_notes,
+            "vulnerability_references": total_vulnerability_references,
         },
         "averages": {
             "purls_per_cpe": (
@@ -644,6 +705,15 @@ def _build_statistics_payload():
         "cpe_part_counts": [
             {"part": part, "count": count} for part, count in cpe_part_counts
         ],
+        "metadata_key_counts": [
+            {"metadata_key": metadata_key, "count": count}
+            for metadata_key, count in metadata_key_counts
+        ],
+        "relationship_type_counts": [
+            {"relationship_type": relationship_type, "count": count}
+            for relationship_type, count in relationship_type_counts
+        ],
+        "proposal_status_counts": _count_proposals_by_status(),
     }
 
 
@@ -1942,6 +2012,16 @@ def statistics():
     total_cpes = statistics_payload["counts"]["cpes"]
     total_purl_mappings = statistics_payload["counts"]["purl_mappings"]
     cpes_with_purl_mappings = statistics_payload["counts"]["cpes_with_purl_mappings"]
+    contributed_inputs = statistics_payload["counts"]["contributed_inputs"]
+    contributed_cpes = statistics_payload["counts"]["contributed_cpes"]
+    metadata_entries = statistics_payload["counts"]["metadata_entries"]
+    relationships = statistics_payload["counts"]["relationships"]
+    product_aliases = statistics_payload["counts"]["product_aliases"]
+    product_alias_members = statistics_payload["counts"]["product_alias_members"]
+    notes = statistics_payload["counts"]["notes"]
+    vulnerability_references = statistics_payload["counts"][
+        "vulnerability_references"
+    ]
     average_purls_per_cpe = statistics_payload["averages"]["purls_per_cpe"]
 
     vendor_product_counts_query = _statistics_top_vendors_query()
@@ -1961,6 +2041,9 @@ def statistics():
     average_products_per_vendor = statistics_payload["averages"]["products_per_vendor"]
     vendors_without_products = statistics_payload["counts"]["vendors_without_products"]
     cpe_part_counts = statistics_payload["cpe_part_counts"]
+    metadata_key_counts = statistics_payload["metadata_key_counts"]
+    relationship_type_counts = statistics_payload["relationship_type_counts"]
+    proposal_status_counts = statistics_payload["proposal_status_counts"]
 
     return render_template(
         "statistics.html",
@@ -1969,6 +2052,14 @@ def statistics():
         total_cpes=total_cpes,
         total_purl_mappings=total_purl_mappings,
         cpes_with_purl_mappings=cpes_with_purl_mappings,
+        contributed_inputs=contributed_inputs,
+        contributed_cpes=contributed_cpes,
+        metadata_entries=metadata_entries,
+        relationships=relationships,
+        product_aliases=product_aliases,
+        product_alias_members=product_alias_members,
+        notes=notes,
+        vulnerability_references=vulnerability_references,
         average_purls_per_cpe=average_purls_per_cpe,
         average_products_per_vendor=average_products_per_vendor,
         top_vendor=top_vendor,
@@ -1980,6 +2071,9 @@ def statistics():
         vendor_has_next=vendor_page < vendor_product_total_pages,
         vendor_rank_start=vendor_offset + 1,
         cpe_part_counts=cpe_part_counts,
+        metadata_key_counts=metadata_key_counts,
+        relationship_type_counts=relationship_type_counts,
+        proposal_status_counts=proposal_status_counts,
     )
 
 

@@ -2,7 +2,17 @@ import io
 import json
 import tarfile
 
-from app.models import CPEEntry, Product, Vendor, db
+from app.models import (
+    CPEEntry,
+    EntityMetadata,
+    EntityNote,
+    EntityRelationship,
+    Product,
+    ProductAlias,
+    ProductAliasMember,
+    Vendor,
+    db,
+)
 from app import views
 
 
@@ -276,6 +286,14 @@ def test_statistics_api_returns_clean_dataset_summary(client):
         "cpes_with_purl_mappings": 2,
         "vendors_with_products": 2,
         "vendors_without_products": 0,
+        "contributed_inputs": 2,
+        "contributed_cpes": 0,
+        "metadata_entries": 0,
+        "relationships": 0,
+        "product_aliases": 0,
+        "product_alias_members": 0,
+        "notes": 0,
+        "vulnerability_references": 2,
     }
     assert payload["averages"] == {
         "purls_per_cpe": 0.67,
@@ -288,6 +306,75 @@ def test_statistics_api_returns_clean_dataset_summary(client):
         {"part": "a", "count": 2},
         {"part": "o", "count": 1},
     ]
+    assert payload["metadata_key_counts"] == []
+    assert payload["relationship_type_counts"] == []
+    assert payload["proposal_status_counts"] == {"accepted": 1, "pending": 1}
+
+
+def test_statistics_includes_contributed_metadata_relationships_and_aliases(client, app):
+    with app.app_context():
+        vendor = Vendor.query.filter_by(name="microsoft").one()
+        source_product = Product.query.filter_by(name="windows_11").one()
+        target_product = Product.query.filter_by(name="office").one()
+        contributed_cpe = CPEEntry.query.filter_by(product_id=source_product.id).first()
+        contributed_cpe.from_proposal = True
+
+        db.session.add(
+            EntityMetadata(
+                vendor_id=vendor.id,
+                metadata_key="gcve:url",
+                metadata_value="https://example.test/microsoft",
+            )
+        )
+        db.session.add(
+            EntityNote(
+                product_id=source_product.id,
+                note_text="Fixture note for statistics.",
+            )
+        )
+        db.session.add(
+            EntityRelationship(
+                source_product_id=source_product.id,
+                target_product_id=target_product.id,
+                relationship_type="equivalent-to",
+            )
+        )
+        alias = ProductAlias(name="Statistics alias")
+        db.session.add(alias)
+        db.session.flush()
+        alias.members.append(
+            ProductAliasMember(
+                vendor_id=source_product.vendor_id,
+                product_id=source_product.id,
+            )
+        )
+        db.session.commit()
+
+    response = client.get("/api/statistics")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["counts"]["contributed_inputs"] == 7
+    assert payload["counts"]["contributed_cpes"] == 1
+    assert payload["counts"]["metadata_entries"] == 1
+    assert payload["counts"]["relationships"] == 1
+    assert payload["counts"]["product_aliases"] == 1
+    assert payload["counts"]["product_alias_members"] == 1
+    assert payload["counts"]["notes"] == 1
+    assert payload["counts"]["vulnerability_references"] == 2
+    assert payload["metadata_key_counts"] == [
+        {"metadata_key": "gcve:url", "count": 1}
+    ]
+    assert payload["relationship_type_counts"] == [
+        {"relationship_type": "equivalent-to", "count": 1}
+    ]
+
+    page_response = client.get("/statistics")
+    assert page_response.status_code == 200
+    assert b"Contributed inputs" in page_response.data
+    assert b"Metadata by key" in page_response.data
+    assert b"Relationships by type" in page_response.data
+    assert b"Product aliases" in page_response.data
 
 
 def test_statistics_top_list_api_paginates_vendors_and_products(client):

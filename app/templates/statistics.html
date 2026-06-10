@@ -2,7 +2,7 @@
 {% block title %}Statistics{% endblock %}
 {% block content %}
   <h1><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Dataset statistics</h1>
-  <p class="muted">A quick overview of vendors, products, and CPE records in this instance.</p>
+  <p class="muted">A quick overview of vendors, products, CPE records, and approved contributed data in this instance.</p>
 
   <section class="grid grid-2">
     <article class="card">
@@ -29,6 +29,22 @@
       <h2><i class="fa-solid fa-percent" aria-hidden="true"></i> Average PURLs per CPE</h2>
       <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ average_purls_per_cpe }}</strong></p>
     </article>
+    <article class="card">
+      <h2><i class="fa-solid fa-hands-helping" aria-hidden="true"></i> Contributed inputs</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ contributed_inputs }}</strong></p>
+    </article>
+    <article class="card">
+      <h2><i class="fa-solid fa-tags" aria-hidden="true"></i> Metadata entries</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ metadata_entries }}</strong></p>
+    </article>
+    <article class="card">
+      <h2><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Relationships</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ relationships }}</strong></p>
+    </article>
+    <article class="card">
+      <h2><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Product aliases</h2>
+      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ product_aliases }}</strong></p>
+    </article>
   </section>
 
   <section class="card">
@@ -47,6 +63,10 @@
       {% endif %}
       <li>Vendors without products: {{ vendors_without_products }}</li>
       <li>CPE records with at least one PURL mapping: {{ cpes_with_purl_mappings }}</li>
+      <li>Contributed CPE records: {{ contributed_cpes }}</li>
+      <li>Alias memberships: {{ product_alias_members }}</li>
+      <li>Approved notes: {{ notes }}</li>
+      <li>Approved vulnerability references: {{ vulnerability_references }}</li>
     </ul>
 
     {% if cpe_part_counts %}
@@ -54,6 +74,33 @@
       <ul>
         {% for part_stat in cpe_part_counts %}
           <li><code>{{ part_stat.part }}</code>: {{ part_stat.count }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if metadata_key_counts %}
+      <h3>Metadata by key</h3>
+      <ul>
+        {% for metadata_stat in metadata_key_counts %}
+          <li><code>{{ metadata_stat.metadata_key }}</code>: {{ metadata_stat.count }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if relationship_type_counts %}
+      <h3>Relationships by type</h3>
+      <ul>
+        {% for relationship_stat in relationship_type_counts %}
+          <li><code>{{ relationship_stat.relationship_type }}</code>: {{ relationship_stat.count }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if proposal_status_counts %}
+      <h3>Proposal statuses</h3>
+      <ul>
+        {% for status, count in proposal_status_counts|dictsort %}
+          <li><code>{{ status }}</code>: {{ count }}</li>
         {% endfor %}
       </ul>
     {% endif %}

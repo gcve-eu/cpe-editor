@@ -22,7 +22,7 @@ paths:
     get:
       tags: [Statistics]
       summary: Get dataset statistics
-      description: Returns the aggregate counts, averages, CPE part distribution, and top vendor shown on the statistics page as clean JSON.
+      description: Returns the aggregate counts, contribution counts, averages, CPE part distribution, metadata and relationship distributions, and top vendor shown on the statistics page as clean JSON.
       responses:
         '200':
           description: Dataset statistics
@@ -1270,6 +1270,22 @@ components:
           type: integer
         vendors_without_products:
           type: integer
+        contributed_inputs:
+          type: integer
+        contributed_cpes:
+          type: integer
+        metadata_entries:
+          type: integer
+        relationships:
+          type: integer
+        product_aliases:
+          type: integer
+        product_alias_members:
+          type: integer
+        notes:
+          type: integer
+        vulnerability_references:
+          type: integer
     StatisticsAverages:
       type: object
       properties:
@@ -1285,6 +1301,20 @@ components:
         part:
           type: string
           nullable: true
+        count:
+          type: integer
+    StatisticsMetadataKeyCount:
+      type: object
+      properties:
+        metadata_key:
+          type: string
+        count:
+          type: integer
+    StatisticsRelationshipTypeCount:
+      type: object
+      properties:
+        relationship_type:
+          type: string
         count:
           type: integer
     StatisticsTopVendor:
@@ -1355,6 +1385,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/StatisticsCPEPartCount'
+        metadata_key_counts:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsMetadataKeyCount'
+        relationship_type_counts:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatisticsRelationshipTypeCount'
+        proposal_status_counts:
+          type: object
+          additionalProperties:
+            type: integer
     PaginatedStatisticsTopList:
       allOf:
         - $ref: '#/components/schemas/Pagination'
