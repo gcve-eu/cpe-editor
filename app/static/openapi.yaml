@@ -11,6 +11,7 @@ servers:
 tags:
   - name: Vendors
   - name: Products
+  - name: Product Aliases
   - name: CPE Entries
   - name: Vulnerability References
   - name: Statistics
@@ -130,6 +131,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Product'
+        '404':
+          description: Not found
+  /api/aliases:
+    get:
+      tags: [Product Aliases]
+      summary: List product aliases
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Case-insensitive text search on alias name or description.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Product alias list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductAliases'
+  /api/aliases/{alias_uuid}:
+    get:
+      tags: [Product Aliases]
+      summary: Get product alias by UUID
+      parameters:
+        - in: path
+          name: alias_uuid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product alias detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAlias'
         '404':
           description: Not found
   /api/cpes:
@@ -491,6 +541,10 @@ components:
           nullable: true
         cpe_count:
           type: integer
+        aliases:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductAliasSummary'
         approved_notes:
           type: array
           items:
@@ -503,6 +557,84 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EntityRelationship'
+    ProductAliasSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        proposal_id:
+          type: integer
+          nullable: true
+        member_count:
+          type: integer
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    ProductAliasMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        vendor_id:
+          type: integer
+        vendor_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        vendor_name:
+          type: string
+          nullable: true
+        vendor_title:
+          type: string
+          nullable: true
+        product_id:
+          type: integer
+        product_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        product_name:
+          type: string
+          nullable: true
+        product_title:
+          type: string
+          nullable: true
+    ProductAlias:
+      allOf:
+        - $ref: '#/components/schemas/ProductAliasSummary'
+        - type: object
+          properties:
+            submitter_name:
+              type: string
+              nullable: true
+            submitter_email:
+              type: string
+              nullable: true
+            members:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductAliasMember'
     EntityRecordRef:
       type: object
       nullable: true
@@ -721,6 +853,22 @@ components:
         cpe_applicability:
           type: string
           nullable: true
+        alias_name:
+          type: string
+          nullable: true
+        alias_description:
+          type: string
+          nullable: true
+        alias_members:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              vendor_id:
+                type: integer
+              product_id:
+                type: integer
     ApprovedChangeAppliedRecords:
       type: object
       properties:
@@ -732,6 +880,8 @@ components:
           $ref: '#/components/schemas/EntityRelationship'
         vulnerability_reference:
           $ref: '#/components/schemas/CPEVulnerabilityReference'
+        product_alias:
+          $ref: '#/components/schemas/ProductAlias'
     BCP10DatasetCounts:
       type: object
       properties:
@@ -1242,6 +1392,15 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Vendor'
+    PaginatedProductAliases:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductAliasSummary'
     PaginatedCPEs:
       allOf:
         - $ref: '#/components/schemas/Pagination'
