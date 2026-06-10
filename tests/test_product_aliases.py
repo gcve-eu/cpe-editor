@@ -119,3 +119,47 @@ def test_product_api_detail_includes_aliases(client, app):
             "updated_at": alias_updated_at,
         }
     ]
+
+
+def test_app_dataset_export_import_preserves_product_aliases(app, tmp_path):
+    from app.cli import write_app_dataset_archive
+
+    output_path = tmp_path / "cpe-editor-dataset.tar.gz"
+
+    with app.app_context():
+        products = Product.query.order_by(Product.id.asc()).limit(2).all()
+        alias = ProductAlias(
+            name="Backup alias",
+            description="Alias should survive export/import.",
+            submitter_name="Dataset Tester",
+            submitter_email="dataset@example.test",
+        )
+        db.session.add(alias)
+        db.session.flush()
+        for product in products:
+            alias.members.append(
+                ProductAliasMember(vendor_id=product.vendor_id, product_id=product.id)
+            )
+        db.session.commit()
+
+        alias_uuid = alias.uuid
+        member_product_names = {product.name for product in products}
+        counts = write_app_dataset_archive(output_path)
+
+    assert counts["aliases"] == 1
+
+    runner = app.test_cli_runner()
+    result = runner.invoke(
+        args=["import-app-dataset", "--source", str(output_path), "--replace"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "aliases=1" in result.output
+    with app.app_context():
+        imported_alias = ProductAlias.query.filter_by(uuid=alias_uuid).one()
+        assert imported_alias.name == "Backup alias"
+        assert imported_alias.description == "Alias should survive export/import."
+        assert imported_alias.submitter_name == "Dataset Tester"
+        assert {
+            member.product.name for member in imported_alias.members
+        } == member_product_names
