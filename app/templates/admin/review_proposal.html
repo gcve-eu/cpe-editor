@@ -10,6 +10,78 @@
     {{ fallback }}
   {%- endif -%}
 {%- endmacro %}
+
+{% if duplicates %}
+<div class="card duplicate-alert">
+  <h2><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Potential Duplicates Detected</h2>
+  <p class="muted">The following records may be similar to the proposed changes. Review carefully before accepting.</p>
+
+  {% if duplicates.vendors %}
+    <div class="duplicate-section">
+      <h3><i class="fa-solid fa-building" aria-hidden="true"></i> Similar Vendors ({{ duplicates.vendors|length }})</h3>
+      <table>
+        <thead><tr><th>Vendor</th><th>Products</th><th>Match</th><th></th></tr></thead>
+        <tbody>
+          {% for vendor in duplicates.vendors %}
+            <tr{% if vendor.match_type == 'exact' %} class="duplicate-exact"{% endif %}>
+              <td>
+                <a href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a>
+                <span class="muted">({{ vendor.name }})</span>
+              </td>
+              <td>{{ vendor.product_count }}</td>
+              <td><span class="pill">{{ vendor.match_type }}</span></td>
+              <td><a class="button secondary icon-button" href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}" title="View vendor"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  {% if duplicates.products %}
+    <div class="duplicate-section">
+      <h3><i class="fa-solid fa-cube" aria-hidden="true"></i> Similar Products ({{ duplicates.products|length }})</h3>
+      <table>
+        <thead><tr><th>Vendor</th><th>Product</th><th>CPEs</th><th>Match</th><th></th></tr></thead>
+        <tbody>
+          {% for product in duplicates.products %}
+            <tr{% if product.match_type == 'exact' %} class="duplicate-exact"{% endif %}>
+              <td><a href="{{ url_for('main.vendor_detail', vendor_uuid=product.vendor_uuid) }}">{{ product.vendor_name }}</a></td>
+              <td>
+                <a href="{{ url_for('main.product_detail', product_uuid=product.uuid) }}">{{ product.title or product.name }}</a>
+              </td>
+              <td>{{ product.cpe_count }}</td>
+              <td><span class="pill">{{ product.match_type }}</span></td>
+              <td><a class="button secondary icon-button" href="{{ url_for('main.product_detail', product_uuid=product.uuid) }}" title="View product"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  {% if duplicates.cpes %}
+    <div class="duplicate-section">
+      <h3><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Similar CPEs ({{ duplicates.cpes|length }})</h3>
+      <table>
+        <thead><tr><th>CPE URI</th><th>Vendor / Product</th><th>Version</th><th>Match</th><th></th></tr></thead>
+        <tbody>
+          {% for cpe in duplicates.cpes %}
+            <tr{% if cpe.match_type == 'exact' %} class="duplicate-exact"{% endif %}>
+              <td><code>{{ cpe.cpe_uri }}</code></td>
+              <td>{{ cpe.vendor_name }} / {{ cpe.product_name }}</td>
+              <td>{{ cpe.version }}</td>
+              <td><span class="pill">{{ cpe.match_type }}</span></td>
+              <td><a class="button secondary icon-button" href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}" title="View CPE"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card">
   <div class="page-header">
     <h1>Review proposal #{{ proposal.id }}</h1>

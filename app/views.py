@@ -3716,6 +3716,106 @@ def admin_reindex():
     return redirect(url_for("main.admin_dashboard"))
 
 
+def _find_duplicate_vendors(name, title=None, exclude_id=None):
+    if not name:
+        return []
+    normalized = normalize_token(name)
+    query = Vendor.query.filter(
+        func.lower(Vendor.name).like(f"%{normalized}%")
+    )
+    if exclude_id:
+        query = query.filter(Vendor.id != exclude_id)
+    vendors = query.limit(10).all()
+    results = []
+    for vendor in vendors:
+        results.append({
+            "id": vendor.id,
+            "uuid": vendor.uuid,
+            "name": vendor.name,
+            "title": vendor.title,
+            "product_count": len(vendor.products),
+            "match_type": "exact" if vendor.name == normalized else "partial",
+        })
+    return results
+
+
+def _find_duplicate_products(vendor_name, product_name, exclude_id=None):
+    if not product_name:
+        return []
+    normalized_vendor = normalize_token(vendor_name) if vendor_name else None
+    normalized_product = normalize_token(product_name)
+    query = Product.query
+    if normalized_vendor:
+        vendor = Vendor.query.filter_by(name=normalized_vendor).first()
+        if vendor:
+            query = query.filter(Product.vendor_id == vendor.id)
+    query = query.filter(
+        func.lower(Product.name).like(f"%{normalized_product}%")
+    )
+    if exclude_id:
+        query = query.filter(Product.id != exclude_id)
+    products = query.limit(10).all()
+    results = []
+    for product in products:
+        results.append({
+            "id": product.id,
+            "uuid": product.uuid,
+            "name": product.name,
+            "title": product.title,
+            "vendor_name": product.vendor.name if product.vendor else None,
+            "vendor_uuid": product.vendor.uuid if product.vendor else None,
+            "cpe_count": len(product.cpes),
+            "match_type": "exact" if product.name == normalized_product else "partial",
+        })
+    return results
+
+
+def _find_duplicate_cpes(cpe_uri, exclude_id=None):
+    if not cpe_uri:
+        return []
+    query = CPEEntry.query.filter(
+        func.lower(CPEEntry.cpe_uri).like(f"%{cpe_uri.lower()}%")
+    )
+    if exclude_id:
+        query = query.filter(CPEEntry.id != exclude_id)
+    cpes = query.limit(10).all()
+    results = []
+    for cpe in cpes:
+        results.append({
+            "id": cpe.id,
+            "cpe_uri": cpe.cpe_uri,
+            "vendor_name": cpe.vendor.name if cpe.vendor else None,
+            "product_name": cpe.product.name if cpe.product else None,
+            "version": cpe.version,
+            "match_type": "exact" if cpe.cpe_uri == cpe_uri else "partial",
+        })
+    return results
+
+
+def _find_proposal_duplicates(proposal):
+    duplicates = {}
+    if proposal.proposal_type in {"new_vendor_product", "new_product"}:
+        if proposal.proposed_vendor_name:
+            duplicates["vendors"] = _find_duplicate_vendors(
+                proposal.proposed_vendor_name,
+                proposal.proposed_vendor_title,
+                exclude_id=proposal.vendor_id,
+            )
+        if proposal.proposed_product_name:
+            duplicates["products"] = _find_duplicate_products(
+                proposal.proposed_vendor_name,
+                proposal.proposed_product_name,
+                exclude_id=proposal.product_id,
+            )
+    if proposal.proposal_type in {"new_cpe", "edit_cpe", "new_vendor_product"}:
+        if proposal.proposed_cpe_uri:
+            duplicates["cpes"] = _find_duplicate_cpes(
+                proposal.proposed_cpe_uri,
+                exclude_id=proposal.cpe_entry_id,
+            )
+    return duplicates
+
+
 @bp.route("/admin/proposals/<int:proposal_id>", methods=["GET", "POST"])
 @admin_required
 def admin_proposal_review(proposal_id):
@@ -3740,9 +3840,12 @@ def admin_proposal_review(proposal_id):
             flash("Proposal accepted and applied.", "success")
             return redirect(url_for("main.admin_dashboard"))
 
+    duplicates = _find_proposal_duplicates(proposal)
+
     return render_template(
         "admin/review_proposal.html",
         proposal=proposal,
+        duplicates=duplicates,
         product_by_id=lambda product_id: (
             Product.query.get(product_id) if product_id else None
         ),
