@@ -16,10 +16,21 @@
       <input id="vendor-search" name="q" type="search" value="{{ vendor_q }}" placeholder="Search by vendor name">
       <button class="search-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Search</span></button>
       {% if vendor_q %}
-        <a class="button secondary" href="{{ url_for('main.vendors') }}">Clear</a>
+        <a class="button secondary" href="{{ url_for('main.vendors', sort=sort_by) }}">Clear</a>
       {% endif %}
     </div>
   </form>
+
+  <div class="vendor-sort-controls">
+    <span class="muted">Sort by:</span>
+    <a href="{{ url_for('main.vendors', q=vendor_q or none, sort='name') }}" class="button secondary{% if sort_by == 'name' %} active{% endif %}">
+      <i class="fa-solid fa-arrow-down-a-z" aria-hidden="true"></i>Name
+    </a>
+    <a href="{{ url_for('main.vendors', q=vendor_q or none, sort='products') }}" class="button secondary{% if sort_by == 'products' %} active{% endif %}">
+      <i class="fa-solid fa-cube" aria-hidden="true"></i>Products
+    </a>
+  </div>
+
   {% if vendors %}
     <div class="muted vendor-results-meta">
       <p>
@@ -30,12 +41,12 @@
       </p>
       <div class="action-row">
         {% if vendor_has_prev %}
-          <a class="button" href="{{ url_for('main.vendors', page=vendor_page - 1, q=vendor_q or none) }}">
+          <a class="button" href="{{ url_for('main.vendors', page=vendor_page - 1, q=vendor_q or none, sort=sort_by) }}">
             <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
           </a>
         {% endif %}
         {% if vendor_has_next %}
-          <a class="button" href="{{ url_for('main.vendors', page=vendor_page + 1, q=vendor_q or none) }}">
+          <a class="button" href="{{ url_for('main.vendors', page=vendor_page + 1, q=vendor_q or none, sort=sort_by) }}">
             Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
           </a>
         {% endif %}
@@ -45,7 +56,12 @@
   <ul class="vendor-list">
     {% for vendor in vendors %}
       <li class="vendor-list-item">
-        <a class="vendor-list-link" href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a>
+        <div class="vendor-list-info">
+          <a class="vendor-list-link" href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a>
+          {% if sort_by == 'products' and vendor_product_counts is not none %}
+            <span class="vendor-product-count pill">{{ vendor_product_counts.get(vendor.id, 0) }} product{% if vendor_product_counts.get(vendor.id, 0) != 1 %}s{% endif %}</span>
+          {% endif %}
+        </div>
         <button
           type="button"
           class="button secondary icon-button js-export-json"
@@ -71,12 +87,12 @@
       </p>
       <div class="action-row">
         {% if vendor_has_prev %}
-          <a class="button" href="{{ url_for('main.vendors', page=vendor_page - 1, q=vendor_q or none) }}">
+          <a class="button" href="{{ url_for('main.vendors', page=vendor_page - 1, q=vendor_q or none, sort=sort_by) }}">
             <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
           </a>
         {% endif %}
         {% if vendor_has_next %}
-          <a class="button" href="{{ url_for('main.vendors', page=vendor_page + 1, q=vendor_q or none) }}">
+          <a class="button" href="{{ url_for('main.vendors', page=vendor_page + 1, q=vendor_q or none, sort=sort_by) }}">
             Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
           </a>
         {% endif %}

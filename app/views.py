@@ -1830,26 +1830,60 @@ def details():
 def vendors():
     vendor_page = max(request.args.get("page", default=1, type=int) or 1, 1)
     vendor_q = (request.args.get("q") or "").strip()
+    sort_by = (request.args.get("sort") or "name").strip().lower()
+    if sort_by not in {"name", "products"}:
+        sort_by = "name"
     vendors_per_page = 25
 
-    vendor_query = Vendor.query
-    if vendor_q:
-        like = f"%{vendor_q.lower()}%"
-        vendor_query = vendor_query.filter(
-            or_(
-                func.lower(Vendor.name).like(like),
-                func.lower(Vendor.title).like(like),
-            )
+    if sort_by == "products":
+        product_count = func.count(Product.id).label("product_count")
+        vendor_query = (
+            db.session.query(Vendor, product_count)
+            .outerjoin(Product, Product.vendor_id == Vendor.id)
+            .group_by(Vendor.id)
         )
-    vendor_query = vendor_query.order_by(Vendor.name.asc())
-    vendor_total = vendor_query.count()
-    vendor_total_pages = max(
-        (vendor_total + vendors_per_page - 1) // vendors_per_page, 1
-    )
-    if vendor_page > vendor_total_pages:
-        vendor_page = vendor_total_pages
-    vendor_offset = (vendor_page - 1) * vendors_per_page
-    vendors = vendor_query.offset(vendor_offset).limit(vendors_per_page).all()
+        if vendor_q:
+            like = f"%{vendor_q.lower()}%"
+            vendor_query = vendor_query.filter(
+                or_(
+                    func.lower(Vendor.name).like(like),
+                    func.lower(Vendor.title).like(like),
+                )
+            )
+        vendor_query = vendor_query.order_by(product_count.desc(), Vendor.name.asc())
+        vendor_total = vendor_query.count()
+        vendor_total_pages = max(
+            (vendor_total + vendors_per_page - 1) // vendors_per_page, 1
+        )
+        if vendor_page > vendor_total_pages:
+            vendor_page = vendor_total_pages
+        vendor_offset = (vendor_page - 1) * vendors_per_page
+        rows = vendor_query.offset(vendor_offset).limit(vendors_per_page).all()
+        vendors_with_count = [
+            {"vendor": vendor, "product_count": count} for vendor, count in rows
+        ]
+        vendors = [item["vendor"] for item in vendors_with_count]
+        vendor_product_counts = {item["vendor"].id: item["product_count"] for item in vendors_with_count}
+    else:
+        vendor_query = Vendor.query
+        if vendor_q:
+            like = f"%{vendor_q.lower()}%"
+            vendor_query = vendor_query.filter(
+                or_(
+                    func.lower(Vendor.name).like(like),
+                    func.lower(Vendor.title).like(like),
+                )
+            )
+        vendor_query = vendor_query.order_by(Vendor.name.asc())
+        vendor_total = vendor_query.count()
+        vendor_total_pages = max(
+            (vendor_total + vendors_per_page - 1) // vendors_per_page, 1
+        )
+        if vendor_page > vendor_total_pages:
+            vendor_page = vendor_total_pages
+        vendor_offset = (vendor_page - 1) * vendors_per_page
+        vendors = vendor_query.offset(vendor_offset).limit(vendors_per_page).all()
+        vendor_product_counts = None
 
     return render_template(
         "vendors.html",
@@ -1860,6 +1894,8 @@ def vendors():
         vendor_has_next=vendor_page < vendor_total_pages,
         vendor_q=vendor_q,
         vendor_total=vendor_total,
+        sort_by=sort_by,
+        vendor_product_counts=vendor_product_counts,
     )
 
 

@@ -250,7 +250,7 @@ def test_vendor_page_bottom_pagination_and_search(client, app):
     response = client.get("/vendors")
 
     assert response.status_code == 200
-    assert response.data.count(b'href="/vendors?page=2"') == 2
+    assert response.data.count(b'page=2') == 2
     assert b'class="vendor-search-form"' in response.data
     assert b'name="q" type="search"' in response.data
     assert b'data-show-more-label="Show more"' not in response.data

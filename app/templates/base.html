@@ -656,6 +656,33 @@
       }
       thead th { position: static; }
     }
+    .vendor-sort-controls {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      margin: .75rem 0;
+      padding: .5rem 0;
+      border-top: 1px solid var(--border);
+    }
+    .vendor-sort-controls .button.active {
+      background: var(--primary);
+      color: white;
+    }
+    .vendor-list-info {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      flex: 1;
+      min-width: 0;
+    }
+    .vendor-list-link {
+      font-weight: 650;
+      text-decoration-thickness: .08em;
+      text-underline-offset: .18em;
+    }
+    .vendor-product-count {
+      font-size: .8rem;
+    }
   </style>
 </head>
 <body>
