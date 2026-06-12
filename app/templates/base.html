@@ -56,6 +56,8 @@
       --vendor-list-bg: rgba(255, 255, 255, .72);
       --vendor-list-hover: #f5fbfa;
       --empty-state-bg: rgba(255, 255, 255, .64);
+      --link-color: #0369a1;
+      --link-hover: #075985;
     }
 
     [data-theme="dark"] {
@@ -91,8 +93,12 @@
       --vendor-list-bg: rgba(30, 41, 59, .7);
       --vendor-list-hover: #1e293b;
       --empty-state-bg: rgba(30, 41, 59, .6);
+      --link-color: #38bdf8;
+      --link-hover: #7dd3fc;
     }
     * { box-sizing: border-box; }
+    a { color: var(--link-color); text-decoration-thickness: .06em; text-underline-offset: .15em; }
+    a:hover { color: var(--link-hover); }
     body {
       font-family: var(--font-sans);
       margin: 0;
