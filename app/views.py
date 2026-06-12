@@ -29,6 +29,7 @@ from .models import (
     CPEEntry,
     CPEPurlMapping,
     CPEVulnerabilityReference,
+    DismissedDuplicate,
     EntityMetadata,
     EntityNote,
     EntityRelationship,
@@ -2195,7 +2196,7 @@ def vendor_detail(vendor_uuid):
         product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
         is_admin=session.get("is_admin", False),
-        similar_vendors=_find_duplicate_vendors(vendor.name, vendor.title, exclude_id=vendor.id) if session.get("is_admin") else [],
+        similar_vendors=_find_duplicate_vendors(vendor.name, vendor.title, exclude_id=vendor.id, source_type="vendor", source_id=vendor.id) if session.get("is_admin") else [],
     )
 
 
@@ -2271,7 +2272,9 @@ def product_detail(product_uuid):
         similar_products=_find_duplicate_products(
             product.vendor.name if product.vendor else None,
             product.name,
-            exclude_id=product.id
+            exclude_id=product.id,
+            source_type="product",
+            source_id=product.id,
         ) if session.get("is_admin") else [],
     )
 
@@ -2297,7 +2300,7 @@ def cpe_detail(cpe_id):
         vulnerability_references=vulnerability_references,
         vulnerability_details=vulnerability_details,
         is_admin=session.get("is_admin", False),
-        similar_cpes=_find_duplicate_cpes(cpe.cpe_uri, exclude_id=cpe.id) if session.get("is_admin") else [],
+        similar_cpes=_find_duplicate_cpes(cpe.cpe_uri, exclude_id=cpe.id, source_type="cpe", source_id=cpe.id) if session.get("is_admin") else [],
     )
 
 
@@ -3726,7 +3729,16 @@ def admin_reindex():
     return redirect(url_for("main.admin_dashboard"))
 
 
-def _find_duplicate_vendors(name, title=None, exclude_id=None):
+def _get_dismissed_duplicates(source_type, source_id, duplicate_type):
+    dismissed = DismissedDuplicate.query.filter_by(
+        source_type=source_type,
+        source_id=source_id,
+        duplicate_type=duplicate_type,
+    ).all()
+    return {(d.duplicate_type, d.duplicate_id) for d in dismissed}
+
+
+def _find_duplicate_vendors(name, title=None, exclude_id=None, source_type=None, source_id=None):
     if not name:
         return []
     normalized = normalize_token(name)
@@ -3736,8 +3748,17 @@ def _find_duplicate_vendors(name, title=None, exclude_id=None):
     if exclude_id:
         query = query.filter(Vendor.id != exclude_id)
     vendors = query.limit(10).all()
+
+    dismissed_ids = set()
+    if source_type and source_id:
+        dismissed_ids = {
+            d[1] for d in _get_dismissed_duplicates(source_type, source_id, "vendor")
+        }
+
     results = []
     for vendor in vendors:
+        if vendor.id in dismissed_ids:
+            continue
         results.append({
             "id": vendor.id,
             "uuid": vendor.uuid,
@@ -3749,7 +3770,7 @@ def _find_duplicate_vendors(name, title=None, exclude_id=None):
     return results
 
 
-def _find_duplicate_products(vendor_name, product_name, exclude_id=None):
+def _find_duplicate_products(vendor_name, product_name, exclude_id=None, source_type=None, source_id=None):
     if not product_name:
         return []
     normalized_vendor = normalize_token(vendor_name) if vendor_name else None
@@ -3765,8 +3786,17 @@ def _find_duplicate_products(vendor_name, product_name, exclude_id=None):
     if exclude_id:
         query = query.filter(Product.id != exclude_id)
     products = query.limit(10).all()
+
+    dismissed_ids = set()
+    if source_type and source_id:
+        dismissed_ids = {
+            d[1] for d in _get_dismissed_duplicates(source_type, source_id, "product")
+        }
+
     results = []
     for product in products:
+        if product.id in dismissed_ids:
+            continue
         results.append({
             "id": product.id,
             "uuid": product.uuid,
@@ -3780,7 +3810,7 @@ def _find_duplicate_products(vendor_name, product_name, exclude_id=None):
     return results
 
 
-def _find_duplicate_cpes(cpe_uri, exclude_id=None):
+def _find_duplicate_cpes(cpe_uri, exclude_id=None, source_type=None, source_id=None):
     if not cpe_uri:
         return []
     query = CPEEntry.query.filter(
@@ -3789,8 +3819,17 @@ def _find_duplicate_cpes(cpe_uri, exclude_id=None):
     if exclude_id:
         query = query.filter(CPEEntry.id != exclude_id)
     cpes = query.limit(10).all()
+
+    dismissed_ids = set()
+    if source_type and source_id:
+        dismissed_ids = {
+            d[1] for d in _get_dismissed_duplicates(source_type, source_id, "cpe")
+        }
+
     results = []
     for cpe in cpes:
+        if cpe.id in dismissed_ids:
+            continue
         results.append({
             "id": cpe.id,
             "cpe_uri": cpe.cpe_uri,
@@ -3804,24 +3843,32 @@ def _find_duplicate_cpes(cpe_uri, exclude_id=None):
 
 def _find_proposal_duplicates(proposal):
     duplicates = {}
+    source_type = "proposal"
+    source_id = proposal.id
     if proposal.proposal_type in {"new_vendor_product", "new_product"}:
         if proposal.proposed_vendor_name:
             duplicates["vendors"] = _find_duplicate_vendors(
                 proposal.proposed_vendor_name,
                 proposal.proposed_vendor_title,
                 exclude_id=proposal.vendor_id,
+                source_type=source_type,
+                source_id=source_id,
             )
         if proposal.proposed_product_name:
             duplicates["products"] = _find_duplicate_products(
                 proposal.proposed_vendor_name,
                 proposal.proposed_product_name,
                 exclude_id=proposal.product_id,
+                source_type=source_type,
+                source_id=source_id,
             )
     if proposal.proposal_type in {"new_cpe", "edit_cpe", "new_vendor_product"}:
         if proposal.proposed_cpe_uri:
             duplicates["cpes"] = _find_duplicate_cpes(
                 proposal.proposed_cpe_uri,
                 exclude_id=proposal.cpe_entry_id,
+                source_type=source_type,
+                source_id=source_id,
             )
     return duplicates
 
@@ -3860,6 +3907,49 @@ def admin_proposal_review(proposal_id):
             Product.query.get(product_id) if product_id else None
         ),
     )
+
+
+@bp.route("/admin/dismiss-duplicate", methods=["POST"])
+@admin_required
+def admin_dismiss_duplicate():
+    source_type = (request.form.get("source_type") or "").strip()
+    source_id = request.form.get("source_id", type=int)
+    duplicate_type = (request.form.get("duplicate_type") or "").strip()
+    duplicate_id = request.form.get("duplicate_id", type=int)
+    redirect_target = request.form.get("redirect_target") or url_for("main.index")
+
+    if source_type not in {"vendor", "product", "cpe", "proposal"}:
+        flash("Invalid source type.", "danger")
+        return redirect(redirect_target)
+    if duplicate_type not in {"vendor", "product", "cpe"}:
+        flash("Invalid duplicate type.", "danger")
+        return redirect(redirect_target)
+    if not source_id or not duplicate_id:
+        flash("Missing required parameters.", "danger")
+        return redirect(redirect_target)
+
+    existing = DismissedDuplicate.query.filter_by(
+        source_type=source_type,
+        source_id=source_id,
+        duplicate_type=duplicate_type,
+        duplicate_id=duplicate_id,
+    ).first()
+
+    if existing:
+        flash("This duplicate has already been dismissed.", "info")
+    else:
+        dismissed = DismissedDuplicate(
+            source_type=source_type,
+            source_id=source_id,
+            duplicate_type=duplicate_type,
+            duplicate_id=duplicate_id,
+            dismissed_by=session.get("admin_username", "admin"),
+        )
+        db.session.add(dismissed)
+        db.session.commit()
+        flash("Duplicate dismissed.", "success")
+
+    return redirect(redirect_target)
 
 
 @bp.route("/admin/notes/<int:note_id>/delete", methods=["POST"])

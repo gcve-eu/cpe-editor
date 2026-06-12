@@ -30,7 +30,18 @@
               </td>
               <td>{{ vendor.product_count }}</td>
               <td><span class="pill">{{ vendor.match_type }}</span></td>
-              <td><a class="button secondary icon-button" href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}" title="View vendor"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td>
+              <td class="duplicate-actions">
+                <a class="button secondary icon-button" href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}" title="View vendor"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                <form method="post" action="{{ url_for('main.admin_dismiss_duplicate') }}" class="inline-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="source_type" value="proposal">
+                  <input type="hidden" name="source_id" value="{{ proposal.id }}">
+                  <input type="hidden" name="duplicate_type" value="vendor">
+                  <input type="hidden" name="duplicate_id" value="{{ vendor.id }}">
+                  <input type="hidden" name="redirect_target" value="{{ url_for('main.admin_proposal_review', proposal_id=proposal.id) }}">
+                  <button type="submit" class="button secondary icon-button" title="Dismiss false positive"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                </form>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
@@ -52,7 +63,18 @@
               </td>
               <td>{{ product.cpe_count }}</td>
               <td><span class="pill">{{ product.match_type }}</span></td>
-              <td><a class="button secondary icon-button" href="{{ url_for('main.product_detail', product_uuid=product.uuid) }}" title="View product"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td>
+              <td class="duplicate-actions">
+                <a class="button secondary icon-button" href="{{ url_for('main.product_detail', product_uuid=product.uuid) }}" title="View product"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                <form method="post" action="{{ url_for('main.admin_dismiss_duplicate') }}" class="inline-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="source_type" value="proposal">
+                  <input type="hidden" name="source_id" value="{{ proposal.id }}">
+                  <input type="hidden" name="duplicate_type" value="product">
+                  <input type="hidden" name="duplicate_id" value="{{ product.id }}">
+                  <input type="hidden" name="redirect_target" value="{{ url_for('main.admin_proposal_review', proposal_id=proposal.id) }}">
+                  <button type="submit" class="button secondary icon-button" title="Dismiss false positive"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                </form>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
@@ -72,7 +94,18 @@
               <td>{{ cpe.vendor_name }} / {{ cpe.product_name }}</td>
               <td>{{ cpe.version }}</td>
               <td><span class="pill">{{ cpe.match_type }}</span></td>
-              <td><a class="button secondary icon-button" href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}" title="View CPE"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td>
+              <td class="duplicate-actions">
+                <a class="button secondary icon-button" href="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}" title="View CPE"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                <form method="post" action="{{ url_for('main.admin_dismiss_duplicate') }}" class="inline-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="source_type" value="proposal">
+                  <input type="hidden" name="source_id" value="{{ proposal.id }}">
+                  <input type="hidden" name="duplicate_type" value="cpe">
+                  <input type="hidden" name="duplicate_id" value="{{ cpe.id }}">
+                  <input type="hidden" name="redirect_target" value="{{ url_for('main.admin_proposal_review', proposal_id=proposal.id) }}">
+                  <button type="submit" class="button secondary icon-button" title="Dismiss false positive"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+                </form>
+              </td>
             </tr>
           {% endfor %}
         </tbody>

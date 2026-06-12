@@ -56,7 +56,18 @@
           <td>{{ similar.vendor_name }} / {{ similar.product_name }}</td>
           <td>{{ similar.version }}</td>
           <td><span class="pill">{{ similar.match_type }}</span></td>
-          <td><a class="button secondary icon-button" href="{{ url_for('main.cpe_detail', cpe_id=similar.id) }}" title="View CPE"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td>
+          <td class="duplicate-actions">
+            <a class="button secondary icon-button" href="{{ url_for('main.cpe_detail', cpe_id=similar.id) }}" title="View CPE"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+            <form method="post" action="{{ url_for('main.admin_dismiss_duplicate') }}" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="source_type" value="cpe">
+              <input type="hidden" name="source_id" value="{{ cpe.id }}">
+              <input type="hidden" name="duplicate_type" value="cpe">
+              <input type="hidden" name="duplicate_id" value="{{ similar.id }}">
+              <input type="hidden" name="redirect_target" value="{{ url_for('main.cpe_detail', cpe_id=cpe.id) }}">
+              <button type="submit" class="button secondary icon-button" title="Dismiss false positive"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </form>
+          </td>
         </tr>
       {% endfor %}
     </tbody>

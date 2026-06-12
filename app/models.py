@@ -395,6 +395,31 @@ class EntityRelationship(TimestampMixin, db.Model):
     )
 
 
+class DismissedDuplicate(TimestampMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    source_type = db.Column(db.String(32), nullable=False, index=True)
+    source_id = db.Column(db.Integer, nullable=False, index=True)
+    duplicate_type = db.Column(db.String(32), nullable=False, index=True)
+    duplicate_id = db.Column(db.Integer, nullable=False, index=True)
+    dismissed_by = db.Column(db.String(255), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "source_type",
+            "source_id",
+            "duplicate_type",
+            "duplicate_id",
+            name="uq_dismissed_duplicate",
+        ),
+        db.Index(
+            "ix_dismissed_duplicate_lookup",
+            "source_type",
+            "source_id",
+            "duplicate_type",
+        ),
+    )
+
+
 class EntityMetadata(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     vendor_id = db.Column(
