@@ -43,6 +43,27 @@
   </table>
 </div>
 
+{% if is_admin and similar_cpes %}
+<div class="card duplicate-alert">
+  <h2><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Similar CPEs ({{ similar_cpes|length }})</h2>
+  <p class="muted">These CPEs have similar URIs and may be duplicates.</p>
+  <table>
+    <thead><tr><th>CPE URI</th><th>Vendor / Product</th><th>Version</th><th>Match</th><th></th></tr></thead>
+    <tbody>
+      {% for similar in similar_cpes %}
+        <tr{% if similar.match_type == 'exact' %} class="duplicate-exact"{% endif %}>
+          <td><code>{{ similar.cpe_uri }}</code></td>
+          <td>{{ similar.vendor_name }} / {{ similar.product_name }}</td>
+          <td>{{ similar.version }}</td>
+          <td><span class="pill">{{ similar.match_type }}</span></td>
+          <td><a class="button secondary icon-button" href="{{ url_for('main.cpe_detail', cpe_id=similar.id) }}" title="View CPE"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <div class="card">
   <h2>PURL mappings</h2>
   <table>

@@ -2194,6 +2194,8 @@ def vendor_detail(vendor_uuid):
         ),
         product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
+        is_admin=session.get("is_admin", False),
+        similar_vendors=_find_duplicate_vendors(vendor.name, vendor.title, exclude_id=vendor.id) if session.get("is_admin") else [],
     )
 
 
@@ -2265,6 +2267,12 @@ def product_detail(product_uuid):
         ),
         product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
+        is_admin=session.get("is_admin", False),
+        similar_products=_find_duplicate_products(
+            product.vendor.name if product.vendor else None,
+            product.name,
+            exclude_id=product.id
+        ) if session.get("is_admin") else [],
     )
 
 
@@ -2288,6 +2296,8 @@ def cpe_detail(cpe_id):
         cpe=cpe,
         vulnerability_references=vulnerability_references,
         vulnerability_details=vulnerability_details,
+        is_admin=session.get("is_admin", False),
+        similar_cpes=_find_duplicate_cpes(cpe.cpe_uri, exclude_id=cpe.id) if session.get("is_admin") else [],
     )
 
 

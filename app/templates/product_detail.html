@@ -53,6 +53,28 @@
   <p>{{ product.notes or "No product notes yet." }}</p>
 </div>
 
+{% if is_admin and similar_products %}
+<div class="card duplicate-alert">
+  <h2><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Similar Products ({{ similar_products|length }})</h2>
+  <p class="muted">These products have similar names and may be duplicates.</p>
+  <table>
+    <thead><tr><th>Vendor</th><th>Product</th><th>CPEs</th><th>Match</th><th></th></tr></thead>
+    <tbody>
+      {% for similar in similar_products %}
+        <tr{% if similar.match_type == 'exact' %} class="duplicate-exact"{% endif %}>
+          <td><a href="{{ url_for('main.vendor_detail', vendor_uuid=similar.vendor_uuid) }}">{{ similar.vendor_name }}</a></td>
+          <td>
+            <a href="{{ url_for('main.product_detail', product_uuid=similar.uuid) }}">{{ similar.title or similar.name }}</a>
+          </td>
+          <td>{{ similar.cpe_count }}</td>
+          <td><span class="pill">{{ similar.match_type }}</span></td>
+          <td><a class="button secondary icon-button" href="{{ url_for('main.product_detail', product_uuid=similar.uuid) }}" title="View product"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 <div class="card">
   <h2>Product aliases</h2>
