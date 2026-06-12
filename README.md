@@ -293,6 +293,21 @@ sharded CPE JSON Lines files under `cpes/<vendor>/<product>/<part>.jsonl`, and
 separate JSON Lines shards for metadata, relationships, PURL mappings, and
 proposals.
 
+### Convert exported dataset to single NDJSON
+
+Convert the same portable app export into one newline-delimited JSON file for
+streaming data pipelines or tools that prefer a single append-style file:
+
+```bash
+python tools/export_dataset_to_jsonl.py /path/to/cpe-editor-dataset.tar.gz /path/to/cpe-editor-dataset.ndjson
+```
+
+The converter accepts either the `.tar.gz` export or a plain `dataset.json` file.
+It parses each top-level record array incrementally and writes one NDJSON row per
+record, so memory usage is bounded by the largest individual dataset record
+instead of the full export size. The first row contains dataset metadata; later
+rows have `type: "record"`, `collection`, and `record` fields.
+
 ### Import exported dataset
 
 ```bash
