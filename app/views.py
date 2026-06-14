@@ -1964,6 +1964,8 @@ def alias_proposal_new():
     alias_id = request.args.get("alias_id", type=int)
     alias = ProductAlias.query.get(alias_id) if alias_id else None
     q = (request.values.get("q") or "").strip()
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    products_per_page = 100
     selected_product_ids = request.values.getlist("product_ids")
 
     if alias and request.method == "GET" and not selected_product_ids:
@@ -1980,9 +1982,13 @@ def alias_proposal_new():
                 func.lower(Vendor.title).like(product_like),
             )
         )
-    products = (
-        product_query.order_by(Vendor.name.asc(), Product.name.asc()).limit(100).all()
-    )
+    product_query = product_query.order_by(Vendor.name.asc(), Product.name.asc())
+    total_products = product_query.count()
+    total_pages = max((total_products + products_per_page - 1) // products_per_page, 1)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * products_per_page
+    products = product_query.offset(offset).limit(products_per_page).all()
 
     selected_products = []
     if selected_product_ids:
@@ -2051,6 +2057,11 @@ def alias_proposal_new():
         alias=alias,
         q=q,
         products=products,
+        page=page,
+        total_pages=total_pages,
+        has_prev=page > 1,
+        has_next=page < total_pages,
+        total_products=total_products,
         selected_product_ids={
             int(product_id)
             for product_id in selected_product_ids
