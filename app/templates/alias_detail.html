@@ -5,6 +5,13 @@
   <div class="page-header">
     <h1>{{ alias.name }}</h1>
     <div class="action-row">
+      {% if session.get('is_admin') %}
+      <a class="button" href="{{ url_for('main.admin_edit_alias', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Edit alias</a>
+      <form method="post" action="{{ url_for('main.admin_delete_alias', alias_id=alias.id) }}" onsubmit="return confirm('Delete this alias?');" style="display:inline-block;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="danger" type="submit"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete alias</button>
+      </form>
+      {% endif %}
       <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Propose update</a>
       <button class="secondary copy-json" type="button" data-export-url="{{ url_for('main.api_alias_detail', alias_uuid=alias.uuid) }}"><i class="fa-solid fa-copy" aria-hidden="true"></i>Copy JSON</button>
     </div>

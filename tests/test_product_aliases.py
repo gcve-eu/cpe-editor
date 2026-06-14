@@ -147,6 +147,70 @@ def test_product_api_detail_includes_aliases(client, app):
     ]
 
 
+def test_admin_can_create_edit_and_delete_alias_directly(client, app):
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_username"] = "admin"
+        sess["_csrf_token"] = "test-csrf"
+
+    with app.app_context():
+        products = Product.query.order_by(Product.id.asc()).limit(2).all()
+        first_product = products[0]
+        second_product = products[1]
+
+    create_response = client.post(
+        "/admin/aliases/new",
+        data={
+            "alias_name": "Direct admin alias",
+            "alias_description": "Created without proposal review.",
+            "product_ids": [str(first_product.id), str(second_product.id)],
+            "csrf_token": "test-csrf",
+        },
+        follow_redirects=True,
+    )
+
+    assert create_response.status_code == 200
+    assert b"Direct admin alias" in create_response.data
+
+    with app.app_context():
+        alias = ProductAlias.query.filter_by(name="Direct admin alias").one()
+        alias_id = alias.id
+        alias_uuid = alias.uuid
+        assert {member.product_id for member in alias.members} == {
+            first_product.id,
+            second_product.id,
+        }
+
+    edit_response = client.post(
+        f"/admin/aliases/{alias_id}/edit",
+        data={
+            "alias_name": "Renamed admin alias",
+            "alias_description": "Edited directly.",
+            "product_ids": [str(second_product.id)],
+            "csrf_token": "test-csrf",
+        },
+        follow_redirects=True,
+    )
+
+    assert edit_response.status_code == 200
+    assert b"Renamed admin alias" in edit_response.data
+
+    with app.app_context():
+        alias = ProductAlias.query.filter_by(uuid=alias_uuid).one()
+        assert alias.description == "Edited directly."
+        assert [member.product_id for member in alias.members] == [second_product.id]
+
+    delete_response = client.post(
+        f"/admin/aliases/{alias_id}/delete",
+        data={"csrf_token": "test-csrf"},
+        follow_redirects=True,
+    )
+
+    assert delete_response.status_code == 200
+    with app.app_context():
+        assert ProductAlias.query.filter_by(uuid=alias_uuid).first() is None
+
+
 def test_app_dataset_export_import_preserves_product_aliases(app, tmp_path):
     from app.cli import write_app_dataset_archive
 
