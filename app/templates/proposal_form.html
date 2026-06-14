@@ -61,16 +61,15 @@
         </div>
       </div>
       <div class="grid grid-2">
-        <div>
-          <label for="proposed_product_name">Proposed product token <span class="required-marker">*</span></label>
+        <div id="product_token_group">
+          <label for="proposed_product_name">Proposed product token <span id="product_token_required_marker" class="required-marker">*</span></label>
           <input
             id="proposed_product_name"
             name="proposed_product_name"
             placeholder="e.g. exchange_server"
             value="{% if preselected_product %}{{ preselected_product.name }}{% endif %}"
-            required
           >
-          <small class="muted">For "Add a product to an existing vendor", this is the one required product field.</small>
+          <small id="product_token_help" class="muted">For product and CPE proposals, this is the required product token.</small>
         </div>
         <div>
           <label for="proposed_product_title">Product display title (optional)</label>
@@ -277,6 +276,9 @@
     const vendorTitleInput = document.getElementById("proposed_vendor_title");
     const productIdInput = document.getElementById("product_id");
     const productNameInput = document.getElementById("proposed_product_name");
+    const productTokenGroup = document.getElementById("product_token_group");
+    const productTokenRequiredMarker = document.getElementById("product_token_required_marker");
+    const productTokenHelp = document.getElementById("product_token_help");
     const notesInput = document.getElementById("proposed_notes");
     const relationshipSection = document.getElementById("relationship_section");
     const relationshipTypeInput = document.getElementById("proposed_relationship_type");
@@ -399,7 +401,13 @@
       vendorSelect.required = !isNewVendorProduct && !isRelationship && !isVulnReference;
       vendorNameInput.required = isNewVendorProduct;
       notesInput.required = false;
-      productNameInput.required = typesThatNeedProductToken.has(proposalType.value) && !isRelationship && !isVulnReference;
+      const productTokenIsRequired = typesThatNeedProductToken.has(proposalType.value) && !isRelationship && !isVulnReference;
+      productNameInput.required = productTokenIsRequired;
+      productTokenRequiredMarker.style.display = productTokenIsRequired ? "" : "none";
+      productTokenGroup.style.display = productTokenIsRequired || productNameInput.value.trim() ? "" : "none";
+      productTokenHelp.textContent = productTokenIsRequired
+        ? "For product and CPE proposals, this is the required product token."
+        : "Not needed for this proposal type.";
       productIdInput.required = false;
       if (isNewVendorProduct) {
         vendorSelect.value = "";
