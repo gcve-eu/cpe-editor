@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit alias' if alias else 'Create alias' }}{% endblock %}
+{% block content %}
+<section class="card">
+  <div class="page-header">
+    <div>
+      <h1>{{ 'Edit alias' if alias else 'Create alias' }}</h1>
+      <p class="muted">Admins can publish alias changes directly without proposal review.</p>
+    </div>
+    <button type="submit" form="admin-alias-form"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Save alias</button>
+  </div>
+</section>
+
+<form method="post" id="admin-alias-form" class="card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% for product_id in selected_product_ids if product_id not in product_page_ids %}
+    <input type="hidden" name="product_ids" value="{{ product_id }}">
+  {% endfor %}
+  <div class="form-grid">
+    <label for="alias_name">Alias name</label>
+    <input id="alias_name" name="alias_name" required value="{{ alias.name if alias else '' }}" placeholder="Example: Microsoft Windows">
+    <label for="alias_description">Description</label>
+    <textarea id="alias_description" name="alias_description" placeholder="Optional context for users">{{ alias.description if alias else '' }}</textarea>
+  </div>
+
+  <h2>Selected members</h2>
+  {% if selected_products %}
+    <ul>
+      {% for product in selected_products %}
+        <li>{{ product.vendor.title or product.vendor.name }} / {{ product.title or product.name }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted">No members selected yet. Select one or more products below.</p>
+  {% endif %}
+
+  <h2>Find products</h2>
+  <p class="muted">Search vendors or products, then check products that should belong to this alias.</p>
+  <div class="form-grid">
+    <label for="q">Search</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="vendor or product name">
+  </div>
+  <button class="secondary" type="submit" formmethod="get"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search products</button>
+
+  <p class="muted">Showing page {{ page }} of {{ total_pages }} ({{ total_products }} matching products).</p>
+  <table>
+    <thead><tr><th>Select</th><th>Vendor</th><th>Product</th></tr></thead>
+    <tbody>
+      {% for product in products %}
+        <tr>
+          <td><input type="checkbox" name="product_ids" value="{{ product.id }}" {% if product.id in selected_product_ids %}checked{% endif %}></td>
+          <td>{{ product.vendor.title or product.vendor.name }}</td>
+          <td>{{ product.title or product.name }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">No products match this search.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    {% if has_prev %}<a class="button secondary" href="{{ page_url(page - 1) }}">Previous</a>{% endif %}
+    {% if has_next %}<a class="button secondary" href="{{ page_url(page + 1) }}">Next</a>{% endif %}
+  </div>
+</form>
+{% endblock %}

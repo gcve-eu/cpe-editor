@@ -1917,6 +1917,138 @@ def alias_detail(alias_uuid):
     return render_template("alias_detail.html", alias=alias)
 
 
+def _admin_alias_form_context(alias=None):
+    q = (request.values.get("q") or "").strip()
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    products_per_page = 100
+    selected_product_ids = request.values.getlist("product_ids")
+
+    if alias and request.method == "GET" and not selected_product_ids:
+        selected_product_ids = [str(member.product_id) for member in alias.members]
+
+    product_query = Product.query.join(Vendor)
+    if q:
+        product_like = f"%{q.lower()}%"
+        product_query = product_query.filter(
+            or_(
+                func.lower(Product.name).like(product_like),
+                func.lower(Product.title).like(product_like),
+                func.lower(Vendor.name).like(product_like),
+                func.lower(Vendor.title).like(product_like),
+            )
+        )
+    product_query = product_query.order_by(Vendor.name.asc(), Product.name.asc())
+    total_products = product_query.count()
+    total_pages = max((total_products + products_per_page - 1) // products_per_page, 1)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * products_per_page
+    products = product_query.offset(offset).limit(products_per_page).all()
+    product_page_ids = {product.id for product in products}
+
+    selected_members = _normalize_alias_member_ids(selected_product_ids)
+    selected_ids = {member["product_id"] for member in selected_members}
+    selected_products = (
+        Product.query.filter(Product.id.in_(selected_ids))
+        .join(Vendor)
+        .order_by(Vendor.name.asc(), Product.name.asc())
+        .all()
+        if selected_ids
+        else []
+    )
+
+    def page_url(target_page):
+        return url_for(
+            request.endpoint,
+            alias_id=alias.id if alias else None,
+            q=q or None,
+            page=target_page,
+            product_ids=sorted(selected_ids),
+        )
+
+    return {
+        "alias": alias,
+        "q": q,
+        "products": products,
+        "product_page_ids": product_page_ids,
+        "page": page,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "total_products": total_products,
+        "selected_product_ids": selected_ids,
+        "selected_products": selected_products,
+        "page_url": page_url,
+    }
+
+
+def _save_admin_alias(alias=None):
+    alias_name = (request.form.get("alias_name") or "").strip()
+    alias_description = (request.form.get("alias_description") or "").strip() or None
+    selected_members = _normalize_alias_member_ids(request.form.getlist("product_ids"))
+
+    if not alias_name:
+        flash("Please provide an alias name.", "danger")
+        return False
+    if not selected_members:
+        flash("Please select at least one vendor/product tuple for the alias.", "danger")
+        return False
+
+    conflicting_alias = ProductAlias.query.filter(
+        func.lower(ProductAlias.name) == alias_name.lower()
+    ).first()
+    if conflicting_alias and (not alias or conflicting_alias.id != alias.id):
+        flash("Another alias already uses that name.", "danger")
+        return False
+
+    if alias is None:
+        alias = ProductAlias(
+            submitter_name=session.get("admin_username") or "Admin",
+            submitted_at=datetime.utcnow(),
+            approved_at=datetime.utcnow(),
+        )
+        db.session.add(alias)
+
+    alias.name = alias_name
+    alias.description = alias_description
+    alias.approved_at = alias.approved_at or datetime.utcnow()
+    _apply_alias_members(alias, selected_members)
+    db.session.commit()
+    flash("Alias saved.", "success")
+    return alias
+
+
+@bp.route("/admin/aliases/new", methods=["GET", "POST"])
+@admin_required
+def admin_create_alias():
+    if request.method == "POST":
+        alias = _save_admin_alias()
+        if alias:
+            return redirect(url_for("main.alias_detail", alias_uuid=alias.uuid))
+    return render_template("admin/alias_form.html", **_admin_alias_form_context())
+
+
+@bp.route("/admin/aliases/<int:alias_id>/edit", methods=["GET", "POST"])
+@admin_required
+def admin_edit_alias(alias_id):
+    alias = ProductAlias.query.get_or_404(alias_id)
+    if request.method == "POST":
+        saved_alias = _save_admin_alias(alias)
+        if saved_alias:
+            return redirect(url_for("main.alias_detail", alias_uuid=saved_alias.uuid))
+    return render_template("admin/alias_form.html", **_admin_alias_form_context(alias))
+
+
+@bp.route("/admin/aliases/<int:alias_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_alias(alias_id):
+    alias = ProductAlias.query.get_or_404(alias_id)
+    db.session.delete(alias)
+    db.session.commit()
+    flash("Alias deleted.", "success")
+    return redirect(url_for("main.aliases"))
+
+
 @bp.route("/api/aliases")
 def api_aliases():
     q = (request.args.get("q") or "").strip()

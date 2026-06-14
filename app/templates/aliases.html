@@ -5,6 +5,9 @@
   <div class="page-header">
     <h1>Product aliases</h1>
     <div class="action-row">
+      {% if session.get('is_admin') %}
+      <a class="button" href="{{ url_for('main.admin_create_alias') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Add alias</a>
+      {% endif %}
       <a class="button" href="{{ url_for('main.alias_proposal_new') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Propose alias</a>
     </div>
   </div>
@@ -25,7 +28,16 @@
           <td><a href="{{ url_for('main.alias_detail', alias_uuid=alias.uuid) }}">{{ alias.name }}</a></td>
           <td>{{ alias.members|length }}</td>
           <td>{{ alias.description or '—' }}</td>
-          <td><a class="button secondary" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Propose update</a></td>
+          <td>
+            {% if session.get('is_admin') %}
+              <a class="button secondary" href="{{ url_for('main.admin_edit_alias', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Edit</a>
+              <form method="post" action="{{ url_for('main.admin_delete_alias', alias_id=alias.id) }}" onsubmit="return confirm('Delete this alias?');" style="display:inline-block;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="danger" type="submit"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete</button>
+              </form>
+            {% endif %}
+            <a class="button secondary" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Propose update</a>
+          </td>
         </tr>
       {% else %}
         <tr><td colspan="4">No approved aliases yet.</td></tr>
