@@ -8,6 +8,7 @@ from app.models import (
     EntityNote,
     EntityRelationship,
     Product,
+    Proposal,
     ProductAlias,
     ProductAliasMember,
     Vendor,
@@ -519,3 +520,50 @@ def test_build_app_dataset_skips_orphaned_purl_mappings(app):
         for mapping in dataset["purl_mappings"]
     )
     assert dataset["counts"]["purl_mappings"] == len(dataset["purl_mappings"])
+
+
+def _csrf_token(client):
+    client.get("/proposals/new")
+    with client.session_transaction() as sess:
+        return sess["_csrf_token"]
+
+
+def test_relationship_form_does_not_statically_require_product_token(client):
+    response = client.get("/proposals/new?proposal_type=new_record_relationship")
+
+    assert response.status_code == 200
+    product_input = response.data.split(b'id="proposed_product_name"', 1)[1].split(
+        b">", 1
+    )[0]
+    assert b"required" not in product_input
+
+
+def test_vendor_relationship_submission_does_not_need_product_token(client, app):
+    with app.app_context():
+        vendors = Vendor.query.order_by(Vendor.id).limit(2).all()
+        source_vendor_id = vendors[0].id
+        target_vendor_id = vendors[1].id
+
+    response = client.post(
+        "/proposals/new",
+        data={
+            "csrf_token": _csrf_token(client),
+            "proposal_type": "new_record_relationship",
+            "proposed_relationship_type": "equivalent-to",
+            "source_entity_kind": "vendor",
+            "source_vendor_id": str(source_vendor_id),
+            "target_entity_kind": "vendor",
+            "target_vendor_id": str(target_vendor_id),
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Proposal submitted" in response.data
+    with app.app_context():
+        proposal = Proposal.query.filter_by(
+            proposal_type="new_record_relationship",
+            source_vendor_id=source_vendor_id,
+            target_vendor_id=target_vendor_id,
+        ).one()
+        assert proposal.proposed_product_name is None
