@@ -41,6 +41,32 @@ def test_alias_pages_and_proposal_form(client):
     assert b"Microsoft" in form_response.data
 
 
+def test_alias_proposal_product_search_is_paginated(client, app):
+    with app.app_context():
+        vendor = Product.query.first().vendor
+        for index in range(105):
+            db.session.add(
+                Product(
+                    vendor_id=vendor.id,
+                    name=f"alias_pagination_product_{index:03d}",
+                    title=f"Alias Pagination Product {index:03d}",
+                )
+            )
+        db.session.commit()
+
+    first_page = client.get("/aliases/proposals/new?q=alias_pagination")
+    assert first_page.status_code == 200
+    assert b"Showing page 1 of 2" in first_page.data
+    assert b"Alias Pagination Product 000" in first_page.data
+    assert b"Alias Pagination Product 104" not in first_page.data
+    assert b"page=2" in first_page.data
+
+    second_page = client.get("/aliases/proposals/new?q=alias_pagination&page=2")
+    assert second_page.status_code == 200
+    assert b"Showing page 2 of 2" in second_page.data
+    assert b"Alias Pagination Product 104" in second_page.data
+    assert b"page=1" in second_page.data
+
 def test_alias_proposal_submission_requires_member(client):
     client.get("/aliases/proposals/new")
     with client.session_transaction() as sess:

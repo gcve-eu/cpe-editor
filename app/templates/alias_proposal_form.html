@@ -50,6 +50,25 @@
   <div class="card">
     <h2>Selected tuples</h2>
     <p class="muted">Checked rows below will be included in the proposal. Search again to add more tuples; current selections are preserved.</p>
+    {% if total_products %}
+      <div class="muted vendor-results-meta">
+        <p>Showing page {{ page }} of {{ total_pages }} ({{ total_products }} matching tuple{% if total_products != 1 %}s{% endif %}).</p>
+        {% if has_prev or has_next %}
+          <div class="action-row">
+            {% if has_prev %}
+              <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id if alias else none, q=q or none, page=page - 1, product_ids=selected_product_ids|list) }}">
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
+              </a>
+            {% endif %}
+            {% if has_next %}
+              <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id if alias else none, q=q or none, page=page + 1, product_ids=selected_product_ids|list) }}">
+                Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+              </a>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
     <table>
       <thead><tr><th>Include</th><th>Vendor</th><th>Product</th></tr></thead>
       <tbody>
@@ -75,6 +94,23 @@
         {% endfor %}
       </tbody>
     </table>
+    {% if total_products and (has_prev or has_next) %}
+      <div class="muted vendor-results-meta">
+        <p>Showing page {{ page }} of {{ total_pages }} ({{ total_products }} matching tuple{% if total_products != 1 %}s{% endif %}).</p>
+        <div class="action-row">
+          {% if has_prev %}
+            <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id if alias else none, q=q or none, page=page - 1, product_ids=selected_product_ids|list) }}">
+              <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
+            </a>
+          {% endif %}
+          {% if has_next %}
+            <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id if alias else none, q=q or none, page=page + 1, product_ids=selected_product_ids|list) }}">
+              Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
   </div>
 </form>
 {% endblock %}
