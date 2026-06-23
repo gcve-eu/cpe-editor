@@ -77,6 +77,76 @@ def _case_insensitive_prefix_filter(column, prefix):
     return and_(*filters)
 
 
+def _matching_vendor_ids(vendor_q, limit=None):
+    query = Vendor.query.with_entities(Vendor.id)
+    if vendor_q:
+        query = query.filter(
+            or_(
+                _case_insensitive_prefix_filter(Vendor.name, vendor_q),
+                _case_insensitive_prefix_filter(Vendor.title, vendor_q),
+            )
+        )
+    query = query.order_by(Vendor.name.asc(), Vendor.id.asc())
+    if limit is not None:
+        query = query.limit(limit)
+    return [vendor_id for (vendor_id,) in query.all()]
+
+
+def _matching_product_ids(product_q, vendor_ids=None, limit=None):
+    query = Product.query.with_entities(Product.id)
+    if vendor_ids is not None:
+        if not vendor_ids:
+            return []
+        query = query.filter(Product.vendor_id.in_(vendor_ids))
+    if product_q:
+        query = query.filter(
+            or_(
+                _case_insensitive_prefix_filter(Product.name, product_q),
+                _case_insensitive_prefix_filter(Product.title, product_q),
+            )
+        )
+    query = query.order_by(Product.name.asc(), Product.id.asc())
+    if limit is not None:
+        query = query.limit(limit)
+    return [product_id for (product_id,) in query.all()]
+
+
+def _apply_cpe_search_filters(
+    query, vendor_q=None, product_q=None, purl_q=None, part=None
+):
+    """Apply CPE filters using indexed id preselection for prefix searches.
+
+    Prefix filters on joined vendor/product text columns can force SQLite to build
+    and sort a very large joined row set before it can return the first page.
+    Resolving matching vendor/product ids first lets the CPE query use ordinary
+    foreign-key indexes, which keeps broad searches such as vendor_q=microsoft
+    bounded before pagination.
+    """
+    vendor_ids = None
+    if vendor_q:
+        vendor_ids = _matching_vendor_ids(vendor_q)
+        if not vendor_ids:
+            return query.filter(text("0 = 1"))
+        query = query.filter(CPEEntry.vendor_id.in_(vendor_ids))
+
+    if product_q:
+        product_ids = _matching_product_ids(product_q, vendor_ids=vendor_ids)
+        if not product_ids:
+            return query.filter(text("0 = 1"))
+        query = query.filter(CPEEntry.product_id.in_(product_ids))
+
+    if purl_q:
+        matching_cpe_name_ids = (
+            select(CPEPurlMapping.cpe_name_id)
+            .filter(_case_insensitive_prefix_filter(CPEPurlMapping.purl, purl_q))
+            .distinct()
+        )
+        query = query.filter(CPEEntry.cpe_name_id.in_(matching_cpe_name_ids))
+    if part:
+        query = query.filter(CPEEntry.part == part)
+    return query
+
+
 def _limited_page(query, page, per_page):
     """Fetch one bounded page without issuing an expensive full result count."""
     page = max(page, 1)
@@ -1844,29 +1914,9 @@ def index():
             selectinload(CPEEntry.purl_mappings),
         )
     )
-    if purl_q:
-        matching_cpe_name_ids = (
-            select(CPEPurlMapping.cpe_name_id)
-            .filter(_case_insensitive_prefix_filter(CPEPurlMapping.purl, purl_q))
-            .distinct()
-        )
-        query = query.filter(CPEEntry.cpe_name_id.in_(matching_cpe_name_ids))
-    if vendor_q:
-        query = query.filter(
-            or_(
-                _case_insensitive_prefix_filter(Vendor.name, vendor_q),
-                _case_insensitive_prefix_filter(Vendor.title, vendor_q),
-            )
-        )
-    if product_q:
-        query = query.filter(
-            or_(
-                _case_insensitive_prefix_filter(Product.name, product_q),
-                _case_insensitive_prefix_filter(Product.title, product_q),
-            )
-        )
-    if part:
-        query = query.filter(CPEEntry.part == part)
+    query = _apply_cpe_search_filters(
+        query, vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part
+    )
 
     ordered_query = query.order_by(
         Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc()
@@ -2877,13 +2927,9 @@ def api_cpes():
     )
 
     query = CPEEntry.query.join(Vendor).join(Product)
-    if purl_q:
-        matching_cpe_name_ids = (
-            select(CPEPurlMapping.cpe_name_id)
-            .filter(_case_insensitive_prefix_filter(CPEPurlMapping.purl, purl_q))
-            .distinct()
-        )
-        query = query.filter(CPEEntry.cpe_name_id.in_(matching_cpe_name_ids))
+    query = _apply_cpe_search_filters(
+        query, vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part
+    )
     if q:
         like = f"%{q.lower()}%"
         query = query.filter(
@@ -2897,23 +2943,6 @@ def api_cpes():
                 func.lower(CPEEntry.version).like(like),
             )
         )
-    if vendor_q:
-        query = query.filter(
-            or_(
-                _case_insensitive_prefix_filter(Vendor.name, vendor_q),
-                _case_insensitive_prefix_filter(Vendor.title, vendor_q),
-            )
-        )
-    if product_q:
-        query = query.filter(
-            or_(
-                _case_insensitive_prefix_filter(Product.name, product_q),
-                _case_insensitive_prefix_filter(Product.title, product_q),
-            )
-        )
-    if part:
-        query = query.filter(CPEEntry.part == part)
-
     total = (
         query.with_entities(func.count(func.distinct(CPEEntry.id)))
         .order_by(None)
