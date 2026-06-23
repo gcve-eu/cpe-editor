@@ -53,8 +53,8 @@
       {% if top_vendor %}
         <li>
           Top vendor by product count:
-          <a href="{{ url_for('main.vendor_detail', vendor_uuid=top_vendor.vendor_uuid) }}">
-            {{ top_vendor.vendor_title or top_vendor.vendor_name }}
+          <a href="{{ url_for('main.vendor_detail', vendor_uuid=top_vendor.uuid or top_vendor.vendor_uuid) }}">
+            {{ top_vendor.title or top_vendor.name or top_vendor.vendor_title or top_vendor.vendor_name }}
           </a>
           ({{ top_vendor.product_count }} products)
         </li>
@@ -122,8 +122,8 @@
             <tr>
               <td>{{ vendor_rank_start + loop.index0 }}</td>
               <td>
-                <a href="{{ url_for('main.vendor_detail', vendor_uuid=item.vendor_uuid) }}">
-                  {{ item.vendor_title or item.vendor_name }}
+                <a href="{{ url_for('main.vendor_detail', vendor_uuid=item.uuid or item.vendor_uuid) }}">
+                  {{ item.title or item.name or item.vendor_title or item.vendor_name }}
                 </a>
               </td>
               <td>{{ item.product_count }}</td>
