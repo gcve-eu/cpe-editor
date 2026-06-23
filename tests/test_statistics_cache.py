@@ -86,3 +86,64 @@ def test_statistics_payload_populates_cache_on_miss(app, monkeypatch):
 
     assert payload["counts"]["vendors"] == 2
     assert writes == [("cpe-editor:statistics:payload:v1", payload)]
+
+
+def test_statistics_page_renders_cached_top_vendor_names(client, monkeypatch):
+    top_list_payload = {
+        "entity": "vendors",
+        "items": [
+            {
+                "entity_type": "vendor",
+                "id": 1,
+                "uuid": "11111111-1111-1111-1111-111111111111",
+                "name": "cached_vendor",
+                "title": "Cached Vendor",
+                "product_count": 17904,
+                "rank": 1,
+            }
+        ],
+        "page": 1,
+        "per_page": 25,
+        "total": 1,
+        "total_pages": 1,
+    }
+
+    monkeypatch.setattr(
+        views,
+        "_build_statistics_payload",
+        lambda: {
+            "counts": {
+                "vendors": 1,
+                "products": 17904,
+                "cpes": 0,
+                "purl_mappings": 0,
+                "cpes_with_purl_mappings": 0,
+                "contributed_inputs": 0,
+                "contributed_cpes": 0,
+                "metadata_entries": 0,
+                "relationships": 0,
+                "product_aliases": 0,
+                "product_alias_members": 0,
+                "notes": 0,
+                "vulnerability_references": 0,
+                "vendors_without_products": 0,
+            },
+            "averages": {"purls_per_cpe": 0, "products_per_vendor": 17904},
+            "top_vendor": top_list_payload["items"][0],
+            "cpe_part_counts": [],
+            "metadata_key_counts": [],
+            "relationship_type_counts": [],
+            "proposal_status_counts": {},
+        },
+    )
+    monkeypatch.setattr(
+        views, "_build_statistics_top_list_payload", lambda *args: top_list_payload
+    )
+
+    response = client.get("/statistics")
+
+    assert response.status_code == 200
+    assert b"Cached Vendor" in response.data
+    assert b"cached_vendor" not in response.data
+    assert b"17904" in response.data
+    assert b"11111111-1111-1111-1111-111111111111" in response.data
