@@ -25,6 +25,7 @@ from flask import (
     url_for,
 )
 from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy.orm import contains_eager, selectinload
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
 from .models import (
@@ -74,6 +75,17 @@ def _case_insensitive_prefix_filter(column, prefix):
     if upper_bound is not None:
         filters.append(lowered_column < upper_bound)
     return and_(*filters)
+
+
+def _limited_page(query, page, per_page):
+    """Fetch one bounded page without issuing an expensive full result count."""
+    page = max(page, 1)
+    rows = (
+        query.offset((page - 1) * per_page)
+        .limit(per_page + 1)
+        .all()
+    )
+    return rows[:per_page], len(rows) > per_page
 
 
 RELATIONSHIP_TYPE_DESCRIPTIONS = {
@@ -1823,7 +1835,15 @@ def index():
             has_search_filters=has_search_filters,
         )
 
-    query = CPEEntry.query.join(Vendor).join(Product)
+    query = (
+        CPEEntry.query.join(Vendor)
+        .join(Product)
+        .options(
+            contains_eager(CPEEntry.vendor),
+            contains_eager(CPEEntry.product),
+            selectinload(CPEEntry.purl_mappings),
+        )
+    )
     if purl_q:
         matching_cpe_name_ids = (
             select(CPEPurlMapping.cpe_name_id)
@@ -1851,12 +1871,8 @@ def index():
     ordered_query = query.order_by(
         Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc()
     )
-    total_results = ordered_query.count()
-    total_pages = max((total_results + per_page - 1) // per_page, 1)
-    if page > total_pages:
-        page = total_pages
-    offset = (page - 1) * per_page
-    results = ordered_query.offset(offset).limit(per_page).all()
+    results, has_next = _limited_page(ordered_query, page, per_page)
+    has_prev = page > 1
 
     return render_template(
         "index.html",
@@ -1866,10 +1882,10 @@ def index():
         purl_q=purl_q,
         part=part,
         page=page,
-        total_pages=total_pages,
-        has_prev=page > 1,
-        has_next=page < total_pages,
-        total_results=total_results,
+        total_pages=None,
+        has_prev=has_prev,
+        has_next=has_next,
+        total_results=None,
         has_search_filters=has_search_filters,
     )
 
