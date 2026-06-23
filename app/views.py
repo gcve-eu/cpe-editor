@@ -25,6 +25,7 @@ from flask import (
 )
 from sqlalchemy import func, or_, select, text
 
+from .cache import cache_get_json, cache_set_json, dict_to_namespace
 from .models import (
     CPEEntry,
     CPEPurlMapping,
@@ -610,7 +611,15 @@ def _count_proposals_by_status():
     return {status or "unknown": count for status, count in rows}
 
 
-def _build_statistics_payload():
+def _statistics_payload_cache_key():
+    return "cpe-editor:statistics:payload:v1"
+
+
+def _statistics_top_list_cache_key(entity, page, per_page):
+    return f"cpe-editor:statistics:top-list:v1:{entity}:{page}:{per_page}"
+
+
+def _build_statistics_payload_uncached():
     total_vendors = db.session.query(func.count(Vendor.id)).scalar() or 0
     total_products = db.session.query(func.count(Product.id)).scalar() or 0
     total_cpes = db.session.query(func.count(CPEEntry.id)).scalar() or 0
@@ -716,6 +725,17 @@ def _build_statistics_payload():
         ],
         "proposal_status_counts": _count_proposals_by_status(),
     }
+
+
+def _build_statistics_payload():
+    cache_key = _statistics_payload_cache_key()
+    cached_payload = cache_get_json(cache_key)
+    if cached_payload is not None:
+        return cached_payload
+
+    payload = _build_statistics_payload_uncached()
+    cache_set_json(cache_key, payload)
+    return payload
 
 
 def _serialize_entity_note(note):
@@ -1864,7 +1884,9 @@ def vendors():
             {"vendor": vendor, "product_count": count} for vendor, count in rows
         ]
         vendors = [item["vendor"] for item in vendors_with_count]
-        vendor_product_counts = {item["vendor"].id: item["product_count"] for item in vendors_with_count}
+        vendor_product_counts = {
+            item["vendor"].id: item["product_count"] for item in vendors_with_count
+        }
     else:
         vendor_query = Vendor.query
         if vendor_q:
@@ -1991,7 +2013,9 @@ def _save_admin_alias(alias=None):
         flash("Please provide an alias name.", "danger")
         return False
     if not selected_members:
-        flash("Please select at least one vendor/product tuple for the alias.", "danger")
+        flash(
+            "Please select at least one vendor/product tuple for the alias.", "danger"
+        )
         return False
 
     conflicting_alias = ProductAlias.query.filter(
@@ -2224,20 +2248,29 @@ def statistics():
     vulnerability_references = statistics_payload["counts"]["vulnerability_references"]
     average_purls_per_cpe = statistics_payload["averages"]["purls_per_cpe"]
 
-    vendor_product_counts_query = _statistics_top_vendors_query()
-
-    vendor_product_total = vendor_product_counts_query.count()
+    top_list_payload = _build_statistics_top_list_payload(
+        "vendors", vendor_page, vendors_per_page
+    )
+    vendor_product_total = top_list_payload["total"]
     vendor_product_total_pages = max(
         (vendor_product_total + vendors_per_page - 1) // vendors_per_page, 1
     )
     if vendor_page > vendor_product_total_pages:
         vendor_page = vendor_product_total_pages
     vendor_offset = (vendor_page - 1) * vendors_per_page
-    vendor_product_counts = (
-        vendor_product_counts_query.offset(vendor_offset).limit(vendors_per_page).all()
-    )
+    if vendor_page != top_list_payload["page"]:
+        top_list_payload = _build_statistics_top_list_payload(
+            "vendors", vendor_page, vendors_per_page
+        )
+    vendor_product_counts = [
+        dict_to_namespace(item) for item in top_list_payload["items"]
+    ]
 
-    top_vendor = vendor_product_counts_query.first()
+    top_vendor = (
+        dict_to_namespace(statistics_payload["top_vendor"])
+        if statistics_payload.get("top_vendor")
+        else None
+    )
     average_products_per_vendor = statistics_payload["averages"]["products_per_vendor"]
     vendors_without_products = statistics_payload["counts"]["vendors_without_products"]
     cpe_part_counts = statistics_payload["cpe_part_counts"]
@@ -2339,7 +2372,17 @@ def vendor_detail(vendor_uuid):
         product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
         is_admin=session.get("is_admin", False),
-        similar_vendors=_find_duplicate_vendors(vendor.name, vendor.title, exclude_id=vendor.id, source_type="vendor", source_id=vendor.id) if session.get("is_admin") else [],
+        similar_vendors=(
+            _find_duplicate_vendors(
+                vendor.name,
+                vendor.title,
+                exclude_id=vendor.id,
+                source_type="vendor",
+                source_id=vendor.id,
+            )
+            if session.get("is_admin")
+            else []
+        ),
     )
 
 
@@ -2412,13 +2455,17 @@ def product_detail(product_uuid):
         product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,
         is_admin=session.get("is_admin", False),
-        similar_products=_find_duplicate_products(
-            product.vendor.name if product.vendor else None,
-            product.name,
-            exclude_id=product.id,
-            source_type="product",
-            source_id=product.id,
-        ) if session.get("is_admin") else [],
+        similar_products=(
+            _find_duplicate_products(
+                product.vendor.name if product.vendor else None,
+                product.name,
+                exclude_id=product.id,
+                source_type="product",
+                source_id=product.id,
+            )
+            if session.get("is_admin")
+            else []
+        ),
     )
 
 
@@ -2443,7 +2490,13 @@ def cpe_detail(cpe_id):
         vulnerability_references=vulnerability_references,
         vulnerability_details=vulnerability_details,
         is_admin=session.get("is_admin", False),
-        similar_cpes=_find_duplicate_cpes(cpe.cpe_uri, exclude_id=cpe.id, source_type="cpe", source_id=cpe.id) if session.get("is_admin") else [],
+        similar_cpes=(
+            _find_duplicate_cpes(
+                cpe.cpe_uri, exclude_id=cpe.id, source_type="cpe", source_id=cpe.id
+            )
+            if session.get("is_admin")
+            else []
+        ),
     )
 
 
@@ -2470,6 +2523,39 @@ def api_statistics():
     return jsonify(_build_statistics_payload())
 
 
+def _build_statistics_top_list_payload(entity, page, per_page):
+    cache_key = _statistics_top_list_cache_key(entity, page, per_page)
+    cached_payload = cache_get_json(cache_key)
+    if cached_payload is not None:
+        return cached_payload
+
+    if entity == "vendors":
+        query = _statistics_top_vendors_query()
+        serializer = _serialize_top_vendor
+    else:
+        query = _statistics_top_products_query()
+        serializer = _serialize_top_product
+
+    total = query.count()
+    total_pages = max((total + per_page - 1) // per_page, 1)
+    page = min(page, total_pages)
+    rank_start = (page - 1) * per_page + 1
+    results = query.offset((page - 1) * per_page).limit(per_page).all()
+    payload = {
+        "entity": entity,
+        "items": [
+            serializer(row, rank=rank_start + index)
+            for index, row in enumerate(results)
+        ],
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+    }
+    cache_set_json(cache_key, payload)
+    return payload
+
+
 @bp.route("/api/statistics/top-list")
 def api_statistics_top_list():
     entity = (request.args.get("entity") or "vendors").strip().lower()
@@ -2480,31 +2566,13 @@ def api_statistics_top_list():
 
     if entity in {"vendor", "vendors"}:
         normalized_entity = "vendors"
-        query = _statistics_top_vendors_query()
-        serializer = _serialize_top_vendor
     elif entity in {"product", "products"}:
         normalized_entity = "products"
-        query = _statistics_top_products_query()
-        serializer = _serialize_top_product
     else:
         abort(400, description="entity must be one of: vendors, products")
 
-    total = query.count()
-    rank_start = (page - 1) * per_page + 1
-    results = query.offset((page - 1) * per_page).limit(per_page).all()
-
     return jsonify(
-        {
-            "entity": normalized_entity,
-            "items": [
-                serializer(row, rank=rank_start + index)
-                for index, row in enumerate(results)
-            ],
-            "page": page,
-            "per_page": per_page,
-            "total": total,
-            "total_pages": max((total + per_page - 1) // per_page, 1),
-        }
+        _build_statistics_top_list_payload(normalized_entity, page, per_page)
     )
 
 
@@ -3886,13 +3954,13 @@ def _get_dismissed_duplicates(source_type, source_id, duplicate_type):
     return {(d.duplicate_type, d.duplicate_id) for d in dismissed}
 
 
-def _find_duplicate_vendors(name, title=None, exclude_id=None, source_type=None, source_id=None):
+def _find_duplicate_vendors(
+    name, title=None, exclude_id=None, source_type=None, source_id=None
+):
     if not name:
         return []
     normalized = normalize_token(name)
-    query = Vendor.query.filter(
-        func.lower(Vendor.name).like(f"%{normalized}%")
-    )
+    query = Vendor.query.filter(func.lower(Vendor.name).like(f"%{normalized}%"))
     if exclude_id:
         query = query.filter(Vendor.id != exclude_id)
     vendors = query.limit(10).all()
@@ -3907,18 +3975,22 @@ def _find_duplicate_vendors(name, title=None, exclude_id=None, source_type=None,
     for vendor in vendors:
         if vendor.id in dismissed_ids:
             continue
-        results.append({
-            "id": vendor.id,
-            "uuid": vendor.uuid,
-            "name": vendor.name,
-            "title": vendor.title,
-            "product_count": len(vendor.products),
-            "match_type": "exact" if vendor.name == normalized else "partial",
-        })
+        results.append(
+            {
+                "id": vendor.id,
+                "uuid": vendor.uuid,
+                "name": vendor.name,
+                "title": vendor.title,
+                "product_count": len(vendor.products),
+                "match_type": "exact" if vendor.name == normalized else "partial",
+            }
+        )
     return results
 
 
-def _find_duplicate_products(vendor_name, product_name, exclude_id=None, source_type=None, source_id=None):
+def _find_duplicate_products(
+    vendor_name, product_name, exclude_id=None, source_type=None, source_id=None
+):
     if not product_name:
         return []
     normalized_vendor = normalize_token(vendor_name) if vendor_name else None
@@ -3928,9 +4000,7 @@ def _find_duplicate_products(vendor_name, product_name, exclude_id=None, source_
         vendor = Vendor.query.filter_by(name=normalized_vendor).first()
         if vendor:
             query = query.filter(Product.vendor_id == vendor.id)
-    query = query.filter(
-        func.lower(Product.name).like(f"%{normalized_product}%")
-    )
+    query = query.filter(func.lower(Product.name).like(f"%{normalized_product}%"))
     if exclude_id:
         query = query.filter(Product.id != exclude_id)
     products = query.limit(10).all()
@@ -3945,16 +4015,20 @@ def _find_duplicate_products(vendor_name, product_name, exclude_id=None, source_
     for product in products:
         if product.id in dismissed_ids:
             continue
-        results.append({
-            "id": product.id,
-            "uuid": product.uuid,
-            "name": product.name,
-            "title": product.title,
-            "vendor_name": product.vendor.name if product.vendor else None,
-            "vendor_uuid": product.vendor.uuid if product.vendor else None,
-            "cpe_count": len(product.cpes),
-            "match_type": "exact" if product.name == normalized_product else "partial",
-        })
+        results.append(
+            {
+                "id": product.id,
+                "uuid": product.uuid,
+                "name": product.name,
+                "title": product.title,
+                "vendor_name": product.vendor.name if product.vendor else None,
+                "vendor_uuid": product.vendor.uuid if product.vendor else None,
+                "cpe_count": len(product.cpes),
+                "match_type": (
+                    "exact" if product.name == normalized_product else "partial"
+                ),
+            }
+        )
     return results
 
 
@@ -3978,14 +4052,16 @@ def _find_duplicate_cpes(cpe_uri, exclude_id=None, source_type=None, source_id=N
     for cpe in cpes:
         if cpe.id in dismissed_ids:
             continue
-        results.append({
-            "id": cpe.id,
-            "cpe_uri": cpe.cpe_uri,
-            "vendor_name": cpe.vendor.name if cpe.vendor else None,
-            "product_name": cpe.product.name if cpe.product else None,
-            "version": cpe.version,
-            "match_type": "exact" if cpe.cpe_uri == cpe_uri else "partial",
-        })
+        results.append(
+            {
+                "id": cpe.id,
+                "cpe_uri": cpe.cpe_uri,
+                "vendor_name": cpe.vendor.name if cpe.vendor else None,
+                "product_name": cpe.product.name if cpe.product else None,
+                "version": cpe.version,
+                "match_type": "exact" if cpe.cpe_uri == cpe_uri else "partial",
+            }
+        )
     return results
 
 

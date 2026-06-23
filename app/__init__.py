@@ -19,11 +19,17 @@ def create_app():
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         ADMIN_USERNAME=os.getenv("ADMIN_USERNAME", "admin"),
         ADMIN_PASSWORD=os.getenv("ADMIN_PASSWORD", "admin"),
-        PROPOSAL_RATE_LIMIT_PER_HOUR=int(os.getenv("PROPOSAL_RATE_LIMIT_PER_HOUR", "10")),
+        PROPOSAL_RATE_LIMIT_PER_HOUR=int(
+            os.getenv("PROPOSAL_RATE_LIMIT_PER_HOUR", "10")
+        ),
         OLLAMA_BASE_URL=os.getenv("OLLAMA_BASE_URL", "").strip(),
         OLLAMA_HOST=os.getenv("OLLAMA_HOST", "127.0.0.1"),
         OLLAMA_PORT=int(os.getenv("OLLAMA_PORT", "11434")),
         OLLAMA_MODEL=os.getenv("OLLAMA_MODEL", "qwen3.6:35b"),
+        VALKEY_URL=os.getenv("VALKEY_URL", "redis://127.0.0.1:6379/0").strip(),
+        STATISTICS_CACHE_TTL_SECONDS=int(
+            os.getenv("STATISTICS_CACHE_TTL_SECONDS", "300")
+        ),
     )
     if database_uri.startswith("sqlite"):
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
