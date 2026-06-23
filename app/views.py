@@ -24,7 +24,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
 from .models import (
@@ -55,6 +55,27 @@ GCVE_DETAIL_TOTAL_BUDGET_SECONDS = 3
 GCVE_DETAIL_MAX_REFERENCES = 5
 
 bp = Blueprint("main", __name__)
+
+
+def _prefix_upper_bound(value):
+    if not value:
+        return None
+    last_char = value[-1]
+    if ord(last_char) >= 0x10FFFF:
+        return None
+    return f"{value[:-1]}{chr(ord(last_char) + 1)}"
+
+
+def _case_insensitive_prefix_filter(column, prefix):
+    normalized_prefix = prefix.lower()
+    lowered_column = func.lower(column)
+    filters = [lowered_column >= normalized_prefix]
+    upper_bound = _prefix_upper_bound(normalized_prefix)
+    if upper_bound is not None:
+        filters.append(lowered_column < upper_bound)
+    return and_(*filters)
+
+
 RELATIONSHIP_TYPE_DESCRIPTIONS = {
     "synonym-of": "the source record is a synonym of the target record.",
     "canonical-of": "the source record is an alias whose canonical record is the target.",
@@ -1804,27 +1825,24 @@ def index():
 
     query = CPEEntry.query.join(Vendor).join(Product)
     if purl_q:
-        purl_like = f"{purl_q.lower()}%"
         matching_cpe_name_ids = (
             select(CPEPurlMapping.cpe_name_id)
-            .filter(func.lower(CPEPurlMapping.purl).like(purl_like))
+            .filter(_case_insensitive_prefix_filter(CPEPurlMapping.purl, purl_q))
             .distinct()
         )
         query = query.filter(CPEEntry.cpe_name_id.in_(matching_cpe_name_ids))
     if vendor_q:
-        vendor_like = f"{vendor_q.lower()}%"
         query = query.filter(
             or_(
-                func.lower(Vendor.name).like(vendor_like),
-                func.lower(Vendor.title).like(vendor_like),
+                _case_insensitive_prefix_filter(Vendor.name, vendor_q),
+                _case_insensitive_prefix_filter(Vendor.title, vendor_q),
             )
         )
     if product_q:
-        product_like = f"{product_q.lower()}%"
         query = query.filter(
             or_(
-                func.lower(Product.name).like(product_like),
-                func.lower(Product.title).like(product_like),
+                _case_insensitive_prefix_filter(Product.name, product_q),
+                _case_insensitive_prefix_filter(Product.title, product_q),
             )
         )
     if part:
@@ -2844,10 +2862,9 @@ def api_cpes():
 
     query = CPEEntry.query.join(Vendor).join(Product)
     if purl_q:
-        purl_like = f"{purl_q.lower()}%"
         matching_cpe_name_ids = (
             select(CPEPurlMapping.cpe_name_id)
-            .filter(func.lower(CPEPurlMapping.purl).like(purl_like))
+            .filter(_case_insensitive_prefix_filter(CPEPurlMapping.purl, purl_q))
             .distinct()
         )
         query = query.filter(CPEEntry.cpe_name_id.in_(matching_cpe_name_ids))
@@ -2865,19 +2882,17 @@ def api_cpes():
             )
         )
     if vendor_q:
-        vendor_like = f"{vendor_q.lower()}%"
         query = query.filter(
             or_(
-                func.lower(Vendor.name).like(vendor_like),
-                func.lower(Vendor.title).like(vendor_like),
+                _case_insensitive_prefix_filter(Vendor.name, vendor_q),
+                _case_insensitive_prefix_filter(Vendor.title, vendor_q),
             )
         )
     if product_q:
-        product_like = f"{product_q.lower()}%"
         query = query.filter(
             or_(
-                func.lower(Product.name).like(product_like),
-                func.lower(Product.title).like(product_like),
+                _case_insensitive_prefix_filter(Product.name, product_q),
+                _case_insensitive_prefix_filter(Product.title, product_q),
             )
         )
     if part:
