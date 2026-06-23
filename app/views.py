@@ -2778,7 +2778,12 @@ def api_cpes():
     if part:
         query = query.filter(CPEEntry.part == part)
 
-    total = query.count()
+    total = (
+        query.with_entities(func.count(func.distinct(CPEEntry.id)))
+        .order_by(None)
+        .scalar()
+        or 0
+    )
     results = (
         query.order_by(Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc())
         .offset((page - 1) * per_page)

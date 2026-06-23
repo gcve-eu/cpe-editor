@@ -4,6 +4,7 @@ import tarfile
 
 from app.models import (
     CPEEntry,
+    CPEPurlMapping,
     EntityMetadata,
     EntityNote,
     EntityRelationship,
@@ -105,6 +106,29 @@ def test_cpe_listing_supports_purl_prefix_filter(client):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["total"] == 1
+    assert len(payload["items"]) == 1
+    assert "apache:http_server" in payload["items"][0]["cpe_uri"]
+
+
+def test_cpe_listing_counts_distinct_cpes_when_filter_matches_multiple_related_rows(client):
+    cpe = CPEEntry.query.filter(
+        CPEEntry.cpe_uri.contains("apache:http_server")
+    ).one()
+    db.session.add(
+        CPEPurlMapping(
+            cpe_name_id=cpe.cpe_name_id,
+            purl="pkg:generic/apache/httpd-alias",
+            source="test",
+        )
+    )
+    db.session.commit()
+
+    response = client.get("/api/cpes?purl_q=pkg:generic/apache&per_page=1")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["total"] == 1
+    assert payload["total_pages"] == 1
     assert len(payload["items"]) == 1
     assert "apache:http_server" in payload["items"][0]["cpe_uri"]
 
