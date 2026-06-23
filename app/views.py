@@ -1906,8 +1906,8 @@ def index():
         )
 
     query = (
-        CPEEntry.query.join(Vendor)
-        .join(Product)
+        CPEEntry.query.join(Vendor, CPEEntry.vendor_id == Vendor.id)
+        .join(Product, CPEEntry.product_id == Product.id)
         .options(
             contains_eager(CPEEntry.vendor),
             contains_eager(CPEEntry.product),
