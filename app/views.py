@@ -2926,13 +2926,13 @@ def api_cpes():
         max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
     )
 
-    query = CPEEntry.query.join(Vendor).join(Product)
+    query = CPEEntry.query
     query = _apply_cpe_search_filters(
         query, vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part
     )
     if q:
         like = f"%{q.lower()}%"
-        query = query.filter(
+        query = query.join(Vendor).join(Product).filter(
             or_(
                 func.lower(CPEEntry.cpe_uri).like(like),
                 func.lower(CPEEntry.title).like(like),
@@ -2943,14 +2943,22 @@ def api_cpes():
                 func.lower(CPEEntry.version).like(like),
             )
         )
-    total = (
-        query.with_entities(func.count(func.distinct(CPEEntry.id)))
-        .order_by(None)
-        .scalar()
-        or 0
-    )
+        total_expression = func.count(func.distinct(CPEEntry.id))
+        ordered_query = query.order_by(
+            Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc()
+        )
+    else:
+        total_expression = func.count(CPEEntry.id)
+        ordered_query = query.order_by(CPEEntry.cpe_uri.asc())
+
+    total = query.with_entities(total_expression).order_by(None).scalar() or 0
     results = (
-        query.order_by(Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc())
+        ordered_query.options(
+            selectinload(CPEEntry.vendor),
+            selectinload(CPEEntry.product),
+            selectinload(CPEEntry.vulnerability_links),
+            selectinload(CPEEntry.purl_mappings),
+        )
         .offset((page - 1) * per_page)
         .limit(per_page)
         .all()
