@@ -88,8 +88,13 @@
   <h2>Results</h2>
   {% if has_search_filters %}
     <p class="muted">
-      Showing {{ results|length }} of {{ total_results }} result{% if total_results != 1 %}s{% endif %}
-      (page {{ page }} of {{ total_pages }}).
+      Showing up to {{ results|length }} result{% if results|length != 1 %}s{% endif %}
+      from page {{ page }}.
+      {% if has_next %}
+        More matches are available on the next page.
+      {% elif page > 1 %}
+        This is the last page for the current filters.
+      {% endif %}
     </p>
   {% else %}
     <p class="muted">Enter a query or filter and click Search to view results.</p>
@@ -134,7 +139,7 @@
       {% endfor %}
       </tbody>
     </table>
-    {% if total_pages > 1 %}
+    {% if has_prev or has_next %}
       <div class="action-row" style="margin-top: 1rem;">
         {% if has_prev %}
           <a
