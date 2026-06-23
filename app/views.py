@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
+from time import monotonic
 from functools import wraps
 from hmac import compare_digest
 import json
@@ -47,6 +48,10 @@ from .utils import (
     product_uuid_for_names,
     vendor_uuid_for_name,
 )
+
+GCVE_DETAIL_TIMEOUT_SECONDS = 1
+GCVE_DETAIL_TOTAL_BUDGET_SECONDS = 3
+GCVE_DETAIL_MAX_REFERENCES = 5
 
 bp = Blueprint("main", __name__)
 RELATIONSHIP_TYPE_DESCRIPTIONS = {
@@ -96,7 +101,15 @@ def _coerce_datetime(value):
     return parsed
 
 
-def _fetch_gcve_vulnerability(reference):
+def _gcve_unavailable_response(vulnerability_id, web_base_url, error=None):
+    return {
+        "ok": False,
+        "lookup_url": f"{web_base_url}/vuln/{quote(vulnerability_id, safe='')}",
+        "error": error or "db.gcve.eu details are currently unavailable.",
+    }
+
+
+def _fetch_gcve_vulnerability(reference, timeout=None):
     vulnerability_id = (reference.vulnerability_id or "").strip()
     if not vulnerability_id:
         return None
@@ -116,21 +129,22 @@ def _fetch_gcve_vulnerability(reference):
         },
     )
 
+    if timeout is None:
+        timeout = current_app.config.get(
+            "GCVE_DETAIL_TIMEOUT_SECONDS", GCVE_DETAIL_TIMEOUT_SECONDS
+        )
+
     try:
-        with urlopen(request_obj, timeout=4) as response:
+        with urlopen(request_obj, timeout=timeout) as response:
             payload = json.load(response)
     except HTTPError as exc:
-        return {
-            "ok": False,
-            "lookup_url": f"{web_base_url}/vuln/{quote(vulnerability_id, safe='')}",
-            "error": f"db.gcve.eu returned HTTP {exc.code}.",
-        }
-    except (URLError, TimeoutError, ValueError, json.JSONDecodeError):
-        return {
-            "ok": False,
-            "lookup_url": f"{web_base_url}/vuln/{quote(vulnerability_id, safe='')}",
-            "error": "db.gcve.eu details are currently unavailable.",
-        }
+        return _gcve_unavailable_response(
+            vulnerability_id,
+            web_base_url,
+            error=f"db.gcve.eu returned HTTP {exc.code}.",
+        )
+    except (URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
+        return _gcve_unavailable_response(vulnerability_id, web_base_url)
 
     record = payload
     if isinstance(payload, dict):
@@ -2433,10 +2447,33 @@ def cpe_detail(cpe_id):
         )
         .all()
     )
-    vulnerability_details = {
-        reference.id: _fetch_gcve_vulnerability(reference)
-        for reference in vulnerability_references
-    }
+    vulnerability_details = {}
+    gcve_web_base_url = (
+        current_app.config.get("GCVE_WEB_BASE_URL") or "https://db.gcve.eu"
+    ).rstrip("/")
+    detail_timeout = current_app.config.get(
+        "GCVE_DETAIL_TIMEOUT_SECONDS", GCVE_DETAIL_TIMEOUT_SECONDS
+    )
+    detail_budget = current_app.config.get(
+        "GCVE_DETAIL_TOTAL_BUDGET_SECONDS", GCVE_DETAIL_TOTAL_BUDGET_SECONDS
+    )
+    max_details = current_app.config.get(
+        "GCVE_DETAIL_MAX_REFERENCES", GCVE_DETAIL_MAX_REFERENCES
+    )
+    detail_deadline = monotonic() + detail_budget
+    for index, reference in enumerate(vulnerability_references):
+        vulnerability_id = (reference.vulnerability_id or "").strip()
+        if index >= max_details or monotonic() >= detail_deadline:
+            vulnerability_details[reference.id] = _gcve_unavailable_response(
+                vulnerability_id,
+                gcve_web_base_url,
+                error="db.gcve.eu details were skipped to keep the page responsive.",
+            )
+            continue
+        remaining_budget = max(0.1, detail_deadline - monotonic())
+        vulnerability_details[reference.id] = _fetch_gcve_vulnerability(
+            reference, timeout=min(detail_timeout, remaining_budget)
+        )
     return render_template(
         "cpe_detail.html",
         cpe=cpe,

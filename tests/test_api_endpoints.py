@@ -5,6 +5,7 @@ import tarfile
 from app.models import (
     CPEEntry,
     CPEPurlMapping,
+    CPEVulnerabilityReference,
     EntityMetadata,
     EntityNote,
     EntityRelationship,
@@ -591,3 +592,55 @@ def test_vendor_relationship_submission_does_not_need_product_token(client, app)
             target_vendor_id=target_vendor_id,
         ).one()
         assert proposal.proposed_product_name is None
+
+
+def test_cpe_detail_limits_gcve_detail_fetches(client, app, monkeypatch):
+    with app.app_context():
+        cpe = CPEEntry.query.filter_by(
+            cpe_uri="cpe:2.3:a:apache:http_server:2.4.58:*:*:*:*:*:*:*"
+        ).one()
+        for index in range(6):
+            db.session.add(
+                CPEVulnerabilityReference(
+                    cpe_entry_id=cpe.id,
+                    vulnerability_source="CVE",
+                    vulnerability_id=f"CVE-2024-99{index:03d}",
+                    cpe_applicability="vulnerable",
+                )
+            )
+        db.session.commit()
+        cpe_id = cpe.id
+
+    calls = []
+
+    def fake_fetch(reference, timeout=None):
+        calls.append((reference.vulnerability_id, timeout))
+        return {"ok": True, "lookup_url": "https://db.gcve.eu/vuln/example"}
+
+    app.config["GCVE_DETAIL_MAX_REFERENCES"] = 2
+    app.config["GCVE_DETAIL_TOTAL_BUDGET_SECONDS"] = 30
+    monkeypatch.setattr(views, "_fetch_gcve_vulnerability", fake_fetch)
+
+    response = client.get(f"/cpes/{cpe_id}")
+
+    assert response.status_code == 200
+    assert len(calls) == 2
+    assert b"db.gcve.eu details were skipped to keep the page responsive." in response.data
+
+
+def test_fetch_gcve_vulnerability_handles_os_errors(app, monkeypatch):
+    with app.app_context():
+        reference = CPEVulnerabilityReference(
+            vulnerability_source="CVE",
+            vulnerability_id="CVE-2024-12345",
+        )
+
+        def fake_urlopen(_request_obj, timeout=1):
+            raise OSError("network is unreachable")
+
+        monkeypatch.setattr(views, "urlopen", fake_urlopen)
+
+        result = views._fetch_gcve_vulnerability(reference)
+
+    assert result["ok"] is False
+    assert result["error"] == "db.gcve.eu details are currently unavailable."
