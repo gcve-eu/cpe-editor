@@ -110,6 +110,7 @@ class Product(TimestampMixin, db.Model):
 
     __table_args__ = (
         db.UniqueConstraint("vendor_id", "name", name="uq_product_vendor_name"),
+        db.Index("ix_product_vendor_name", "vendor_id", "name"),
         db.Index("ix_product_vendor_name_lower", "vendor_id", db.func.lower(name)),
         db.Index("ix_product_name_lower", db.func.lower(name)),
         db.Index("ix_product_title_lower", db.func.lower(title)),
@@ -217,6 +218,8 @@ class CPEEntry(TimestampMixin, db.Model):
 
     __table_args__ = (
         db.Index("ix_cpe_vendor_product_part", "vendor_id", "product_id", "part"),
+        db.Index("ix_cpe_vendor_product_uri", "vendor_id", "product_id", "cpe_uri"),
+        db.Index("ix_cpe_product_uri", "product_id", "cpe_uri"),
         db.Index("ix_cpe_product_version", "product_id", "version"),
     )
 

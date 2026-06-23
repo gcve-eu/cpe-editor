@@ -1,7 +1,7 @@
 import os
 
 from flask import Flask
-from sqlalchemy import event
+from sqlalchemy import event, text
 
 from .cli import register_cli
 from .models import db
@@ -61,5 +61,25 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        if database_uri.startswith("sqlite"):
+            db.session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_product_vendor_name "
+                    "ON product (vendor_id, name)"
+                )
+            )
+            db.session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_cpe_vendor_product_uri "
+                    "ON cpe_entry (vendor_id, product_id, cpe_uri)"
+                )
+            )
+            db.session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_cpe_product_uri "
+                    "ON cpe_entry (product_id, cpe_uri)"
+                )
+            )
+            db.session.commit()
 
     return app
