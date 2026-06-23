@@ -16,7 +16,7 @@ import sys
 import tempfile
 from collections.abc import Iterable, Sequence
 
-DEFAULT_PORT = 8000
+DEFAULT_PORT = 5000
 DEFAULT_WORKER_CLASS = "gthread"
 DEFAULT_THREADS = 4
 DEFAULT_TIMEOUT = 60
@@ -25,6 +25,10 @@ DEFAULT_KEEPALIVE = 5
 DEFAULT_BACKLOG = 2048
 DEFAULT_MAX_REQUESTS = 1000
 DEFAULT_MAX_REQUESTS_JITTER = 100
+DEFAULT_ACCESS_LOG_FORMAT = (
+    '%(h)s %({x-forwarded-for}i)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s '
+    '"%(f)s" "%(a)s"'
+)
 
 
 def _env_int(name: str, default: int, *, minimum: int | None = None) -> int:
@@ -61,7 +65,9 @@ def _listen_socket(family: socket.AddressFamily, host: str, port: int) -> socket
     return sock
 
 
-def _open_listen_sockets(port: int, host_ipv4: str, host_ipv6: str) -> list[socket.socket]:
+def _open_listen_sockets(
+    port: int, host_ipv4: str, host_ipv6: str
+) -> list[socket.socket]:
     """Open configured listening sockets. IPv6 can be disabled by clearing HOST_IPV6."""
 
     sockets = [_listen_socket(socket.AF_INET, host_ipv4, port)]
@@ -132,6 +138,8 @@ def build_gunicorn_command(
             _worker_tmp_dir(),
             "--access-logfile",
             os.environ.get("GUNICORN_ACCESS_LOGFILE", "-"),
+            "--access-logformat",
+            os.environ.get("GUNICORN_ACCESS_LOGFORMAT", DEFAULT_ACCESS_LOG_FORMAT),
             "--error-logfile",
             os.environ.get("GUNICORN_ERROR_LOGFILE", "-"),
             "wsgi:app",

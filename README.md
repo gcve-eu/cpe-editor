@@ -72,11 +72,13 @@ Use the dedicated WSGI entry point with a production WSGI server instead of the 
 ./start.py
 ```
 
-The start script runs Gunicorn against `wsgi:app` and binds to all IPv4 and IPv6 addresses on `PORT` (default `8000`). It uses production-oriented defaults for concurrency and request handling: `gthread` workers, `WEB_CONCURRENCY` defaulting to `(CPU * 2) + 1`, four threads per worker, worker recycling, access/error logs on stdout/stderr, and a larger connection backlog. You can pass additional Gunicorn options after the script name; command-line arguments are appended last so they can override the defaults:
+The start script runs Gunicorn against `wsgi:app` and binds to all IPv4 and IPv6 addresses on `PORT` (default `5000`). It uses production-oriented defaults for concurrency and request handling: `gthread` workers, `WEB_CONCURRENCY` defaulting to `(CPU * 2) + 1`, four threads per worker, worker recycling, access/error logs on stdout/stderr, and a larger connection backlog. You can pass additional Gunicorn options after the script name; command-line arguments are appended last so they can override the defaults:
 
 ```bash
-PORT=8000 WEB_CONCURRENCY=4 GUNICORN_THREADS=8 ./start.py --timeout 90
+PORT=5000 WEB_CONCURRENCY=4 GUNICORN_THREADS=8 ./start.py --timeout 90
 ```
+
+Access logs include the `X-Forwarded-For` request header by default so deployments behind a proxy can see the original client IP; set `GUNICORN_ACCESS_LOGFORMAT` to override the format.
 
 Set `HOST_IPV6=` to disable the IPv6 listener in environments without IPv6 support.
 
