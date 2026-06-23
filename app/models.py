@@ -219,6 +219,8 @@ class CPEEntry(TimestampMixin, db.Model):
     __table_args__ = (
         db.Index("ix_cpe_vendor_product_part", "vendor_id", "product_id", "part"),
         db.Index("ix_cpe_vendor_product_uri", "vendor_id", "product_id", "cpe_uri"),
+        db.Index("ix_cpe_vendor_uri", "vendor_id", "cpe_uri"),
+        db.Index("ix_cpe_vendor_part_uri", "vendor_id", "part", "cpe_uri"),
         db.Index("ix_cpe_product_uri", "product_id", "cpe_uri"),
         db.Index("ix_cpe_product_version", "product_id", "version"),
     )

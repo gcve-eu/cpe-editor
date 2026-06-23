@@ -3,6 +3,7 @@ import json
 import tarfile
 import warnings
 
+from sqlalchemy import event, inspect
 from sqlalchemy.exc import SAWarning
 
 from app.models import (
@@ -144,6 +145,39 @@ def test_cpe_listing_counts_distinct_cpes_when_filter_matches_multiple_related_r
     assert payload["total_pages"] == 1
     assert len(payload["items"]) == 1
     assert "apache:http_server" in payload["items"][0]["cpe_uri"]
+
+
+def test_cpe_listing_vendor_prefix_uses_cpe_table_for_count(client):
+    statements = []
+
+    def capture_sql(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement.lower())
+
+    event.listen(db.engine, "before_cursor_execute", capture_sql)
+    try:
+        response = client.get("/api/cpes?vendor_q=microsoft&per_page=2")
+    finally:
+        event.remove(db.engine, "before_cursor_execute", capture_sql)
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["per_page"] == 2
+
+    count_statements = [
+        statement
+        for statement in statements
+        if "count(" in statement and "from cpe_entry" in statement
+    ]
+    assert count_statements
+    assert " join vendor" not in count_statements[0]
+    assert " join product" not in count_statements[0]
+    assert "count(distinct" not in count_statements[0]
+
+    index_names = {
+        index["name"] for index in inspect(db.engine).get_indexes("cpe_entry")
+    }
+    assert "ix_cpe_vendor_uri" in index_names
+    assert "ix_cpe_vendor_part_uri" in index_names
 
 
 def test_vulnerability_reference_endpoints(client):

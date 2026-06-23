@@ -76,6 +76,18 @@ def create_app():
             )
             db.session.execute(
                 text(
+                    "CREATE INDEX IF NOT EXISTS ix_cpe_vendor_uri "
+                    "ON cpe_entry (vendor_id, cpe_uri)"
+                )
+            )
+            db.session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_cpe_vendor_part_uri "
+                    "ON cpe_entry (vendor_id, part, cpe_uri)"
+                )
+            )
+            db.session.execute(
+                text(
                     "CREATE INDEX IF NOT EXISTS ix_cpe_product_uri "
                     "ON cpe_entry (product_id, cpe_uri)"
                 )
