@@ -25,6 +25,11 @@ def test_build_gunicorn_command_includes_production_defaults(monkeypatch):
     assert command[command.index("--threads") + 1] == "4"
     assert command[command.index("--backlog") + 1] == "2048"
     assert command[command.index("--max-requests") + 1] == "1000"
+    assert (
+        command[command.index("--access-logformat") + 1]
+        == start.DEFAULT_ACCESS_LOG_FORMAT
+    )
+    assert "%({x-forwarded-for}i)s" in start.DEFAULT_ACCESS_LOG_FORMAT
     assert command[-3:] == ["wsgi:app", "--workers", "9"]
 
 
@@ -32,12 +37,14 @@ def test_build_gunicorn_command_reads_environment(monkeypatch):
     monkeypatch.setenv("WEB_CONCURRENCY", "6")
     monkeypatch.setenv("GUNICORN_THREADS", "8")
     monkeypatch.setenv("GUNICORN_WORKER_TMP_DIR", "/tmp")
+    monkeypatch.setenv("GUNICORN_ACCESS_LOGFORMAT", "%(h)s %(r)s")
 
     command = start.build_gunicorn_command([FakeSocket(3)], [])
 
     assert command[command.index("--workers") + 1] == "6"
     assert command[command.index("--threads") + 1] == "8"
     assert command[command.index("--worker-tmp-dir") + 1] == "/tmp"
+    assert command[command.index("--access-logformat") + 1] == "%(h)s %(r)s"
 
 
 def test_env_int_rejects_invalid_values(monkeypatch):
@@ -56,7 +63,7 @@ def test_open_listen_sockets_allows_ipv6_to_be_disabled(monkeypatch):
 
     monkeypatch.setattr(start, "_listen_socket", fake_listen_socket)
 
-    sockets = start._open_listen_sockets(8000, "0.0.0.0", "")
+    sockets = start._open_listen_sockets(start.DEFAULT_PORT, "0.0.0.0", "")
 
     assert len(sockets) == 1
-    assert calls == [(socket.AF_INET, "0.0.0.0", 8000)]
+    assert calls == [(socket.AF_INET, "0.0.0.0", start.DEFAULT_PORT)]
