@@ -1,6 +1,9 @@
 import io
 import json
 import tarfile
+import warnings
+
+from sqlalchemy.exc import SAWarning
 
 from app.models import (
     CPEEntry,
@@ -17,6 +20,15 @@ from app.models import (
     db,
 )
 from app import views
+
+
+def test_index_cpe_search_uses_cpe_product_join_without_eager_load_warning(client):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", SAWarning)
+        response = client.get("/?vendor_q=micro")
+
+    assert response.status_code == 200
+    assert b"cpe:2.3:o:microsoft:windows_11" in response.data
 
 
 def test_list_vendors_with_pagination(client):
