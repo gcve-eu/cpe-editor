@@ -16,6 +16,7 @@ tags:
   - name: Vulnerability References
   - name: Statistics
   - name: Changes
+  - name: Proposals
   - name: Admin
 paths:
   /api/statistics:
@@ -374,6 +375,36 @@ paths:
                 $ref: '#/components/schemas/ApprovedChange'
         '404':
           description: Not found
+  /api/proposals:
+    post:
+      tags: [Proposals]
+      summary: Submit a proposal
+      description: |
+        Submits a proposal for admin review, using the same moderation queue as the
+        web submission form. Requires an API key issued by an admin
+        (`Authorization: Bearer <key>`). Subject to a per-client hourly rate limit
+        configured on the API key.
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposalSubmission'
+      responses:
+        '201':
+          description: Proposal accepted into the moderation queue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalSubmissionResult'
+        '400':
+          description: Invalid or incomplete proposal payload.
+        '401':
+          description: Missing, invalid, revoked, or expired API key.
+        '429':
+          description: Per-client rate limit exceeded.
   /admin/notes/{note_id}/delete:
     post:
       tags: [Admin]
@@ -459,7 +490,106 @@ paths:
         '404':
           description: Relationship not found.
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: "API key issued by an admin via `/admin/api-clients`. Send as `Authorization: Bearer <key>`."
   schemas:
+    ProposalSubmission:
+      type: object
+      required: [proposal_type]
+      properties:
+        proposal_type:
+          type: string
+          enum: [edit_cpe, new_cpe, new_product, new_vendor_product, new_record_relationship, new_cpe_vulnerability_reference]
+        submitter_name:
+          type: string
+        submitter_email:
+          type: string
+        rationale:
+          type: string
+        vendor_id:
+          type: integer
+          description: Existing vendor ID, for proposals targeting a known vendor.
+        product_id:
+          type: integer
+          description: Existing product ID, for proposals targeting a known product.
+        cpe_entry_id:
+          type: integer
+          description: Existing CPE entry ID, required for `edit_cpe` and `new_cpe_vulnerability_reference`.
+        proposed_vendor_name:
+          type: string
+        proposed_vendor_title:
+          type: string
+        proposed_product_name:
+          type: string
+        proposed_product_title:
+          type: string
+        proposed_part:
+          type: string
+          description: CPE part component, defaults to `a`.
+        proposed_version:
+          type: string
+        proposed_update:
+          type: string
+        proposed_edition:
+          type: string
+        proposed_language:
+          type: string
+        proposed_sw_edition:
+          type: string
+        proposed_target_sw:
+          type: string
+        proposed_target_hw:
+          type: string
+        proposed_other:
+          type: string
+        proposed_title:
+          type: string
+        proposed_notes:
+          type: string
+        proposed_relationship_type:
+          type: string
+          description: Required for `new_record_relationship`. See relationship type descriptions on the proposal form.
+        proposed_vulnerability_id:
+          type: string
+          description: Required for `new_cpe_vulnerability_reference`.
+        proposed_vulnerability_source:
+          type: string
+          enum: [CVE, GCVE, GHSA]
+          description: Required for `new_cpe_vulnerability_reference`.
+        proposed_cpe_applicability:
+          type: string
+          enum: [vulnerable, not_vulnerable, requires_configuration, under_investigation]
+          description: Required for `new_cpe_vulnerability_reference`.
+        source_entity_kind:
+          type: string
+          enum: [vendor, product]
+          description: Required for `new_record_relationship`.
+        target_entity_kind:
+          type: string
+          enum: [vendor, product]
+          description: Required for `new_record_relationship`.
+        source_vendor_id:
+          type: integer
+        source_product_id:
+          type: integer
+        target_vendor_id:
+          type: integer
+        target_product_id:
+          type: integer
+    ProposalSubmissionResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        proposal_type:
+          type: string
+        message:
+          type: string
     Pagination:
       type: object
       properties:

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}API client created{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>API client created</h1>
+  <p class="muted">Client <strong>{{ client.name }}</strong> was created successfully.</p>
+
+  <div class="flash">
+    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+    Copy this API key now — it will not be shown again.
+  </div>
+
+  <label for="api-key">API key</label>
+  <input id="api-key" type="text" readonly value="{{ token }}" style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;" onclick="this.select()">
+
+  <div class="action-row end">
+    <a class="button" href="{{ url_for('main.admin_dashboard') }}">
+      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to API clients
+    </a>
+  </div>
+</div>
+{% endblock %}

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import NAMESPACE_URL, uuid4, uuid5
+from werkzeug.security import check_password_hash, generate_password_hash
+import secrets
 
 GCVE_ROOT_NAMESPACE_URL = "GCVE-BCP-10"
 GCVE_ROOT_NAMESPACE = uuid5(NAMESPACE_URL, GCVE_ROOT_NAMESPACE_URL)
@@ -104,3 +107,56 @@ def product_uuid_for_names(vendor_name: str, product_name: str) -> str:
             f"{normalize_token(vendor_name)}:{normalize_token(product_name)}",
         )
     )
+
+
+def generate_api_key() -> tuple[str, str, str]:
+    prefix = secrets.token_hex(8)
+    secret = secrets.token_urlsafe(32)
+    token = f"{prefix}_{secret}"
+
+    return token, prefix, secret
+
+
+def create_api_client(
+    name: str,
+    instance_url: str | None = None,
+    rate_limit_per_hour: int = 100,
+    expires_at=None,
+) -> tuple[APIClient, str]:
+    from .models import APIClient
+
+    token, prefix, secret = generate_api_key()
+
+    client = APIClient(
+        uuid=new_uuid(),
+        name=name,
+        instance_url=instance_url,
+        key_prefix=prefix,
+        key_hash=generate_password_hash(secret),
+        rate_limit_per_hour=rate_limit_per_hour,
+        created_at=datetime.utcnow(),
+        expires_at=expires_at,
+    )
+    return client, token
+
+
+def authenticate_api_client(token: str) -> APIClient | None:
+    from .models import APIClient
+
+    try:
+        prefix, secret = token.split("_", 1)
+    except ValueError:
+        return None
+
+    if not prefix or not secret:
+        return None
+
+    client = APIClient.query.filter_by(key_prefix=prefix).first()
+
+    if client is None:
+        return None
+
+    if not check_password_hash(client.key_hash, secret):
+        return None
+
+    return client

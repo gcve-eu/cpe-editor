@@ -243,6 +243,9 @@ class Proposal(TimestampMixin, db.Model):
     product_alias_id = db.Column(
         db.Integer, db.ForeignKey("product_alias.id", use_alter=True), nullable=True
     )
+    api_client_id = db.Column(
+        db.Integer, db.ForeignKey("api_client.id"), nullable=True, index=True
+    )
 
     proposed_vendor_name = db.Column(db.String(255), nullable=True)
     proposed_vendor_title = db.Column(db.String(255), nullable=True)
@@ -289,6 +292,7 @@ class Proposal(TimestampMixin, db.Model):
     vendor = db.relationship("Vendor", foreign_keys=[vendor_id])
     product = db.relationship("Product", foreign_keys=[product_id])
     cpe_entry = db.relationship("CPEEntry", foreign_keys=[cpe_entry_id])
+    api_client = db.relationship("APIClient", foreign_keys=[api_client_id])
     product_alias = db.relationship("ProductAlias", foreign_keys=[product_alias_id])
     note_entry = db.relationship("EntityNote", back_populates="proposal", uselist=False)
     source_vendor = db.relationship("Vendor", foreign_keys=[source_vendor_id])
@@ -512,3 +516,24 @@ class CPEPurlMapping(TimestampMixin, db.Model):
             db.func.lower(purl),
         ),
     )
+
+
+class APIClient(db.Model):
+    __tablename__ = "api_client"
+
+    id = db.Column(db.Integer, primary_key=True)
+    uuid = db.Column(db.String(36), unique=True, nullable=False)
+
+    name = db.Column(db.String(100), nullable=False)
+    instance_url = db.Column(db.String(500), nullable=True)
+
+    key_prefix = db.Column(db.String(20), unique=True, nullable=False)
+    key_hash = db.Column(db.String(255), nullable=False)
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    rate_limit_per_hour = db.Column(db.Integer, nullable=False, default=100)
+
+    created_at = db.Column(db.DateTime, nullable=False)
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)

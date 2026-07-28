@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}New API client{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="page-header">
+    <h1>New API client</h1>
+    <a class="button secondary" href="{{ url_for('main.admin_dashboard') }}">
+      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back
+    </a>
+  </div>
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label for="name">Client name <span class="required-marker">*</span></label>
+    <input id="name" name="name" placeholder="Trusted integration name" required>
+
+    <label for="instance_url">Instance URL</label>
+    <input id="instance_url" name="instance_url" type="url" placeholder="https://client.example.org">
+
+    <label for="rate_limit_per_hour">Rate limit per hour</label>
+    <input id="rate_limit_per_hour" name="rate_limit_per_hour" type="number" min="1" value="100">
+
+    <div class="action-row end">
+      <button type="submit"><i class="fa-solid fa-key" aria-hidden="true"></i>Create API key</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

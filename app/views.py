@@ -23,12 +23,14 @@ from flask import (
     send_from_directory,
     session,
     url_for,
+    g,
 )
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import contains_eager, selectinload
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
 from .models import (
+    APIClient,
     CPEEntry,
     CPEPurlMapping,
     CPEVulnerabilityReference,
@@ -49,6 +51,8 @@ from .utils import (
     parse_cpe23_uri,
     product_uuid_for_names,
     vendor_uuid_for_name,
+    authenticate_api_client,
+    create_api_client,
 )
 
 GCVE_DETAIL_TIMEOUT_SECONDS = 1
@@ -171,6 +175,14 @@ PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES = {
     "synonym-of",
     "canonical-of",
     "equivalent-to",
+}
+ALLOWED_PROPOSAL_TYPES = {
+    "edit_cpe",
+    "new_cpe",
+    "new_product",
+    "new_vendor_product",
+    "new_record_relationship",
+    "new_cpe_vulnerability_reference",
 }
 ALLOWED_METADATA_KEYS = {"gcve:description", "gcve:url"}
 VULNERABILITY_REFERENCE_SOURCES = {"CVE", "GCVE", "GHSA"}
@@ -485,6 +497,9 @@ def inject_csrf_token():
 def validate_csrf_token():
     if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
         return None
+    view_func = current_app.view_functions.get(request.endpoint)
+    if getattr(view_func, "_api_key_protected", False):
+        return None
     session_token = session.get("_csrf_token")
     form_token = request.form.get("csrf_token")
     if not form_token and request.is_json:
@@ -509,6 +524,48 @@ def admin_required(view_func):
             return redirect(url_for("main.admin_login", next=request.path))
         return view_func(*args, **kwargs)
 
+    return wrapped
+
+
+def api_key_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        authorization = request.headers.get("Authorization", "")
+
+        if not authorization.startswith("Bearer "):
+            return jsonify({
+                "error": "missing_api_key",
+                "message": "A Bearer API key is required.",
+            }), 401
+
+        token = authorization.removeprefix("Bearer ").strip()
+        client = authenticate_api_client(token)
+
+        if client is None:
+            return jsonify({
+                "error": "invalid_api_key",
+                "message": "The supplied API key is invalid.",
+            }), 401
+
+        if not client.is_active or client.revoked_at is not None:
+            return jsonify({
+                "error": "revoked_api_key",
+                "message": "The supplied API key has been revoked.",
+            }), 401
+
+        if client.expires_at and client.expires_at <= datetime.utcnow():
+            return jsonify({
+                "error": "expired_api_key",
+                "message": "The supplied API key has expired.",
+            }), 401
+
+        client.last_used_at = datetime.utcnow()
+        db.session.commit()
+
+        g.api_client = client
+        return view(*args, **kwargs)
+
+    wrapped._api_key_protected = True
     return wrapped
 
 
@@ -1068,6 +1125,209 @@ def _is_rate_limited_for_ip(ip_address: str):
         Proposal.created_at >= one_hour_ago,
     ).count()
     return recent_count >= limit
+
+
+def _is_rate_limited_for_api_client(client):
+    limit = client.rate_limit_per_hour
+    if limit is None or limit <= 0:
+        return False
+
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent_count = Proposal.query.filter(
+        Proposal.api_client_id == client.id,
+        Proposal.created_at >= one_hour_ago,
+    ).count()
+    return recent_count >= limit
+
+
+def _build_proposal_from_data(data, submitter_ip, submitter_user_agent, api_client_id=None):
+    """Validate and construct a Proposal from a form- or JSON-like mapping.
+
+    Returns (proposal, error_message); error_message is None on success and
+    the proposal is not yet added to the session.
+    """
+    proposal_type = data.get("proposal_type", "edit_cpe")
+    if proposal_type not in ALLOWED_PROPOSAL_TYPES:
+        return None, "Please choose a valid proposal type."
+
+    vendor_id = data.get("vendor_id") or None
+    product_id = data.get("product_id") or None
+    cpe_entry_id = data.get("cpe_entry_id") or None
+
+    try:
+        proposal = Proposal(
+            proposal_type=proposal_type,
+            submitter_name=data.get("submitter_name"),
+            submitter_email=data.get("submitter_email"),
+            submitter_ip=submitter_ip,
+            submitter_user_agent=submitter_user_agent,
+            api_client_id=api_client_id,
+            rationale=data.get("rationale"),
+            vendor_id=int(vendor_id) if vendor_id else None,
+            product_id=int(product_id) if product_id else None,
+            cpe_entry_id=int(cpe_entry_id) if cpe_entry_id else None,
+            proposed_vendor_name=data.get("proposed_vendor_name"),
+            proposed_vendor_title=data.get("proposed_vendor_title"),
+            proposed_product_name=data.get("proposed_product_name"),
+            proposed_product_title=data.get("proposed_product_title"),
+            proposed_part=data.get("proposed_part"),
+            proposed_version=data.get("proposed_version") or "*",
+            proposed_update=data.get("proposed_update") or "*",
+            proposed_edition=data.get("proposed_edition") or "*",
+            proposed_language=data.get("proposed_language") or "*",
+            proposed_sw_edition=data.get("proposed_sw_edition") or "*",
+            proposed_target_sw=data.get("proposed_target_sw") or "*",
+            proposed_target_hw=data.get("proposed_target_hw") or "*",
+            proposed_other=data.get("proposed_other") or "*",
+            proposed_title=data.get("proposed_title"),
+            proposed_notes=data.get("proposed_notes"),
+            proposed_relationship_type=data.get("proposed_relationship_type"),
+            proposed_vulnerability_id=(
+                data.get("proposed_vulnerability_id") or ""
+            ).strip()
+            or None,
+            proposed_vulnerability_source=(
+                data.get("proposed_vulnerability_source") or ""
+            ).strip()
+            or None,
+            proposed_cpe_applicability=(
+                data.get("proposed_cpe_applicability") or ""
+            ).strip()
+            or None,
+            source_vendor_id=(
+                int(data.get("source_vendor_id"))
+                if data.get("source_vendor_id")
+                else None
+            ),
+            source_product_id=(
+                int(data.get("source_product_id"))
+                if data.get("source_product_id")
+                else None
+            ),
+            target_vendor_id=(
+                int(data.get("target_vendor_id"))
+                if data.get("target_vendor_id")
+                else None
+            ),
+            target_product_id=(
+                int(data.get("target_product_id"))
+                if data.get("target_product_id")
+                else None
+            ),
+        )
+    except (TypeError, ValueError):
+        return None, "Invalid numeric identifier supplied."
+
+    if proposal_type == "edit_cpe" and not proposal.cpe_entry_id:
+        return None, "Please provide the ID of the existing CPE entry to edit."
+
+    if proposal_type == "new_cpe" and (
+        not proposal.vendor_id or not proposal.product_id
+    ):
+        return None, "Please choose an existing vendor and product for a new CPE proposal."
+
+    if proposal_type == "new_product":
+        if not proposal.vendor_id:
+            return None, "Please choose an existing vendor for the new product."
+        if not (proposal.proposed_product_name or "").strip():
+            return None, "Please provide a product name for the new product."
+
+    if proposal_type == "new_vendor_product":
+        if not (proposal.proposed_vendor_name or "").strip():
+            return None, "Please provide a vendor name for the new vendor."
+        if not (proposal.proposed_product_name or "").strip():
+            return None, "Please provide a product name for the new product."
+
+    vendor_name = (data.get("proposed_vendor_name") or "").strip()
+    product_name = (data.get("proposed_product_name") or "").strip()
+    part_value = data.get("proposed_part") or "a"
+    if proposal_type in {
+        "new_cpe",
+        "edit_cpe",
+        "new_vendor_product",
+        "new_product",
+    }:
+        if proposal.vendor_id and not vendor_name:
+            existing_vendor = Vendor.query.get(proposal.vendor_id)
+            vendor_name = existing_vendor.name if existing_vendor else vendor_name
+        if proposal.product_id and not product_name:
+            existing_product = Product.query.get(proposal.product_id)
+            product_name = (
+                existing_product.name if existing_product else product_name
+            )
+        proposal.proposed_cpe_uri = build_cpe_uri(
+            part_value,
+            vendor_name,
+            product_name,
+            proposal.proposed_version,
+            proposal.proposed_update,
+            proposal.proposed_edition,
+            proposal.proposed_language,
+            proposal.proposed_sw_edition,
+            proposal.proposed_target_sw,
+            proposal.proposed_target_hw,
+            proposal.proposed_other,
+        )
+
+    if proposal_type == "new_record_relationship":
+        source_kind = (data.get("source_entity_kind") or "").strip().lower()
+        target_kind = (data.get("target_entity_kind") or "").strip().lower()
+        if source_kind not in {"vendor", "product"} or target_kind not in {
+            "vendor",
+            "product",
+        }:
+            return None, "Please choose valid source and target record types."
+        if source_kind == "vendor":
+            proposal.source_product_id = None
+        else:
+            proposal.source_vendor_id = None
+        if target_kind == "vendor":
+            proposal.target_product_id = None
+        else:
+            proposal.target_vendor_id = None
+        if (
+            proposal.proposed_relationship_type
+            not in RELATIONSHIP_TYPE_DESCRIPTIONS
+        ):
+            return None, "Please choose a valid relationship type."
+        source_count = int(bool(proposal.source_vendor_id)) + int(
+            bool(proposal.source_product_id)
+        )
+        target_count = int(bool(proposal.target_vendor_id)) + int(
+            bool(proposal.target_product_id)
+        )
+        if source_count != 1 or target_count != 1:
+            return None, "Please choose exactly one source record and one target record."
+        source_ref = (
+            ("vendor", proposal.source_vendor_id)
+            if proposal.source_vendor_id
+            else ("product", proposal.source_product_id)
+        )
+        target_ref = (
+            ("vendor", proposal.target_vendor_id)
+            if proposal.target_vendor_id
+            else ("product", proposal.target_product_id)
+        )
+        if source_ref == target_ref:
+            return None, "Source and target records must be different."
+
+    if proposal_type == "new_cpe_vulnerability_reference":
+        if not proposal.cpe_entry_id:
+            return None, "Please provide a target CPE entry ID for vulnerability references."
+        if (
+            proposal.proposed_vulnerability_source
+            not in VULNERABILITY_REFERENCE_SOURCES
+        ):
+            return None, "Please choose a supported vulnerability source."
+        if not proposal.proposed_vulnerability_id:
+            return None, "Please provide a vulnerability identifier."
+        if (
+            proposal.proposed_cpe_applicability
+            not in ALLOWED_CPE_APPLICABILITY_STATUSES
+        ):
+            return None, "Please choose a valid cpeApplicability status."
+
+    return proposal, None
 
 
 def _serialize_cpe(cpe):
@@ -2914,6 +3174,44 @@ def api_change_detail(proposal_id):
     return jsonify(payload)
 
 
+@bp.route("/api/proposals", methods=["POST"])
+@api_key_required
+def api_proposal_new():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({
+            "error": "invalid_request",
+            "message": "Request body must be a JSON object.",
+        }), 400
+
+    if _is_rate_limited_for_api_client(g.api_client):
+        return jsonify({
+            "error": "rate_limited",
+            "message": (
+                f"Rate limit reached for this API client "
+                f"(limit: {g.api_client.rate_limit_per_hour} per hour)."
+            ),
+        }), 429
+
+    proposal, error = _build_proposal_from_data(
+        payload,
+        _get_request_ip(),
+        _get_request_user_agent(),
+        api_client_id=g.api_client.id,
+    )
+    if error:
+        return jsonify({"error": "invalid_proposal", "message": error}), 400
+
+    db.session.add(proposal)
+    db.session.commit()
+    return jsonify({
+        "id": proposal.id,
+        "status": proposal.status,
+        "proposal_type": proposal.proposal_type,
+        "message": "Proposal submitted. An admin will review it.",
+    }), 201
+
+
 @bp.route("/api/cpes")
 def api_cpes():
     q = (request.args.get("q") or "").strip()
@@ -2980,15 +3278,7 @@ def proposal_new():
     preselected_product_id = request.args.get("product_id", type=int)
     preselected_cpe_entry_id = request.args.get("cpe_entry_id", type=int)
     preselected_proposal_type = request.args.get("proposal_type", "edit_cpe")
-    allowed_types = {
-        "edit_cpe",
-        "new_cpe",
-        "new_product",
-        "new_vendor_product",
-        "new_record_relationship",
-        "new_cpe_vulnerability_reference",
-    }
-    if preselected_proposal_type not in allowed_types:
+    if preselected_proposal_type not in ALLOWED_PROPOSAL_TYPES:
         preselected_proposal_type = "edit_cpe"
 
     preselected_vendor = None
@@ -3005,12 +3295,6 @@ def proposal_new():
 
     if request.method == "POST":
         proposal_type = request.form.get("proposal_type", "edit_cpe")
-        if proposal_type not in allowed_types:
-            flash("Please choose a valid proposal type.", "danger")
-            return redirect(url_for("main.proposal_new"))
-        vendor_id = request.form.get("vendor_id") or None
-        product_id = request.form.get("product_id") or None
-        cpe_entry_id = request.form.get("cpe_entry_id") or None
         submitter_ip = _get_request_ip()
 
         if _is_rate_limited_for_ip(submitter_ip):
@@ -3021,195 +3305,13 @@ def proposal_new():
             )
             return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
 
-        proposal = Proposal(
-            proposal_type=proposal_type,
-            submitter_name=request.form.get("submitter_name"),
-            submitter_email=request.form.get("submitter_email"),
-            submitter_ip=submitter_ip,
-            submitter_user_agent=_get_request_user_agent(),
-            rationale=request.form.get("rationale"),
-            vendor_id=int(vendor_id) if vendor_id else None,
-            product_id=int(product_id) if product_id else None,
-            cpe_entry_id=int(cpe_entry_id) if cpe_entry_id else None,
-            proposed_vendor_name=request.form.get("proposed_vendor_name"),
-            proposed_vendor_title=request.form.get("proposed_vendor_title"),
-            proposed_product_name=request.form.get("proposed_product_name"),
-            proposed_product_title=request.form.get("proposed_product_title"),
-            proposed_part=request.form.get("proposed_part"),
-            proposed_version=request.form.get("proposed_version") or "*",
-            proposed_update=request.form.get("proposed_update") or "*",
-            proposed_edition=request.form.get("proposed_edition") or "*",
-            proposed_language=request.form.get("proposed_language") or "*",
-            proposed_sw_edition=request.form.get("proposed_sw_edition") or "*",
-            proposed_target_sw=request.form.get("proposed_target_sw") or "*",
-            proposed_target_hw=request.form.get("proposed_target_hw") or "*",
-            proposed_other=request.form.get("proposed_other") or "*",
-            proposed_title=request.form.get("proposed_title"),
-            proposed_notes=request.form.get("proposed_notes"),
-            proposed_relationship_type=request.form.get("proposed_relationship_type"),
-            proposed_vulnerability_id=(
-                request.form.get("proposed_vulnerability_id") or ""
-            ).strip()
-            or None,
-            proposed_vulnerability_source=(
-                request.form.get("proposed_vulnerability_source") or ""
-            ).strip()
-            or None,
-            proposed_cpe_applicability=(
-                request.form.get("proposed_cpe_applicability") or ""
-            ).strip()
-            or None,
-            source_vendor_id=(
-                int(request.form.get("source_vendor_id"))
-                if request.form.get("source_vendor_id")
-                else None
-            ),
-            source_product_id=(
-                int(request.form.get("source_product_id"))
-                if request.form.get("source_product_id")
-                else None
-            ),
-            target_vendor_id=(
-                int(request.form.get("target_vendor_id"))
-                if request.form.get("target_vendor_id")
-                else None
-            ),
-            target_product_id=(
-                int(request.form.get("target_product_id"))
-                if request.form.get("target_product_id")
-                else None
-            ),
+        proposal, error = _build_proposal_from_data(
+            request.form, submitter_ip, _get_request_user_agent()
         )
+        if error:
+            flash(error, "danger")
+            return redirect(url_for("main.proposal_new", proposal_type=proposal_type))
 
-        vendor_name = (request.form.get("proposed_vendor_name") or "").strip()
-        product_name = (request.form.get("proposed_product_name") or "").strip()
-        part_value = request.form.get("proposed_part") or "a"
-        if proposal_type in {
-            "new_cpe",
-            "edit_cpe",
-            "new_vendor_product",
-            "new_product",
-        }:
-            if vendor_id and not vendor_name:
-                existing_vendor = Vendor.query.get(int(vendor_id))
-                vendor_name = existing_vendor.name if existing_vendor else vendor_name
-            if product_id and not product_name:
-                existing_product = Product.query.get(int(product_id))
-                product_name = (
-                    existing_product.name if existing_product else product_name
-                )
-            proposal.proposed_cpe_uri = build_cpe_uri(
-                part_value,
-                vendor_name,
-                product_name,
-                proposal.proposed_version,
-                proposal.proposed_update,
-                proposal.proposed_edition,
-                proposal.proposed_language,
-                proposal.proposed_sw_edition,
-                proposal.proposed_target_sw,
-                proposal.proposed_target_hw,
-                proposal.proposed_other,
-            )
-
-        if proposal_type == "new_record_relationship":
-            source_kind = (request.form.get("source_entity_kind") or "").strip().lower()
-            target_kind = (request.form.get("target_entity_kind") or "").strip().lower()
-            if source_kind not in {"vendor", "product"} or target_kind not in {
-                "vendor",
-                "product",
-            }:
-                flash("Please choose valid source and target record types.", "danger")
-                return redirect(
-                    url_for("main.proposal_new", proposal_type=proposal_type)
-                )
-            if source_kind == "vendor":
-                proposal.source_product_id = None
-            else:
-                proposal.source_vendor_id = None
-            if target_kind == "vendor":
-                proposal.target_product_id = None
-            else:
-                proposal.target_vendor_id = None
-            if (
-                proposal.proposed_relationship_type
-                not in RELATIONSHIP_TYPE_DESCRIPTIONS
-            ):
-                flash("Please choose a valid relationship type.", "danger")
-                return redirect(
-                    url_for("main.proposal_new", proposal_type=proposal_type)
-                )
-            source_count = int(bool(proposal.source_vendor_id)) + int(
-                bool(proposal.source_product_id)
-            )
-            target_count = int(bool(proposal.target_vendor_id)) + int(
-                bool(proposal.target_product_id)
-            )
-            if source_count != 1 or target_count != 1:
-                flash(
-                    "Please choose exactly one source record and one target record.",
-                    "danger",
-                )
-                return redirect(
-                    url_for("main.proposal_new", proposal_type=proposal_type)
-                )
-            source_ref = (
-                (
-                    "vendor",
-                    proposal.source_vendor_id,
-                )
-                if proposal.source_vendor_id
-                else (
-                    "product",
-                    proposal.source_product_id,
-                )
-            )
-            target_ref = (
-                (
-                    "vendor",
-                    proposal.target_vendor_id,
-                )
-                if proposal.target_vendor_id
-                else (
-                    "product",
-                    proposal.target_product_id,
-                )
-            )
-            if source_ref == target_ref:
-                flash("Source and target records must be different.", "danger")
-                return redirect(
-                    url_for("main.proposal_new", proposal_type=proposal_type)
-                )
-        if proposal_type == "new_cpe_vulnerability_reference":
-            if not proposal.cpe_entry_id:
-                flash(
-                    "Please provide a target CPE entry ID for vulnerability references.",
-                    "danger",
-                )
-                return redirect(
-                    url_for("main.proposal_new", proposal_type=proposal_type)
-                )
-            if (
-                proposal.proposed_vulnerability_source
-                not in VULNERABILITY_REFERENCE_SOURCES
-            ):
-                flash("Please choose a supported vulnerability source.", "danger")
-                return redirect(
-                    url_for("main.proposal_new", proposal_type=proposal_type)
-                )
-            if not proposal.proposed_vulnerability_id:
-                flash("Please provide a vulnerability identifier.", "danger")
-                return redirect(
-                    url_for("main.proposal_new", proposal_type=proposal_type)
-                )
-            if (
-                proposal.proposed_cpe_applicability
-                not in ALLOWED_CPE_APPLICABILITY_STATUSES
-            ):
-                flash("Please choose a valid cpeApplicability status.", "danger")
-                return redirect(
-                    url_for("main.proposal_new", proposal_type=proposal_type)
-                )
         db.session.add(proposal)
         db.session.commit()
         flash("Proposal submitted. An admin will review it.", "success")
@@ -3608,7 +3710,8 @@ def admin_dashboard():
         .all()
     )
     recent = Proposal.query.order_by(Proposal.created_at.desc()).limit(20).all()
-    return render_template("admin/dashboard.html", pending=pending, recent=recent)
+    clients = APIClient.query.order_by(APIClient.created_at.desc()).all()
+    return render_template("admin/dashboard.html", pending=pending, recent=recent, clients=clients, now=datetime.utcnow())
 
 
 @bp.route("/admin/proposals/bulk-delete", methods=["POST"])
@@ -4471,6 +4574,41 @@ def admin_delete_relationship(relationship_id):
     return redirect(redirect_target)
 
 
+@bp.route("/admin/api-clients/new", methods=["GET", "POST"])
+@admin_required
+def admin_create_api_client():
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        instance_url = (request.form.get("instance_url") or "").strip() or None
+        rate_limit_per_hour = request.form.get("rate_limit_per_hour", type=int) or 100
+
+        if not name:
+            flash("Please provide a name for the API client.", "danger")
+            return redirect(request.url)
+
+        client, token = create_api_client(
+            name=name,
+            instance_url=instance_url,
+            rate_limit_per_hour=rate_limit_per_hour,
+        )
+        db.session.add(client)
+        db.session.commit()
+        return render_template("admin/api_client_created.html", client=client, token=token)
+
+    return render_template("admin/create_api_client.html")
+
+
+@bp.route("/admin/api-clients/<int:client_id>/revoke", methods=["POST"])
+@admin_required
+def admin_revoke_api_client(client_id):
+    client = APIClient.query.get_or_404(client_id)
+    client.is_active = False
+    client.revoked_at = datetime.utcnow()
+    db.session.commit()
+    flash(f"API key for {client.name} revoked.", "success")
+    return redirect(url_for("main.admin_dashboard"))
+
+
 # --- Moderation logic ---------------------------------------------------------
 def apply_proposal(proposal: Proposal):
     vendor = proposal.vendor
@@ -4756,3 +4894,5 @@ def apply_proposal(proposal: Proposal):
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")
+
+
