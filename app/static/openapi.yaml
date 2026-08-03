@@ -272,6 +272,34 @@ paths:
                 $ref: '#/components/schemas/CPEVulnerabilityReferenceListByCPE'
         '404':
           description: Not found
+  /api/cpes/lookup:
+    post:
+      tags: [CPE Entries]
+      summary: Exact-match lookup of CPE URIs
+      description: |
+        Given a list of CPE 2.3 URI strings, reports which ones already exist in the
+        catalog, with the matching entry when found. Matching is an exact string
+        comparison on `cpe_uri` (no fuzzy/substring matching). Requires an API key
+        issued by an admin (`Authorization: Bearer <key>`).
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CPELookupRequest'
+      responses:
+        '200':
+          description: Lookup results, one entry per requested CPE URI, in the same order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CPELookupResult'
+        '400':
+          description: Missing, empty, non-string, or oversized `cpes` list.
+        '401':
+          description: Missing, invalid, revoked, or expired API key.
   /api/vulnerability-references:
     get:
       tags: [Vulnerability References]
@@ -590,6 +618,33 @@ components:
           type: string
         message:
           type: string
+    CPELookupRequest:
+      type: object
+      required: [cpes]
+      properties:
+        cpes:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: string
+          description: CPE 2.3 URI strings to check for existence in the catalog.
+    CPELookupResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              cpe_uri:
+                type: string
+              found:
+                type: boolean
+              entry:
+                nullable: true
+                allOf:
+                  - $ref: '#/components/schemas/CPEEntry'
     Pagination:
       type: object
       properties:

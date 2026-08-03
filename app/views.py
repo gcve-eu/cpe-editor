@@ -58,6 +58,7 @@ from .utils import (
 GCVE_DETAIL_TIMEOUT_SECONDS = 1
 GCVE_DETAIL_TOTAL_BUDGET_SECONDS = 3
 GCVE_DETAIL_MAX_REFERENCES = 5
+CPE_LOOKUP_MAX_ENTRIES = 500
 
 bp = Blueprint("main", __name__)
 
@@ -3272,6 +3273,53 @@ def api_cpes():
     )
 
 
+@bp.route("/api/cpes/lookup", methods=["POST"])
+@api_key_required
+def api_cpes_lookup():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({
+            "error": "invalid_request",
+            "message": "Request body must be a JSON object.",
+        }), 400
+
+    cpes = payload.get("cpes")
+    if not isinstance(cpes, list) or not cpes or not all(isinstance(c, str) and c for c in cpes):
+        return jsonify({
+            "error": "invalid_request",
+            "message": '"cpes" must be a non-empty list of CPE URI strings.',
+        }), 400
+
+    if len(cpes) > CPE_LOOKUP_MAX_ENTRIES:
+        return jsonify({
+            "error": "invalid_request",
+            "message": f'"cpes" must contain at most {CPE_LOOKUP_MAX_ENTRIES} entries.',
+        }), 400
+
+    entries = (
+        CPEEntry.query.filter(CPEEntry.cpe_uri.in_(set(cpes)))
+        .options(
+            selectinload(CPEEntry.vendor),
+            selectinload(CPEEntry.product),
+            selectinload(CPEEntry.vulnerability_links),
+            selectinload(CPEEntry.purl_mappings),
+        )
+        .all()
+    )
+    by_uri = {entry.cpe_uri: entry for entry in entries}
+
+    return jsonify({
+        "items": [
+            {
+                "cpe_uri": cpe_uri,
+                "found": cpe_uri in by_uri,
+                "entry": _serialize_cpe(by_uri[cpe_uri]) if cpe_uri in by_uri else None,
+            }
+            for cpe_uri in cpes
+        ]
+    })
+
+
 @bp.route("/proposals/new", methods=["GET", "POST"])
 def proposal_new():
     preselected_vendor_id = request.args.get("vendor_id", type=int)
@@ -3292,6 +3340,35 @@ def proposal_new():
         preselected_product = Product.query.get(preselected_product_id)
         if not preselected_product:
             preselected_product_id = None
+
+    # Free-text prefill for linking here from an external site that already
+    # knows the vendor/product/CPE fields but not necessarily their catalog
+    # IDs (e.g. a vendor/product that doesn't exist here yet). These are only
+    # used as fallback defaults -- the preselected_vendor/preselected_product
+    # FK-based prefill above always takes precedence in the template.
+    prefill = {
+        key: (request.args.get(key) or "").strip()
+        for key in (
+            "proposed_vendor_name",
+            "proposed_vendor_title",
+            "proposed_product_name",
+            "proposed_product_title",
+            "proposed_part",
+            "proposed_version",
+            "proposed_update",
+            "proposed_edition",
+            "proposed_language",
+            "proposed_sw_edition",
+            "proposed_target_sw",
+            "proposed_target_hw",
+            "proposed_other",
+            "proposed_title",
+            "proposed_notes",
+            "rationale",
+        )
+    }
+    if prefill["proposed_part"] not in {"a", "o", "h"}:
+        prefill["proposed_part"] = "a"
 
     if request.method == "POST":
         proposal_type = request.form.get("proposal_type", "edit_cpe")
@@ -3327,6 +3404,7 @@ def proposal_new():
         preselected_proposal_type=preselected_proposal_type,
         preselected_vendor=preselected_vendor,
         preselected_product=preselected_product,
+        prefill=prefill,
         relationship_default_source_kind=relationship_default_kind,
         relationship_default_target_kind=relationship_default_kind,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,

@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import tarfile
 import warnings
 
@@ -20,6 +21,7 @@ from app.models import (
     Vendor,
     db,
 )
+from app.utils import create_api_client
 from app import views
 
 
@@ -640,6 +642,69 @@ def test_vendor_relationship_submission_does_not_need_product_token(client, app)
         assert proposal.proposed_product_name is None
 
 
+def test_proposal_form_prefills_free_text_fields_from_query_params(client):
+    response = client.get(
+        "/proposals/new"
+        "?proposal_type=new_vendor_product"
+        "&proposed_vendor_name=redhat"
+        "&proposed_vendor_title=Red+Hat"
+        "&proposed_product_name=build_keycloak"
+        "&proposed_product_title=Build+of+Keycloak"
+        "&proposed_part=o"
+        "&proposed_version=26.4"
+        "&proposed_edition=el9"
+        "&rationale=Referenced+by+CVE-2026-9087"
+    )
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'name="proposed_vendor_name"' in html
+    assert 'value="redhat"' in html
+    assert 'value="Red Hat"' in html
+    assert 'value="build_keycloak"' in html
+    assert 'value="Build of Keycloak"' in html
+    assert 'value="26.4"' in html
+    assert 'value="el9"' in html
+    assert 'Referenced by CVE-2026-9087' in html
+    # proposed_part=o must be the selected option, not the default "a".
+    assert '<option value="o" selected>' in html
+    assert '<option value="a" selected>' not in html
+
+
+def _field_value(html, name):
+    match = re.search(r'name="%s"[^>]*value="([^"]*)"' % re.escape(name), html, re.S)
+    return match.group(1) if match else None
+
+
+def test_proposal_form_fk_prefill_overrides_conflicting_free_text(client, app):
+    with app.app_context():
+        vendor = Vendor.query.first()
+        product = Product.query.filter_by(vendor_id=vendor.id).first()
+        vendor_id, product_id = vendor.id, product.id
+        expected_product_name = product.name
+
+    response = client.get(
+        "/proposals/new"
+        f"?proposal_type=new_cpe&vendor_id={vendor_id}&product_id={product_id}"
+        "&proposed_vendor_name=someone-elses-guess"
+        "&proposed_product_name=someone-elses-guess"
+    )
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert _field_value(html, "proposed_product_name") == expected_product_name
+    assert _field_value(html, "proposed_product_name") != "someone-elses-guess"
+
+
+def test_proposal_form_defaults_to_wildcards_without_prefill(client):
+    response = client.get("/proposals/new?proposal_type=new_vendor_product")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert _field_value(html, "proposed_version") == "*"
+    assert _field_value(html, "proposed_vendor_name") == ""
+
+
 def test_cpe_detail_limits_gcve_detail_fetches(client, app, monkeypatch):
     with app.app_context():
         cpe = CPEEntry.query.filter_by(
@@ -690,3 +755,75 @@ def test_fetch_gcve_vulnerability_handles_os_errors(app, monkeypatch):
 
     assert result["ok"] is False
     assert result["error"] == "db.gcve.eu details are currently unavailable."
+
+
+def _make_api_token(app, name="test-client", rate_limit_per_hour=100):
+    with app.app_context():
+        client_obj, token = create_api_client(name, rate_limit_per_hour=rate_limit_per_hour)
+        db.session.add(client_obj)
+        db.session.commit()
+    return token
+
+
+def test_api_cpes_lookup_requires_api_key(client):
+    response = client.post(
+        "/api/cpes/lookup",
+        json={"cpes": ["cpe:2.3:o:microsoft:windows_11:23h2:*:*:*:*:*:*:*"]},
+    )
+
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "missing_api_key"
+
+
+def test_api_cpes_lookup_exact_match(app, client):
+    token = _make_api_token(app)
+
+    response = client.post(
+        "/api/cpes/lookup",
+        json={
+            "cpes": [
+                "cpe:2.3:o:microsoft:windows_11:23h2:*:*:*:*:*:*:*",
+                "cpe:2.3:a:unknown-vendor:unknown-product:1.0:*:*:*:*:*:*:*",
+            ]
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    items = {item["cpe_uri"]: item for item in payload["items"]}
+
+    known = items["cpe:2.3:o:microsoft:windows_11:23h2:*:*:*:*:*:*:*"]
+    assert known["found"] is True
+    assert known["entry"]["cpe_uri"] == "cpe:2.3:o:microsoft:windows_11:23h2:*:*:*:*:*:*:*"
+
+    unknown = items["cpe:2.3:a:unknown-vendor:unknown-product:1.0:*:*:*:*:*:*:*"]
+    assert unknown["found"] is False
+    assert unknown["entry"] is None
+
+
+def test_api_cpes_lookup_rejects_invalid_body(app, client):
+    token = _make_api_token(app)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post("/api/cpes/lookup", json={"cpes": []}, headers=headers)
+    assert response.status_code == 400
+
+    response = client.post("/api/cpes/lookup", json={"cpes": [123]}, headers=headers)
+    assert response.status_code == 400
+
+    response = client.post("/api/cpes/lookup", json={}, headers=headers)
+    assert response.status_code == 400
+
+
+def test_api_cpes_lookup_rejects_oversized_list(app, client):
+    token = _make_api_token(app)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        "/api/cpes/lookup",
+        json={"cpes": [f"cpe:2.3:a:v:p{i}:1.0:*:*:*:*:*:*:*" for i in range(501)]},
+        headers=headers,
+    )
+
+    assert response.status_code == 400
