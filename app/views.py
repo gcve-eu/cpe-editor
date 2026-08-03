@@ -4687,6 +4687,23 @@ def admin_revoke_api_client(client_id):
     return redirect(url_for("main.admin_dashboard"))
 
 
+@bp.route("/admin/api-clients/<int:client_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_api_client(client_id):
+    client = APIClient.query.get_or_404(client_id)
+    if not client.revoked_at:
+        flash("Revoke the API key before deleting it.", "danger")
+        return redirect(url_for("main.admin_dashboard"))
+
+    Proposal.query.filter_by(api_client_id=client.id).update(
+        {"api_client_id": None}
+    )
+    db.session.delete(client)
+    db.session.commit()
+    flash(f"API client {client.name} deleted.", "success")
+    return redirect(url_for("main.admin_dashboard"))
+
+
 # --- Moderation logic ---------------------------------------------------------
 def apply_proposal(proposal: Proposal):
     vendor = proposal.vendor

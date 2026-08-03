@@ -127,6 +127,11 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="danger"><i class="fa-solid fa-ban" aria-hidden="true"></i>Revoke</button>
           </form>
+          {% else %}
+          <form method="post" action="{{ url_for('main.admin_delete_api_client', client_id=client.id) }}" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="danger"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete</button>
+          </form>
           {% endif %}
         </td>
       </tr>
