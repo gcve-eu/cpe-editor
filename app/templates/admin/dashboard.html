@@ -85,4 +85,60 @@
     </tbody>
   </table>
 </div>
+
+<div class="card">
+  <div class="page-header">
+    <h1>API clients</h1>
+    <a class="button" href="{{ url_for('main.admin_create_api_client') }}">
+      <i class="fa-solid fa-plus" aria-hidden="true"></i>New API client
+    </a>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Key prefix</th>
+        <th>Status</th>
+        <th>Rate limit / hour</th>
+        <th>Created</th>
+        <th>Last used</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for client in clients %}
+      <tr>
+        <td>{{ client.name }}</td>
+        <td><code>{{ client.key_prefix }}</code></td>
+        <td>
+          {% if client.revoked_at %}Revoked
+          {% elif not client.is_active %}Inactive
+          {% elif client.expires_at and client.expires_at <= now %}Expired
+          {% else %}Active
+          {% endif %}
+        </td>
+        <td>{{ client.rate_limit_per_hour }}</td>
+        <td>{{ client.created_at }}</td>
+        <td>{{ client.last_used_at or 'Never' }}</td>
+        <td>
+          {% if not client.revoked_at %}
+          <form method="post" action="{{ url_for('main.admin_revoke_api_client', client_id=client.id) }}" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="danger"><i class="fa-solid fa-ban" aria-hidden="true"></i>Revoke</button>
+          </form>
+          {% else %}
+          <form method="post" action="{{ url_for('main.admin_delete_api_client', client_id=client.id) }}" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="danger"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7">No API clients yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}
