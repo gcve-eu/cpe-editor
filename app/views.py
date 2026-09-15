@@ -26,6 +26,7 @@ from flask import (
     g,
 )
 from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, selectinload
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
@@ -4401,9 +4402,29 @@ def admin_proposal_review(proposal_id):
             return redirect(url_for("main.admin_dashboard"))
 
         if action == "accept":
-            apply_proposal(proposal)
-            proposal.status = "accepted"
-            db.session.commit()
+            try:
+                apply_proposal(proposal)
+                proposal.status = "accepted"
+                db.session.commit()
+            except IntegrityError as error:
+                db.session.rollback()
+                if "vendor.name" in str(error.orig):
+                    vendor_name = normalize_token(proposal.proposed_vendor_name)
+                    flash(
+                        "Proposal could not be accepted because vendor "
+                        f"'{vendor_name}' already exists. Update the proposal to use "
+                        "the existing vendor instead of creating a new one.",
+                        "danger",
+                    )
+                else:
+                    flash(
+                        "Proposal could not be accepted because it conflicts with "
+                        "an existing record.",
+                        "danger",
+                    )
+                return redirect(
+                    url_for("main.admin_proposal_review", proposal_id=proposal.id)
+                )
             flash("Proposal accepted and applied.", "success")
             return redirect(url_for("main.admin_dashboard"))
 
@@ -4989,5 +5010,4 @@ def apply_proposal(proposal: Proposal):
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")
-
 
