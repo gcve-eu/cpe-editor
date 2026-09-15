@@ -4753,12 +4753,15 @@ def apply_proposal(proposal: Proposal):
         return cpe
 
     if proposal.proposal_type == "new_vendor_product":
-        vendor = Vendor(
-            name=normalize_token(proposal.proposed_vendor_name),
-            title=proposal.proposed_vendor_title or proposal.proposed_vendor_name,
-        )
-        db.session.add(vendor)
-        db.session.flush()
+        normalized_vendor_name = normalize_token(proposal.proposed_vendor_name)
+        vendor = vendor or Vendor.query.filter_by(name=normalized_vendor_name).first()
+        if not vendor:
+            vendor = Vendor(
+                name=normalized_vendor_name,
+                title=proposal.proposed_vendor_title or proposal.proposed_vendor_name,
+            )
+            db.session.add(vendor)
+            db.session.flush()
 
         product = Product(
             vendor_id=vendor.id,
@@ -5010,4 +5013,3 @@ def apply_proposal(proposal: Proposal):
         return
 
     raise ValueError(f"Unsupported proposal type: {proposal.proposal_type}")
-

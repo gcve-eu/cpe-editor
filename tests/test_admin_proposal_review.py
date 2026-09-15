@@ -1,9 +1,7 @@
-from app.models import Proposal, Vendor, db
+from app.models import CPEEntry, Product, Proposal, Vendor, db
 
 
-def test_accept_duplicate_vendor_shows_clear_error_and_keeps_proposal_pending(
-    app, client
-):
+def test_accept_new_vendor_product_reuses_existing_vendor(app, client):
     with app.app_context():
         existing_vendor = Vendor.query.first()
         proposal = Proposal(
@@ -13,6 +11,9 @@ def test_accept_duplicate_vendor_shows_clear_error_and_keeps_proposal_pending(
             proposed_vendor_title="Duplicate vendor",
             proposed_product_name="new_product",
             proposed_product_title="New product",
+            proposed_cpe_uri=(
+                f"cpe:2.3:a:{existing_vendor.name}:new_product:*:*:*:*:*:*:*:*"
+            ),
         )
         db.session.add(proposal)
         db.session.commit()
@@ -30,12 +31,16 @@ def test_accept_duplicate_vendor_shows_clear_error_and_keeps_proposal_pending(
     )
 
     assert response.status_code == 200
-    assert (
-        f"vendor &#39;{vendor_name}&#39; already exists".encode() in response.data
-    )
-    assert b"use the existing vendor instead of creating a new one" in response.data
+    assert b"Proposal accepted and applied." in response.data
 
     with app.app_context():
         proposal = db.session.get(Proposal, proposal_id)
-        assert proposal.status == "pending"
+        assert proposal.status == "accepted"
         assert Vendor.query.filter_by(name=vendor_name).count() == 1
+        product = Product.query.filter_by(
+            vendor_id=proposal.vendor_id, name="new_product"
+        ).one()
+        assert proposal.product_id == product.id
+        cpe = db.session.get(CPEEntry, proposal.cpe_entry_id)
+        assert cpe.vendor_id == proposal.vendor_id
+        assert cpe.product_id == product.id
