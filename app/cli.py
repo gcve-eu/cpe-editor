@@ -735,26 +735,16 @@ def register_cli(app):
                 f"Could not find gcve-enriched-dumps CVE directory at {cves_dir}."
             )
 
-        vendor_cache = {v.name: v for v in Vendor.query.all()}
-        product_cache = {(p.vendor_id, p.name): p for p in Product.query.all()}
-        cpe_cache = {c.cpe_uri: c for c in CPEEntry.query.all()}
-        cpe_name_id_to_id = {
-            c.cpe_name_id: c.id for c in cpe_cache.values() if c.cpe_name_id
-        }
-        existing_references = {
-            (
-                row.cpe_entry_id,
-                row.vulnerability_source,
-                row.vulnerability_id,
-                row.cpe_applicability,
-            )
-            for row in CPEVulnerabilityReference.query.with_entities(
-                CPEVulnerabilityReference.cpe_entry_id,
-                CPEVulnerabilityReference.vulnerability_source,
-                CPEVulnerabilityReference.vulnerability_id,
-                CPEVulnerabilityReference.cpe_applicability,
-            ).all()
-        }
+        if batch_size < 1:
+            raise click.BadParameter("must be at least 1", param_hint="--batch-size")
+
+        # Keep only the current batch in memory.  Loading every vendor, product,
+        # CPE and vulnerability reference made this command's memory usage grow
+        # with the size of both the database and the dump.
+        vendor_cache = {}
+        product_cache = {}
+        cpe_cache = {}
+        batch_references = set()
 
         imported_references = 0
         imported_cpes = 0
@@ -778,29 +768,35 @@ def register_cli(app):
 
             vendor = vendor_cache.get(vendor_name)
             if vendor is None:
-                vendor = Vendor(
-                    uuid=vendor_uuid_for_name(vendor_name),
-                    name=vendor_name,
-                    title=titleize_token(vendor_name),
-                )
-                db.session.add(vendor)
-                db.session.flush()
+                vendor = Vendor.query.filter_by(name=vendor_name).first()
+                if vendor is None:
+                    vendor = Vendor(
+                        uuid=vendor_uuid_for_name(vendor_name),
+                        name=vendor_name,
+                        title=titleize_token(vendor_name),
+                    )
+                    db.session.add(vendor)
+                    db.session.flush()
+                    created_vendors += 1
                 vendor_cache[vendor_name] = vendor
-                created_vendors += 1
 
             product_key = (vendor.id, product_name)
             product = product_cache.get(product_key)
             if product is None:
-                product = Product(
-                    uuid=product_uuid_for_names(vendor_name, product_name),
-                    vendor_id=vendor.id,
-                    name=product_name,
-                    title=titleize_token(product_name),
-                )
-                db.session.add(product)
-                db.session.flush()
+                product = Product.query.filter_by(
+                    vendor_id=vendor.id, name=product_name
+                ).first()
+                if product is None:
+                    product = Product(
+                        uuid=product_uuid_for_names(vendor_name, product_name),
+                        vendor_id=vendor.id,
+                        name=product_name,
+                        title=titleize_token(product_name),
+                    )
+                    db.session.add(product)
+                    db.session.flush()
+                    created_products += 1
                 product_cache[product_key] = product
-                created_products += 1
             return vendor, product
 
         def ensure_cpe(
@@ -811,10 +807,13 @@ def register_cli(app):
             nonlocal imported_cpes, updated_cpe_ids, skipped
             cpe_uri = (cpe_uri or "").strip()
             cpe = cpe_cache.get(cpe_uri)
+            if cpe is None:
+                cpe = CPEEntry.query.filter_by(cpe_uri=cpe_uri).first()
+                if cpe is not None:
+                    cpe_cache[cpe_uri] = cpe
             if cpe is not None:
                 if not cpe.cpe_name_id:
                     cpe.cpe_name_id = new_uuid()
-                    cpe_name_id_to_id[cpe.cpe_name_id] = cpe.id
                     updated_cpe_ids += 1
                 return cpe
 
@@ -851,11 +850,10 @@ def register_cli(app):
             db.session.add(cpe)
             db.session.flush()
             cpe_cache[cpe_uri] = cpe
-            cpe_name_id_to_id[cpe.cpe_name_id] = cpe.id
             imported_cpes += 1
             return cpe
 
-        for cve_file in sorted(cves_dir.glob("**/*.json")):
+        for cve_file in cves_dir.rglob("*.json"):
             processed_files += 1
             try:
                 payload = json.loads(cve_file.read_text(encoding="utf-8"))
@@ -886,7 +884,15 @@ def register_cli(app):
 
                 applicability = gcve_candidate_applicability(candidate)
                 key = (cpe.id, "CVE", cve_id, applicability)
-                if key in existing_references:
+                if key in batch_references:
+                    continue
+                reference_exists = CPEVulnerabilityReference.query.filter_by(
+                    cpe_entry_id=cpe.id,
+                    vulnerability_source="CVE",
+                    vulnerability_id=cve_id,
+                    cpe_applicability=applicability,
+                ).first()
+                if reference_exists is not None:
                     continue
                 db.session.add(
                     CPEVulnerabilityReference(
@@ -898,11 +904,16 @@ def register_cli(app):
                         approved_at=datetime.now(timezone.utc).replace(tzinfo=None),
                     )
                 )
-                existing_references.add(key)
+                batch_references.add(key)
                 imported_references += 1
 
             if processed_files % batch_size == 0:
                 db.session.commit()
+                vendor_cache.clear()
+                product_cache.clear()
+                cpe_cache.clear()
+                batch_references.clear()
+                db.session.expunge_all()
                 click.echo(
                     f"Processed {processed_files} CVE files | references={imported_references} "
                     f"new_cpes={imported_cpes} vendors={created_vendors} products={created_products} skipped={skipped}"
