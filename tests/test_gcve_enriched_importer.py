@@ -1,5 +1,7 @@
 import json
 
+from sqlalchemy.orm import Query
+
 from app.models import CPEEntry, CPEVulnerabilityReference, Product, Vendor
 from app.utils import product_uuid_for_names, vendor_uuid_for_name
 
@@ -107,3 +109,57 @@ def test_import_gcve_enriched_cves_creates_cpes_and_references(app, tmp_path):
     )
     assert Vendor.query.filter_by(name="example").count() == 1
     assert Product.query.filter_by(name="adp_product").count() == 1
+
+
+def test_import_gcve_enriched_cves_does_not_load_whole_tables(
+    app, tmp_path, monkeypatch
+):
+    cves_dir = tmp_path / "cves"
+    cves_dir.mkdir()
+    (cves_dir / "CVE-2025-0001.json").write_text(
+        json.dumps(
+            {
+                "cveMetadata": {"cveId": "CVE-2025-0001"},
+                "containers": {
+                    "cna": {
+                        "affected": [
+                            {"vendor": "bounded", "product": "memory"}
+                        ]
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def reject_unbounded_all(self):
+        raise AssertionError("the importer must not materialize an entire table")
+
+    monkeypatch.setattr(Query, "all", reject_unbounded_all)
+    result = app.test_cli_runner().invoke(
+        args=[
+            "import-gcve-enriched-cves",
+            "--source",
+            str(cves_dir),
+            "--batch-size",
+            "1",
+        ]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Imported 1 CVE→CPE references" in result.output
+
+
+def test_import_gcve_enriched_cves_rejects_zero_batch_size(app, tmp_path):
+    result = app.test_cli_runner().invoke(
+        args=[
+            "import-gcve-enriched-cves",
+            "--source",
+            str(tmp_path),
+            "--batch-size",
+            "0",
+        ]
+    )
+
+    assert result.exit_code == 2
+    assert "must be at least 1" in result.output
