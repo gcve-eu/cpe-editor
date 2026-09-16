@@ -252,10 +252,13 @@ Use a custom clone or `cves` directory path:
 python -m flask --app run import-gcve-enriched-cves --source /path/to/gcve-enriched-dumps
 ```
 
-Commit progress after a custom number of CVE files:
+Control how many CVE files are processed per transaction with `--batch-size`
+(default: `2000`). The importer clears its in-memory caches after each batch, so
+use a smaller value on memory-constrained systems. Smaller batches reduce peak
+memory usage at the cost of more database commits:
 
 ```bash
-python -m flask --app run import-gcve-enriched-cves --batch-size 1000
+python -m flask --app run import-gcve-enriched-cves --batch-size 500
 ```
 
 ### Export dataset
