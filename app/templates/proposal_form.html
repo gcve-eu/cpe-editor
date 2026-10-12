@@ -46,7 +46,7 @@
                 >{{ preselected_vendor.title or preselected_vendor.name }}</option>
               {% endif %}
             </select>
-            <small class="muted">This is prefilled when opened from a vendor page.</small>
+            <small class="muted">Type a vendor name or prefix, then choose a matching vendor. Prefilled when opened from a vendor page.</small>
           </div>
           <div id="new_vendor_group" style="display:none;">
             <label for="proposed_vendor_name">New vendor token <span class="required-marker">*</span></label>
@@ -316,46 +316,90 @@
       };
     }
 
-    function setSelectOptions(selectEl, items, labelBuilder) {
-      const previousValue = selectEl.value;
-      const hasEmptyOption = Array.from(selectEl.options).some((opt) => opt.value === "");
-      selectEl.innerHTML = hasEmptyOption ? '<option value="">None selected</option>' : "";
+    function setSelectOptions(selectEl, items, labelBuilder, placeholder) {
+      const emptyOption = new Option(placeholder, "");
+      selectEl.replaceChildren(emptyOption);
       items.forEach((item) => {
-        const option = document.createElement("option");
-        option.value = item.id;
-        option.textContent = labelBuilder(item);
-        if (item.name) {
-          option.dataset.vendorName = item.name;
-        }
-        if (item.title) {
-          option.dataset.vendorTitle = item.title;
-        }
+        const option = new Option(labelBuilder(item), item.id);
+        option.dataset.vendorName = item.name || "";
+        option.dataset.vendorTitle = item.title || item.name || "";
         selectEl.appendChild(option);
       });
-      if (previousValue && Array.from(selectEl.options).some((opt) => opt.value === previousValue)) {
-        selectEl.value = previousValue;
-      }
-    }
-
-    async function fetchSuggestions(url, q) {
-      if (!q || q.length < 1) {
-        return [];
-      }
-      const response = await fetch(`${url}?q=${encodeURIComponent(q)}&limit=${suggestLimit}`);
-      if (!response.ok) {
-        return [];
-      }
-      const payload = await response.json();
-      return payload.items || [];
+      selectEl.value = "";
     }
 
     function connectPrefixSearch(searchInput, selectInput, url, labelBuilder) {
-      const runSearch = debounce(async () => {
-        const q = searchInput.value.trim();
-        const items = await fetchSuggestions(url, q);
-        setSelectOptions(selectInput, items, labelBuilder);
+      const entity = url.includes("/vendors/") ? "vendor" : "product";
+      const status = document.createElement("p");
+      status.id = `${selectInput.id}_search_status`;
+      status.className = "picker-status muted";
+      status.setAttribute("role", "status");
+      selectInput.before(status);
+      searchInput.setAttribute("aria-label", `Search ${entity}s by name or prefix`);
+      searchInput.setAttribute("aria-describedby", status.id);
+      selectInput.setAttribute("aria-describedby", status.id);
+      selectInput.classList.add("suggestion-picker");
+      let revision = 0;
+      let controller;
+
+      function showSelection() {
+        if (selectInput.value) {
+          status.textContent = `Selected: ${selectInput.selectedOptions[0].textContent}`;
+          selectInput.size = 1;
+        } else {
+          status.textContent = searchInput.value.trim()
+            ? `Choose a matching ${entity} below.`
+            : `Search by name or prefix to find an existing ${entity}.`;
+        }
+      }
+      if (!selectInput.value) {
+        selectInput.options[0].textContent = `Search above to find a ${entity}`;
+      }
+      showSelection();
+      selectInput.addEventListener("change", showSelection);
+
+      const runSearch = debounce(async (q, searchRevision) => {
+        if (!q || searchRevision !== revision) return;
+        controller = new AbortController();
+        try {
+          const response = await fetch(`${url}?q=${encodeURIComponent(q)}&limit=${suggestLimit}`, {
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error("Suggestion request failed");
+          const payload = await response.json();
+          if (searchRevision !== revision) return;
+          const items = payload.items || [];
+          setSelectOptions(selectInput, items, labelBuilder,
+            items.length ? `Choose a ${entity} from the matches below` : `No matching ${entity}s`);
+          // A native list keeps results visible and supports mouse, touch, and keyboard selection.
+          selectInput.size = items.length ? Math.min(items.length + 1, 6) : 1;
+          status.textContent = items.length
+            ? `${items.length === suggestLimit ? "Showing the first " : ""}${items.length} matching ${entity}${items.length === 1 ? "" : "s"}. Choose a result below.`
+            : `No ${entity}s match “${q}”. Try a different name or prefix.`;
+        } catch (error) {
+          if (error.name === "AbortError" || searchRevision !== revision) return;
+          setSelectOptions(selectInput, [], labelBuilder, `Search unavailable`);
+          selectInput.size = 1;
+          status.textContent = `Could not load ${entity}s. Edit the search to try again.`;
+        } finally {
+          if (searchRevision === revision) selectInput.removeAttribute("aria-busy");
+        }
       }, 200);
-      searchInput.addEventListener("input", runSearch);
+
+      searchInput.addEventListener("input", () => {
+        const q = searchInput.value.trim();
+        revision += 1;
+        if (controller) controller.abort();
+        selectInput.size = 1;
+        setSelectOptions(selectInput, [], labelBuilder,
+          q ? `Searching for ${entity}s…` : `Search above to find a ${entity}`);
+        status.textContent = q
+          ? `Searching for ${entity}s…`
+          : `Search by name or prefix to find an existing ${entity}.`;
+        if (q) selectInput.setAttribute("aria-busy", "true");
+        else selectInput.removeAttribute("aria-busy");
+        runSearch(q, revision);
+      });
     }
 
     function syncRelationshipMode() {
@@ -415,6 +459,7 @@
       // stale selections when the user actively switches proposal type.
       if (isNewVendorProduct && !options.initial) {
         vendorSelect.value = "";
+        vendorSelect.dispatchEvent(new Event("change"));
         vendorNameInput.value = "";
       }
     }
