@@ -1,25 +1,53 @@
 {% extends "base.html" %}
 {% block title %}API Docs - CPE Editor{% endblock %}
 {% block content %}
-<section class="card">
-  <h1><i class="fa-solid fa-book-open" aria-hidden="true"></i> OpenAPI Documentation</h1>
-  <p class="muted">
-    This page renders the OpenAPI spec at
-    <code>{{ url_for('main.api_openapi_spec') }}</code>.
-  </p>
+<div class="page-header">
+  <div>
+    <p class="eyebrow">Developer reference</p>
+    <h1>OpenAPI documentation</h1>
+    <p class="muted">Explore endpoints, parameters, and response schemas.</p>
+  </div>
+  <a class="button secondary" href="{{ url_for('main.api_openapi_spec') }}">Download specification</a>
+</div>
+<vt-openapi variant="full" src="{{ url_for('main.api_openapi_spec') }}" label="CPE Editor API" aria-label="CPE Editor API reference"></vt-openapi>
+<details class="card request-console">
+  <summary>Try API requests</summary>
+  <p class="muted">Use the interactive console to send requests to this instance.</p>
+  <p class="console-status" role="status"></p>
   <div id="swagger-ui"></div>
-</section>
-<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
-<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+</details>
 <script>
-  window.addEventListener('load', function () {
-    SwaggerUIBundle({
-      url: "{{ url_for('main.api_openapi_spec') }}",
-      dom_id: '#swagger-ui',
-      deepLinking: true,
-      docExpansion: 'none',
-      presets: [SwaggerUIBundle.presets.apis]
-    });
+  document.querySelector('.request-console').addEventListener('toggle', async function () {
+    if (!this.open || this.dataset.loaded) return;
+    this.dataset.loaded = 'true';
+    const status = this.querySelector('.console-status');
+    status.textContent = 'Loading request console…';
+    try {
+      const styles = document.createElement('link');
+      styles.rel = 'stylesheet';
+      styles.href = {{ url_for('static', filename='vendor/swagger-ui/swagger-ui.css') | tojson }};
+      document.head.appendChild(styles);
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = {{ url_for('static', filename='vendor/swagger-ui/swagger-ui-bundle.js') | tojson }};
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+      SwaggerUIBundle({
+        url: {{ url_for('main.api_openapi_spec') | tojson }},
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        docExpansion: 'none',
+        presets: [SwaggerUIBundle.presets.apis]
+      });
+      status.textContent = '';
+    } catch (_) {
+      status.textContent = 'The request console could not load. You can still browse the API reference above or download the specification.';
+      delete this.dataset.loaded;
+    }
   });
 </script>
+<noscript><p>Enable JavaScript to browse the reference, or download the specification above.</p></noscript>
+<script type="module" src="{{ url_for('static', filename='vendor/vitrine/esm/vt-openapi.js') }}"></script>
 {% endblock %}

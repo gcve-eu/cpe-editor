@@ -45,11 +45,13 @@
       </a>
     </div>
   </div>
+  <div class="record-meta">
   <p class="muted">Approved changes feed: <a href="{{ url_for('main.product_changes_rss', product_uuid=product.uuid) }}">RSS</a> · <a href="{{ url_for('main.product_changes_atom', product_uuid=product.uuid) }}">Atom</a></p>
   <p class="muted">Vendor: <a href="{{ url_for('main.vendor_detail', vendor_uuid=product.vendor.uuid) }}">{{ product.vendor.title or product.vendor.name }}</a></p>
   <p class="muted">Vendor UUID: <code>{{ product.vendor.uuid }}</code></p>
   <p class="muted">Product token: <code>{{ product.name }}</code></p>
   <p class="muted">Product UUID: <code>{{ product.uuid }}</code></p>
+  </div>
   <p>{{ product.notes or "No product notes yet." }}</p>
 </div>
 
@@ -98,6 +100,7 @@
   </ul>
 </div>
 
+<div class="entity-summary-grid">
 <div class="card">
   <h2>Approved metadata</h2>
   {% if session.get("is_admin") %}
@@ -216,6 +219,8 @@
       <li>No approved relationships yet.</li>
     {% endfor %}
   </ul>
+</div>
+
 </div>
 
 <div class="card">

@@ -45,9 +45,11 @@
       </a>
     </div>
   </div>
+  <div class="record-meta">
   <p class="muted">Approved changes feed: <a href="{{ url_for('main.vendor_changes_rss', vendor_uuid=vendor.uuid) }}">RSS</a> · <a href="{{ url_for('main.vendor_changes_atom', vendor_uuid=vendor.uuid) }}">Atom</a></p>
   <p class="muted">Vendor token: <code>{{ vendor.name }}</code></p>
   <p class="muted">Vendor UUID: <code>{{ vendor.uuid }}</code></p>
+  </div>
   <p>{{ vendor.notes or "No vendor notes yet." }}</p>
 </div>
 
@@ -85,6 +87,7 @@
 </div>
 {% endif %}
 
+<div class="entity-summary-grid">
 <div class="card">
   <h2>Approved metadata</h2>
   {% if session.get("is_admin") %}
@@ -203,6 +206,8 @@
       <li>No approved relationships yet.</li>
     {% endfor %}
   </ul>
+</div>
+
 </div>
 
 <div class="card">

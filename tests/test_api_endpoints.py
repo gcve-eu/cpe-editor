@@ -503,7 +503,10 @@ def test_openapi_and_docs_endpoints(client):
     assert openapi_response.status_code == 200
     assert b"openapi:" in openapi_response.data
     assert docs_response.status_code == 200
-    assert b"SwaggerUIBundle" in docs_response.data
+    assert b'<vt-openapi variant="full" src="/api/openapi.yaml"' in docs_response.data
+    assert b"vendor/vitrine/esm/vt-openapi.js" in docs_response.data
+    for asset in ["esm/vt-openapi.js", "vendor/yaml.js"]:
+        assert client.get(f"/static/vendor/vitrine/{asset}").status_code == 200
 
 
 def test_fixture_contains_expected_subset_records(app):
