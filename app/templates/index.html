@@ -1,57 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Search CPEs{% endblock %}
 {% block content %}
-<section class="hero" aria-labelledby="home-hero-title">
+<section class="page-header workspace-heading" aria-labelledby="home-title">
   <div>
-    <p class="hero-kicker">
-      <span>GCVE initiative</span>
-      <span>CPE curation</span>
-      <span>Proposal workflow</span>
-      <span>API access</span>
-    </p>
-    <h1 id="home-hero-title" class="hero-title">Collaborative CPE editing for transparent vulnerability data.</h1>
-    <p class="hero-copy">
-      Search canonical platform names, map package URLs, and submit moderated improvements through a focused workspace built for maintainers, reviewers, and consumers of security metadata.
-    </p>
-    <div class="hero-actions">
-      <a class="button" href="#cpe-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Start searching</a>
-      <a class="button secondary" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit a proposal</a>
-    </div>
+    <p class="eyebrow">GCVE · Platform catalog</p>
+    <h1 id="home-title">Find a platform. Improve the record.</h1>
+    <p class="muted">Search CPE names and package URLs, then propose reviewed updates.</p>
   </div>
-  <div class="signal-panel" aria-label="CPE curation flow">
-    <div class="signal-node">
-      <span><strong>Discover</strong><br><small>Vendor, product, PURL, CPE URI</small></span>
-      <i class="fa-solid fa-satellite-dish" aria-hidden="true"></i>
-    </div>
-    <div class="signal-flow">↓ ↓ ↓</div>
-    <div class="signal-node">
-      <span><strong>Moderate</strong><br><small>Reviewed proposals and notes</small></span>
-      <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
-    </div>
-    <div class="signal-flow">↓ ↓ ↓</div>
-    <div class="signal-node">
-      <span><strong>Distribute</strong><br><small>Change history, API, dataset export</small></span>
-      <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
-    </div>
-  </div>
+  <a class="button secondary" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Submit a proposal</a>
 </section>
-<div class="info-box intro-box" role="note" aria-label="About CPE and GCVE">
-  <a class="intro-logo-link" href="https://gcve.eu/" target="_blank" rel="noopener noreferrer" aria-label="Visit the GCVE initiative website">
-    <img class="intro-logo" src="https://gcve.eu/logos/gcve.png" alt="GCVE logo">
-  </a>
-  <div>
-    <h2>About CPE and this collaborative initiative</h2>
-    <p class="muted">
-      Common Platform Enumeration (CPE) is the naming standard used to identify software, hardware, and operating systems consistently across vulnerability management workflows.
-      Through the <a href="https://gcve.eu/" target="_blank" rel="noopener noreferrer">GCVE initiative</a>, this editor supports collaborative CPE maintenance so contributors can improve entries, reviewers can validate proposals, and everyone can follow a transparent change history.
-    </p>
-  </div>
-</div>
+<details class="about-cpe">
+  <summary>About CPE and the GCVE initiative</summary>
+  <p>Common Platform Enumeration identifies software, hardware, and operating systems across vulnerability management workflows. The <a href="https://gcve.eu/" target="_blank" rel="noopener noreferrer">GCVE initiative</a> supports collaborative maintenance through reviewed proposals and a transparent change history.</p>
+</details>
 
 <div id="cpe-search" class="card">
   <h2>Search CPEs</h2>
   <p class="muted">Search by vendor and product prefixes, then narrow by part.</p>
-  <form method="get" class="grid grid-2 search-form" aria-label="CPE search form">
+  <form method="get" class="grid search-form" aria-label="CPE search form">
     <div>
       <label for="vendor_q">Vendor starts with</label>
       <input id="vendor_q" name="vendor_q" value="{{ vendor_q }}" placeholder="microsoft">
