@@ -155,3 +155,9 @@ nav .mobile-nav-toggle { display: none; }
 .record-meta { display: flex; flex-wrap: wrap; gap: .35rem 1.5rem; margin: .75rem 0; font-size: .82rem; }
 .record-meta p { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 900px) { .entity-summary-grid { grid-template-columns: 1fr; gap: 0; } }
+
+/* Search suggestions stay visible until the contributor chooses a result. */
+.picker-status { font-size: .82rem; margin: .4rem 0; }
+.suggestion-picker[size]:not([size="1"]) { padding: .25rem; background: var(--input-bg); }
+.suggestion-picker option { padding: .55rem .65rem; }
+.suggestion-picker option:checked { background: var(--primary-soft); color: var(--text); }
