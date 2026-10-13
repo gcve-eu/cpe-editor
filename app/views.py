@@ -30,6 +30,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, selectinload
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
+from .graphs import GRAPH_NODE_LIMIT, build_entity_graph
 from .models import (
     APIClient,
     CPEEntry,
@@ -2668,6 +2669,28 @@ def statistics():
         relationship_type_counts=relationship_type_counts,
         proposal_status_counts=proposal_status_counts,
     )
+
+
+@bp.route("/vendors/<string:vendor_uuid>/graph")
+def vendor_graph(vendor_uuid):
+    vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
+    vendors = _collect_related_vendors_for_combined_view(vendor)
+    products = (
+        Product.query.filter(Product.vendor_id.in_([item.id for item in vendors]))
+        .options(selectinload(Product.vendor))
+        .order_by(Product.name.asc(), Product.id.asc())
+        .limit(GRAPH_NODE_LIMIT + 1)
+        .all()
+    )
+    return jsonify(build_entity_graph(vendor, vendors, products))
+
+
+@bp.route("/products/<string:product_uuid>/graph")
+def product_graph(product_uuid):
+    product = Product.query.filter_by(uuid=product_uuid).first_or_404()
+    vendors = _collect_related_vendors_for_combined_view(product.vendor)
+    products = _collect_related_products_for_combined_view(product)
+    return jsonify(build_entity_graph(product, vendors, products, include_cpes=True))
 
 
 @bp.route("/vendors/<string:vendor_uuid>")

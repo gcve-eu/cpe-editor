@@ -87,6 +87,10 @@
 </div>
 {% endif %}
 
+{% set graph_url = url_for('main.vendor_graph', vendor_uuid=vendor.uuid) %}
+{% set graph_include_cpes = false %}
+{% include "_entity_graph.html" %}
+
 <div class="entity-summary-grid">
 <div class="card">
   <h2>Approved metadata</h2>

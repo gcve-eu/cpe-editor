@@ -100,6 +100,10 @@
   </ul>
 </div>
 
+{% set graph_url = url_for('main.product_graph', product_uuid=product.uuid) %}
+{% set graph_include_cpes = true %}
+{% include "_entity_graph.html" %}
+
 <div class="entity-summary-grid">
 <div class="card">
   <h2>Approved metadata</h2>
