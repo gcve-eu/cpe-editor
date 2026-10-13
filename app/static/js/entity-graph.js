@@ -100,12 +100,10 @@
               strokeColor: "var(--card-bg)",
             },
             defaultEdgeStyle: { strokeColor: "var(--muted)", markerEnd: "arrow" },
-            // Use DOM text for labels and details, including contributed content.
-            renderLabel: (edge) => {
-              const label = document.createElement("span");
-              label.className = "graph-edge-label";
-              label.textContent = edge.getData().label;
-              return label;
+            // Native SVG text avoids zero-sized HTML label containers during layout.
+            defaultLabelStyle: {
+              fontSize: 12, fontFamily: "var(--font-sans)",
+              color: "var(--text)", backgroundColor: "var(--card-bg)",
             },
           },
           callbacks: {
