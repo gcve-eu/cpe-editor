@@ -65,7 +65,6 @@ summary { cursor: pointer; }
 [data-theme="dark"] .graph-product-key { color: #a5b4fc; }
 [data-theme="dark"] .graph-cpe-key { color: #fbbf24; }
 .graph-canvas { position: relative; width: 100%; height: clamp(320px, 55vh, 600px); overflow: hidden; border: 1px solid var(--border); border-radius: 6px; }
-.graph-edge-label { color: var(--text); background: var(--card-bg); border-radius: 3px; padding: 1px 4px; font: 11px var(--font-sans); }
 .graph-selection { overflow-wrap: anywhere; }
 .graph-record-picker { max-width: 100%; }
 .grid { display: grid; gap: .8rem 1rem; }
