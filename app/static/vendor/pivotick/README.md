@@ -18,8 +18,11 @@ c41ddf02a13e5a560dae84dfc57608fb49010d1397d716314c2272376db888a9  pivotick.css
 ```
 
 No Node build or external CDN is needed to run CPE Editor. Assets are loaded
-only when the graph panel is expanded. The integration uses viewer mode with
-main-thread simulation, so no worker file or editing interface is needed.
+only when the graph panel is expanded. The integration uses viewer mode and the
+bundle's embedded simulation worker, so no separate worker file or editing
+interface is needed. If browser policy prevents worker creation, Pivotick falls
+back to the main thread. Warmup, cooldown, and alpha decay are configured to keep
+that fallback short, including v2.0.1's additional cooling stage.
 The browser constructor is `new Pivotick(container, data, options)`.
 
 See LICENSE for Pivotick's license and THIRD_PARTY_NOTICES.md for bundled

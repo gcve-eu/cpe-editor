@@ -76,7 +76,13 @@
         }, {
           isDirected: true,
           UI: { mode: "viewer", theme: document.documentElement.dataset.theme || "light", navigation: { enabled: false } },
-          simulation: { useWorker: false, d3LinkDistance: 150, d3ManyBodyStrength: -600 },
+          simulation: {
+            useWorker: true,
+            // Keep the fallback short if browser policy prevents worker creation.
+            // Pivotick 2.0.1 also runs a cooling stage after its warmup ticks.
+            warmupTicks: 1, cooldownTime: 250, d3AlphaDecay: 0.2,
+            d3LinkDistance: 150, d3ManyBodyStrength: -600,
+          },
           render: {
             nodeTypeAccessor: (node) => node.getData().kind,
             nodeStyleMap: {
