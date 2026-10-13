@@ -1,18 +1,44 @@
 {% extends "base.html" %}
 {% block title %}Search CPEs{% endblock %}
 {% block content %}
-<section class="page-header workspace-heading" aria-labelledby="home-title">
+{% if not has_search_filters %}
+<section class="card home-intro" aria-labelledby="home-title">
+  <div class="home-intro-main">
+    <p class="eyebrow"><i class="fa-solid fa-circle-nodes" aria-hidden="true"></i> CPE Editor · An open source community catalog</p>
+    <h1 id="home-title">Find a platform.<br>Improve the record.</h1>
+    <p class="home-intro-description">A collaborative catalog of vendors, products, and platform identifiers. Explore CPE records and package URL (PURL) mappings, connect related products, and help improve the data through reviewed proposals.</p>
+    <p class="home-intro-definition">Common Platform Enumeration (CPE) gives software, hardware, and operating systems consistent names so teams can match platforms to vulnerability records.</p>
+    <div class="action-row home-intro-actions">
+      <a class="button" href="#cpe-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search the catalog</a>
+      <a class="button secondary" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Contribute an update</a>
+    </div>
+  </div>
+  <aside class="home-intro-initiative" aria-labelledby="gcve-intro-title">
+    <img class="home-intro-logo" src="{{ url_for('static', filename='gcve.png') }}" alt="GCVE.eu" width="168" height="48">
+    <p class="eyebrow">Part of the GCVE initiative</p>
+    <h2 id="gcve-intro-title">An open approach to vulnerability identification.</h2>
+    <p>GCVE, the <strong>Global CVE Allocation System</strong>, supports decentralized vulnerability identification and publication. CPE Editor contributes a curated platform catalog to that open ecosystem.</p>
+    <div class="home-intro-links">
+      <a href="https://gcve.eu/" target="_blank" rel="noopener noreferrer" aria-label="Explore the GCVE initiative (opens in a new tab)">Explore GCVE<i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
+      <a href="{{ url_for('main.details') }}">About this project<i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+    </div>
+  </aside>
+  <ul class="home-intro-highlights" aria-label="What you can do with CPE Editor">
+    <li><i class="fa-solid fa-diagram-project" aria-hidden="true"></i><div><strong>Explore linked records</strong><span>Vendors, products, CPEs, and PURLs.</span></div></li>
+    <li><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i><div><strong>Contribute improvements</strong><span>Propose corrections for moderators to review.</span></div></li>
+    <li><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><div><strong>Follow the changes</strong><span>An open history of approved updates.</span></div></li>
+  </ul>
+</section>
+{% else %}
+<section class="page-header" aria-labelledby="home-title">
   <div>
     <p class="eyebrow">GCVE · Platform catalog</p>
-    <h1 id="home-title">Find a platform. Improve the record.</h1>
-    <p class="muted">Search CPE names and package URLs, then propose reviewed updates.</p>
+    <h1 id="home-title">Search the platform catalog</h1>
+    <p class="muted">Explore CPE records and package URL mappings.</p>
   </div>
   <a class="button secondary" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Submit a proposal</a>
 </section>
-<details class="about-cpe">
-  <summary>About CPE and the GCVE initiative</summary>
-  <p>Common Platform Enumeration identifies software, hardware, and operating systems across vulnerability management workflows. The <a href="https://gcve.eu/" target="_blank" rel="noopener noreferrer">GCVE initiative</a> supports collaborative maintenance through reviewed proposals and a transparent change history.</p>
-</details>
+{% endif %}
 
 <div id="cpe-search" class="card">
   <h2>Search CPEs</h2>
