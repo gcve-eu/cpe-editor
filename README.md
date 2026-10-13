@@ -2,9 +2,11 @@
 
 A modern Flask application for browsing, curating, and publishing CPE (Common Platform Enumeration) data with a built-in moderation workflow, API access, and dataset portability.
 
-<img width="1213" height="1047" alt="CPE Editor - A Vendor View" src="https://github.com/user-attachments/assets/95c3c102-52e2-4612-8351-c5ff1057f74c" />
-<img width="1211" height="1481" alt="Screenshot from 2026-09-22 10-50-47" src="https://github.com/user-attachments/assets/e0b02dcf-9629-468a-be2e-099af3312576" />
-<img width="1211" height="1481" alt="Screenshot from 2026-09-22 10-51-05" src="https://github.com/user-attachments/assets/ca5f183f-18d2-41ab-b283-a0bed693f857" />
+<img width="1882" height="1349" alt="Screenshot from 2026-10-13 14-59-09" src="https://github.com/user-attachments/assets/9b278c7e-35f4-41a2-8a52-eaa0cab44d6c" />
+<img width="1882" height="1349" alt="Screenshot from 2026-10-13 14-59-42" src="https://github.com/user-attachments/assets/fb6938d1-0fcb-4a82-8d9e-45b71674fc9b" />
+<img width="1882" height="1349" alt="Screenshot from 2026-10-13 15-00-00" src="https://github.com/user-attachments/assets/a9e24fb2-ca54-4e03-8943-36d138fc1cd0" />
+
+The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
 
 ## Highlights
 
@@ -29,7 +31,7 @@ A modern Flask application for browsing, curating, and publishing CPE (Common Pl
 - Browse vendors, products, and CPE records.
 - Drill into vendor/product detail pages and linked relationships.
 - Expand the **Relationship graph** on vendor and product detail pages to explore
-  approved relationships alongside the combined view. The read-only Pivotick
+  approved relationships alongside the combined view. The read-only [Pivotick](https://github.com/Pivotick/Pivotick)
   graph supports pan, zoom, node inspection, and links to the original records;
   product graphs also include CPE entries. It loads on demand and shows a notice
   when the 200-record / 400-link limit omits data. Existing lists remain available.
