@@ -28,6 +28,11 @@ A modern Flask application for browsing, curating, and publishing CPE (Common Pl
 
 - Browse vendors, products, and CPE records.
 - Drill into vendor/product detail pages and linked relationships.
+- Expand the **Relationship graph** on vendor and product detail pages to explore
+  approved relationships alongside the combined view. The read-only Pivotick
+  graph supports pan, zoom, node inspection, and links to the original records;
+  product graphs also include CPE entries. It loads on demand and shows a notice
+  when the 200-record / 400-link limit omits data. Existing lists remain available.
 - Submit anonymous proposals to:
   - edit an existing CPE
   - add a CPE to an existing vendor/product
@@ -99,6 +104,8 @@ The `wsgi.py` entry point creates the Flask application without enabling debug m
 - Vendors: `GET /vendors`
 - Vendor detail: `GET /vendors/{vendor_uuid}`
 - Product detail: `GET /products/{product_uuid}`
+- Vendor graph data: `GET /vendors/{vendor_uuid}/graph`
+- Product graph data: `GET /products/{product_uuid}/graph`
 - CPE detail: `GET /cpes/{cpe_id}`
 - Statistics: `GET /statistics`
 - Proposal form: `GET|POST /proposals/new`
