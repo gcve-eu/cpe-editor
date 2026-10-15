@@ -264,7 +264,8 @@
     </ul>
   {% else %}
     <p class="muted">
-      This vendor does not currently have eligible synonym/equivalent vendor links for combined products.
+      This vendor does not currently have eligible vendor relationships for combined products
+      (<code>{{ combined_view_relationship_types|join(", ") }}</code>).
     </p>
   {% endif %}
 </div>
