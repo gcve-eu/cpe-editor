@@ -178,6 +178,7 @@ PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES = {
     "synonym-of",
     "canonical-of",
     "equivalent-to",
+    "renamed-to",
 }
 ALLOWED_PROPOSAL_TYPES = {
     "edit_cpe",

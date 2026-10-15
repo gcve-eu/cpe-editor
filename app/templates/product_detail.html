@@ -282,7 +282,8 @@
     </table>
   {% else %}
     <p class="muted">
-      This product does not currently have eligible product/vendor synonym or equivalent links.
+      This product does not currently have eligible product or vendor relationships for a combined view
+      (<code>{{ combined_view_relationship_types|join(", ") }}</code>).
     </p>
   {% endif %}
 </div>
