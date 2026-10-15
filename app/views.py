@@ -174,11 +174,14 @@ RELATIONSHIP_TYPE_DESCRIPTIONS = {
     "vendor-merge-into": "vendor/product normalization relationship, when applicable.",
     "derived-from": "the record was derived from another source record.",
 }
+# Combine alternate identities and normalization links. Replacement and provenance
+# relationships do not imply a shared product/CPE identity.
 PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES = {
     "synonym-of",
     "canonical-of",
     "equivalent-to",
     "renamed-to",
+    "vendor-merge-into",
 }
 ALLOWED_PROPOSAL_TYPES = {
     "edit_cpe",
