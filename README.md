@@ -110,6 +110,7 @@ The `wsgi.py` entry point creates the Flask application without enabling debug m
 
 - Home: `GET /`
 - Vendors: `GET /vendors`
+- Products: `GET /products` (search with `q`; sort by `name` or `cpes`)
 - Vendor detail: `GET /vendors/{vendor_uuid}`
 - Product detail: `GET /products/{product_uuid}`
 - Vendor graph data: `GET /vendors/{vendor_uuid}/graph`
@@ -136,6 +137,7 @@ Documented endpoints include:
 - `GET /api/vendors`
 - `GET /api/vendors/{vendor_uuid}`
 - `GET /api/vendors/suggest`
+- `GET /api/products`
 - `GET /api/products/{product_uuid}`
 - `GET /api/products/suggest`
 - `GET /api/changes`
@@ -149,6 +151,7 @@ Documented endpoints include:
 
 ```bash
 curl "http://127.0.0.1:5000/api/vendors?page=1&per_page=5"
+curl "http://127.0.0.1:5000/api/products?q=windows&page=1&per_page=5"
 curl "http://127.0.0.1:5000/api/cpes?vendor_q=microsoft&part=a&per_page=10"
 curl "http://127.0.0.1:5000/api/changes?per_page=10"
 ```

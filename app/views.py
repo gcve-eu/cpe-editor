@@ -2287,6 +2287,62 @@ def vendors():
     )
 
 
+@bp.route("/products")
+def products():
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    q = (request.args.get("q") or "").strip()
+    sort_by = (request.args.get("sort") or "name").strip().lower()
+    if sort_by not in {"name", "cpes"}:
+        sort_by = "name"
+    per_page = 25
+
+    query = Product.query.options(selectinload(Product.vendor))
+    if q:
+        like = f"%{q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Product.name).like(like),
+                func.lower(Product.title).like(like),
+            )
+        )
+
+    # Count products before joining CPEs so pagination avoids a second aggregation.
+    total = query.count()
+    product_cpe_counts = None
+    if sort_by == "cpes":
+        cpe_count = func.count(CPEEntry.id).label("cpe_count")
+        query = (
+            query.add_columns(cpe_count)
+            .outerjoin(CPEEntry, CPEEntry.product_id == Product.id)
+            .group_by(Product.id)
+            .order_by(cpe_count.desc(), Product.name.asc(), Product.id.asc())
+        )
+    else:
+        query = query.order_by(Product.name.asc(), Product.id.asc())
+
+    total_pages = max((total + per_page - 1) // per_page, 1)
+    page = min(page, total_pages)
+    rows = query.offset((page - 1) * per_page).limit(per_page).all()
+    if sort_by == "cpes":
+        product_rows = [product for product, count in rows]
+        product_cpe_counts = {product.id: count for product, count in rows}
+    else:
+        product_rows = rows
+
+    return render_template(
+        "products.html",
+        products=product_rows,
+        product_page=page,
+        product_total_pages=total_pages,
+        product_has_prev=page > 1,
+        product_has_next=page < total_pages,
+        product_q=q,
+        product_total=total,
+        sort_by=sort_by,
+        product_cpe_counts=product_cpe_counts,
+    )
+
+
 @bp.route("/aliases")
 def aliases():
     q = (request.args.get("q") or "").strip()
@@ -3047,6 +3103,42 @@ def api_vendor_suggestions():
 def api_vendor_detail(vendor_uuid):
     vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
     return jsonify(_serialize_vendor(vendor))
+
+
+@bp.route("/api/products")
+def api_products():
+    q = (request.args.get("q") or "").strip()
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = min(
+        max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
+    )
+
+    query = Product.query
+    if q:
+        like = f"%{q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Product.name).like(like),
+                func.lower(Product.title).like(like),
+            )
+        )
+
+    total = query.count()
+    results = (
+        query.order_by(Product.name.asc(), Product.id.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return jsonify(
+        {
+            "items": [_serialize_product(product) for product in results],
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": max((total + per_page - 1) // per_page, 1),
+        }
+    )
 
 
 @bp.route("/api/products/<string:product_uuid>")
