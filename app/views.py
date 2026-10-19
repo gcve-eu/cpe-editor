@@ -27,7 +27,7 @@ from flask import (
 )
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import contains_eager, selectinload
+from sqlalchemy.orm import contains_eager, raiseload, selectinload
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
 from .graphs import GRAPH_NODE_LIMIT, build_entity_graph
@@ -622,7 +622,7 @@ def _serialize_vendor(vendor):
     }
 
 
-def _serialize_product(product):
+def _serialize_product(product, *, cpe_count=None):
     aliases = [
         membership.alias
         for membership in sorted(
@@ -642,7 +642,7 @@ def _serialize_product(product):
         "notes": product.notes,
         "created_at": product.created_at.isoformat() if product.created_at else None,
         "updated_at": product.updated_at.isoformat() if product.updated_at else None,
-        "cpe_count": len(product.cpes),
+        "cpe_count": len(product.cpes) if cpe_count is None else cpe_count,
         "aliases": [_serialize_product_alias_summary(alias) for alias in aliases],
         "approved_notes": [
             _serialize_entity_note(note)
@@ -3125,14 +3125,46 @@ def api_products():
 
     total = query.count()
     results = (
-        query.order_by(Product.name.asc(), Product.id.asc())
+        query.options(
+            selectinload(Product.vendor),
+            selectinload(Product.alias_memberships)
+            .joinedload(ProductAliasMember.alias)
+            .selectinload(ProductAlias.members),
+            selectinload(Product.note_entries),
+            selectinload(Product.metadata_entries),
+            selectinload(Product.outgoing_relationships)
+            .joinedload(EntityRelationship.source_vendor),
+            selectinload(Product.outgoing_relationships)
+            .joinedload(EntityRelationship.source_product)
+            .joinedload(Product.vendor),
+            selectinload(Product.outgoing_relationships)
+            .joinedload(EntityRelationship.target_vendor),
+            selectinload(Product.outgoing_relationships)
+            .joinedload(EntityRelationship.target_product)
+            .joinedload(Product.vendor),
+            raiseload("*"),
+        )
+        .order_by(Product.name.asc(), Product.id.asc())
         .offset((page - 1) * per_page)
         .limit(per_page)
         .all()
     )
+    # Count only the current page's CPEs without materializing their entries.
+    cpe_counts = (
+        dict(
+            db.session.query(CPEEntry.product_id, func.count(CPEEntry.id))
+            .filter(CPEEntry.product_id.in_([product.id for product in results]))
+            .group_by(CPEEntry.product_id)
+            .all()
+        )
+        if results else {}
+    )
     return jsonify(
         {
-            "items": [_serialize_product(product) for product in results],
+            "items": [
+                _serialize_product(product, cpe_count=cpe_counts.get(product.id, 0))
+                for product in results
+            ],
             "page": page,
             "per_page": per_page,
             "total": total,

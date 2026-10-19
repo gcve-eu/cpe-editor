@@ -1,7 +1,10 @@
 import pytest
 from sqlalchemy import event
 
-from app.models import CPEEntry, Product, Vendor, db
+from app.models import (
+    CPEEntry, EntityMetadata, EntityNote, EntityRelationship, Product,
+    ProductAlias, ProductAliasMember, Vendor, db,
+)
 
 
 def test_products_api_lists_paginated_detail_records(client):
@@ -215,3 +218,88 @@ def test_product_cpe_sort_uses_index_and_counts_products_without_cpe_join(client
         "SEARCH cpe_entry USING COVERING INDEX ix_cpe_entry_product_id" in row[3]
         for row in plan
     )
+
+
+def test_products_api_counts_cpes_without_loading_entries(client):
+    product = Product.query.filter_by(name="windows_11").one()
+    product_id = product.id
+    db.session.add_all(
+        CPEEntry(
+            vendor_id=product.vendor_id,
+            product_id=product_id,
+            cpe_uri=f"cpe:2.3:o:microsoft:windows_11:test-{index}:*:*:*:*:*:*:*",
+            part="o",
+        )
+        for index in range(150)
+    )
+    db.session.commit()
+    db.session.remove()
+
+    loaded_cpes = []
+
+    def record_load(target, context):
+        loaded_cpes.append(target.id)
+
+    event.listen(CPEEntry, "load", record_load)
+    try:
+        response = client.get("/api/products?q=windows")
+    finally:
+        event.remove(CPEEntry, "load", record_load)
+
+    assert response.status_code == 200
+    assert response.get_json()["items"][0]["cpe_count"] == 151
+    assert loaded_cpes == []
+
+
+def test_products_api_batches_related_data_and_preserves_details(client):
+    vendor = Vendor.query.first()
+    target_vendor = Vendor(name="target_vendor")
+    target = Product(vendor=target_vendor, name="target_product")
+    alias = ProductAlias(name="Shared product alias")
+    db.session.add_all([target_vendor, target, alias])
+    db.session.flush()
+    for index in range(25):
+        product = Product(vendor=vendor, name=f"batch_product_{index:02d}")
+        db.session.add(product)
+        db.session.flush()
+        db.session.add_all([
+            ProductAliasMember(alias=alias, vendor=vendor, product=product),
+            EntityNote(product=product, note_text=f"Note {index}"),
+            EntityMetadata(product=product, metadata_key="website", metadata_value="https://example.test"),
+            EntityRelationship(source_product=product, target_product=target, relationship_type="related-to"),
+            EntityRelationship(source_product=product, target_vendor=target_vendor, relationship_type="related-to"),
+        ])
+    db.session.commit()
+
+    def fetch_page(per_page):
+        db.session.remove()
+        statements = []
+
+        def capture_sql(conn, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        event.listen(db.engine, "before_cursor_execute", capture_sql)
+        try:
+            response = client.get(f"/api/products?q=batch_product&per_page={per_page}")
+        finally:
+            event.remove(db.engine, "before_cursor_execute", capture_sql)
+        assert response.status_code == 200
+        return response.get_json(), len(statements)
+
+    small, small_query_count = fetch_page(1)
+    large, large_query_count = fetch_page(25)
+    assert len(small["items"]) == 1
+    assert len(large["items"]) == 25
+    assert large_query_count == small_query_count
+    assert large_query_count <= 10
+    for item in large["items"]:
+        assert item["cpe_count"] == 0
+        assert item["approved_notes"]
+        assert item["approved_metadata"]
+        assert len(item["approved_relationships"]) == 2
+        assert item["aliases"][0]["member_count"] == 25
+        # The fixture keeps an app context across requests; use a fresh session
+        # as a real detail request would, without the list's raiseload options.
+        db.session.remove()
+        assert item == client.get(f"/api/products/{item['uuid']}").get_json()
