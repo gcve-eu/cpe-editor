@@ -27,7 +27,7 @@ from flask import (
 )
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import contains_eager, selectinload
+from sqlalchemy.orm import contains_eager, raiseload, selectinload
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
 from .graphs import GRAPH_NODE_LIMIT, build_entity_graph
@@ -622,7 +622,7 @@ def _serialize_vendor(vendor):
     }
 
 
-def _serialize_product(product):
+def _serialize_product(product, *, cpe_count=None):
     aliases = [
         membership.alias
         for membership in sorted(
@@ -642,7 +642,7 @@ def _serialize_product(product):
         "notes": product.notes,
         "created_at": product.created_at.isoformat() if product.created_at else None,
         "updated_at": product.updated_at.isoformat() if product.updated_at else None,
-        "cpe_count": len(product.cpes),
+        "cpe_count": len(product.cpes) if cpe_count is None else cpe_count,
         "aliases": [_serialize_product_alias_summary(alias) for alias in aliases],
         "approved_notes": [
             _serialize_entity_note(note)
@@ -2287,6 +2287,62 @@ def vendors():
     )
 
 
+@bp.route("/products")
+def products():
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    q = (request.args.get("q") or "").strip()
+    sort_by = (request.args.get("sort") or "name").strip().lower()
+    if sort_by not in {"name", "cpes"}:
+        sort_by = "name"
+    per_page = 25
+
+    query = Product.query.options(selectinload(Product.vendor))
+    if q:
+        like = f"%{q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Product.name).like(like),
+                func.lower(Product.title).like(like),
+            )
+        )
+
+    # Count products before joining CPEs so pagination avoids a second aggregation.
+    total = query.count()
+    product_cpe_counts = None
+    if sort_by == "cpes":
+        cpe_count = func.count(CPEEntry.id).label("cpe_count")
+        query = (
+            query.add_columns(cpe_count)
+            .outerjoin(CPEEntry, CPEEntry.product_id == Product.id)
+            .group_by(Product.id)
+            .order_by(cpe_count.desc(), Product.name.asc(), Product.id.asc())
+        )
+    else:
+        query = query.order_by(Product.name.asc(), Product.id.asc())
+
+    total_pages = max((total + per_page - 1) // per_page, 1)
+    page = min(page, total_pages)
+    rows = query.offset((page - 1) * per_page).limit(per_page).all()
+    if sort_by == "cpes":
+        product_rows = [product for product, count in rows]
+        product_cpe_counts = {product.id: count for product, count in rows}
+    else:
+        product_rows = rows
+
+    return render_template(
+        "products.html",
+        products=product_rows,
+        product_page=page,
+        product_total_pages=total_pages,
+        product_has_prev=page > 1,
+        product_has_next=page < total_pages,
+        product_q=q,
+        product_total=total,
+        sort_by=sort_by,
+        product_cpe_counts=product_cpe_counts,
+    )
+
+
 @bp.route("/aliases")
 def aliases():
     q = (request.args.get("q") or "").strip()
@@ -3047,6 +3103,74 @@ def api_vendor_suggestions():
 def api_vendor_detail(vendor_uuid):
     vendor = Vendor.query.filter_by(uuid=vendor_uuid).first_or_404()
     return jsonify(_serialize_vendor(vendor))
+
+
+@bp.route("/api/products")
+def api_products():
+    q = (request.args.get("q") or "").strip()
+    page = max(request.args.get("page", default=1, type=int) or 1, 1)
+    per_page = min(
+        max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
+    )
+
+    query = Product.query
+    if q:
+        like = f"%{q.lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Product.name).like(like),
+                func.lower(Product.title).like(like),
+            )
+        )
+
+    total = query.count()
+    results = (
+        query.options(
+            selectinload(Product.vendor),
+            selectinload(Product.alias_memberships)
+            .joinedload(ProductAliasMember.alias)
+            .selectinload(ProductAlias.members),
+            selectinload(Product.note_entries),
+            selectinload(Product.metadata_entries),
+            selectinload(Product.outgoing_relationships)
+            .joinedload(EntityRelationship.source_vendor),
+            selectinload(Product.outgoing_relationships)
+            .joinedload(EntityRelationship.source_product)
+            .joinedload(Product.vendor),
+            selectinload(Product.outgoing_relationships)
+            .joinedload(EntityRelationship.target_vendor),
+            selectinload(Product.outgoing_relationships)
+            .joinedload(EntityRelationship.target_product)
+            .joinedload(Product.vendor),
+            raiseload("*"),
+        )
+        .order_by(Product.name.asc(), Product.id.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    # Count only the current page's CPEs without materializing their entries.
+    cpe_counts = (
+        dict(
+            db.session.query(CPEEntry.product_id, func.count(CPEEntry.id))
+            .filter(CPEEntry.product_id.in_([product.id for product in results]))
+            .group_by(CPEEntry.product_id)
+            .all()
+        )
+        if results else {}
+    )
+    return jsonify(
+        {
+            "items": [
+                _serialize_product(product, cpe_count=cpe_counts.get(product.id, 0))
+                for product in results
+            ],
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": max((total + per_page - 1) // per_page, 1),
+        }
+    )
 
 
 @bp.route("/api/products/<string:product_uuid>")
