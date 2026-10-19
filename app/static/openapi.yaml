@@ -222,7 +222,12 @@ paths:
           name: q
           schema:
             type: string
-          description: Broad case-insensitive search over URI, title, vendor, product, and version.
+          description: >-
+            Case-insensitive substring search over URI, title, vendor, product,
+            and version. SQLite installations can accelerate searches containing
+            at least three consecutive literal characters with the optional
+            trigram index (rebuild-cpe-search-index CLI command). Percent and
+            underscore retain SQL LIKE wildcard semantics.
         - in: query
           name: vendor_q
           schema:

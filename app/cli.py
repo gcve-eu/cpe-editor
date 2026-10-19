@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 from sqlalchemy import func, inspect, schema, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import aliased
 
 from .models import (
@@ -25,6 +26,7 @@ from .models import (
     Vendor,
     db,
 )
+from .search import rebuild_cpe_search_index
 from .utils import (
     build_cpe_uri,
     new_uuid,
@@ -98,6 +100,19 @@ def _add_missing_columns(engine):
 
 
 def register_cli(app):
+    @app.cli.command("rebuild-cpe-search-index")
+    def rebuild_cpe_search_index_command():
+        """Enable/rebuild SQLite FTS5 trigram acceleration for /api/cpes?q=... ."""
+        try:
+            rebuild_cpe_search_index()
+        except (ValueError, OperationalError) as exc:
+            raise click.ClickException(
+                f"Could not build the CPE search index: {exc}"
+            ) from exc
+        click.echo(
+            "CPE trigram search index rebuilt. Future writes are indexed automatically."
+        )
+
     @app.cli.command("init-db")
     @click.option(
         "--drop", is_flag=True, help="Drop all tables before creating them again."

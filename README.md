@@ -156,6 +156,35 @@ curl "http://127.0.0.1:5000/api/cpes?vendor_q=microsoft&part=a&per_page=10"
 curl "http://127.0.0.1:5000/api/changes?per_page=10"
 ```
 
+### Faster CPE partial searches (SQLite)
+
+`GET /api/cpes?q=...` searches substrings in CPE URIs, titles, versions, and
+vendor/product names and titles. It filters matching CPE IDs before joining the
+page to its vendor and product, preserving exact totals and pagination.
+
+To accelerate substring searches on a large SQLite catalog, build the optional
+FTS5 trigram index once after upgrading, preferably outside busy import periods:
+
+```bash
+python -m flask --app run rebuild-cpe-search-index
+```
+
+This requires SQLite with FTS5 and the trigram tokenizer (SQLite 3.34 or newer).
+The command indexes existing CPE URIs, titles, and versions; database triggers
+keep the index current for subsequent inserts, updates, deletes, and imports.
+Existing server workers detect the index without a restart. Re-running the
+command rebuilds it. Building the index takes a SQLite write lock and uses
+additional disk space; the index also adds work to catalog writes. No large
+index build runs during server startup.
+
+Queries with a literal run of at least three characters use the index to narrow
+CPE candidates, then apply the original case-insensitive substring checks.
+Vendor and product text is searched separately and mapped through foreign-key
+indexes. Shorter searches, patterns without a three-character literal run, and
+databases without the index use the regular search path. Existing `%` and `_`
+wildcard behavior, response fields, prefix filters, and page ordering are retained.
+For narrower searches, combine `q` with `vendor_q`, `product_q`, `part`, or `purl_q`.
+
 ## Running API tests
 
 A focused API regression suite is included under `tests/` and uses a very small CPE fixture (`tests/fixtures/cpe_subset.json`) representing a tiny subset of real-world CPE-style records (vendors, products, CPE URIs, and vulnerability links).
