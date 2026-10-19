@@ -31,6 +31,7 @@ from sqlalchemy.orm import contains_eager, selectinload
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
 from .graphs import GRAPH_NODE_LIMIT, build_entity_graph
+from .search import apply_cpe_text_search
 from .models import (
     APIClient,
     CPEEntry,
@@ -3258,31 +3259,20 @@ def api_cpes():
         query, vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part
     )
     if q:
-        like = f"%{q.lower()}%"
-        query = query.join(Vendor).join(Product).filter(
-            or_(
-                func.lower(CPEEntry.cpe_uri).like(like),
-                func.lower(CPEEntry.title).like(like),
-                func.lower(Vendor.name).like(like),
-                func.lower(Vendor.title).like(like),
-                func.lower(Product.name).like(like),
-                func.lower(Product.title).like(like),
-                func.lower(CPEEntry.version).like(like),
-            )
-        )
-        total_expression = func.count(func.distinct(CPEEntry.id))
-        ordered_query = query.order_by(
-            Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc()
+        query = apply_cpe_text_search(query, q)
+        ordered_query = (
+            query.join(CPEEntry.vendor).join(CPEEntry.product)
+            .order_by(Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc())
         )
     else:
-        total_expression = func.count(CPEEntry.id)
         ordered_query = query.order_by(CPEEntry.cpe_uri.asc())
 
-    total = query.with_entities(total_expression).order_by(None).scalar() or 0
+    total = query.with_entities(func.count(CPEEntry.id)).order_by(None).scalar() or 0
+    load_parent = contains_eager if q else selectinload
     results = (
         ordered_query.options(
-            selectinload(CPEEntry.vendor),
-            selectinload(CPEEntry.product),
+            load_parent(CPEEntry.vendor),
+            load_parent(CPEEntry.product),
             selectinload(CPEEntry.vulnerability_links),
             selectinload(CPEEntry.purl_mappings),
         )
