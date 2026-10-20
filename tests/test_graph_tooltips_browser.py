@@ -43,7 +43,7 @@ window.Pivotick = new Proxy(Pivotick, {
         product = Product.query.first()
         payload = client.get(f"/products/{product.uuid}/graph").get_json()
         page.goto(f"http://graph.test/products/{product.uuid}")
-        page.locator(".entity-graph summary").click()
+        page.locator(".entity-graph > summary").click()
         page.wait_for_function("window.testGraph && document.querySelector('.graph-status').textContent.includes('links.')")
         try:
             yield page, payload
@@ -138,9 +138,9 @@ def test_pinned_tooltips_stay_inside_graph(graph_page):
     _assert_contained(page)
     _assert_connectors(page)
 
-    page.locator(".entity-graph summary").click()
+    page.locator(".entity-graph > summary").click()
     assert not page.locator(".pvt-tooltip-floating").first.is_visible()
-    page.locator(".entity-graph summary").click()
+    page.locator(".entity-graph > summary").click()
     _assert_contained(page)
     page.locator(".pvt-tooltip-floating .close-button").last.click()
     assert page.locator(".pvt-tooltip-floating").count() == 1
