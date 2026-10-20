@@ -25,9 +25,54 @@
     const canvas = panel.querySelector(".graph-canvas");
     const picker = panel.querySelector(".graph-record-picker");
     const selection = panel.querySelector(".graph-selection");
+    const simplify = panel.querySelector(".graph-simplify");
     let graph;
     let payload;
     let loading = false;
+
+    function setupSimplification() {
+      const rules = panel.querySelector(".graph-simplify-rules");
+      rules.replaceChildren();
+      const controls = graph.simplify.getRules().map((rule) => {
+        const fieldset = document.createElement("fieldset");
+        const legend = document.createElement("legend");
+        const label = document.createElement("label");
+        const toggle = document.createElement("input");
+        toggle.type = "checkbox";
+        toggle.checked = rule.enabled;
+        toggle.addEventListener("change", () => graph.simplify.setRuleEnabled(rule.id, toggle.checked));
+        label.append(toggle, ` ${rule.label}`);
+        legend.append(label);
+        const description = document.createElement("p");
+        description.textContent = rule.description;
+        const settingLabel = document.createElement("label");
+        const setting = document.createElement("input");
+        setting.type = "number";
+        setting.min = rule.setting.min;
+        setting.max = rule.setting.max;
+        setting.step = 1;
+        setting.value = rule.setting.value;
+        setting.addEventListener("change", () => {
+          if (setting.value && setting.checkValidity()) {
+            graph.simplify.setRuleSetting(rule.id, setting.valueAsNumber);
+          }
+          setting.value = graph.simplify.getRules().find((current) => current.id === rule.id).setting.value;
+        });
+        settingLabel.append(`${rule.setting.label} `, setting);
+        fieldset.append(legend, description, settingLabel);
+        rules.append(fieldset);
+        return { id: rule.id, toggle };
+      });
+      function syncSimplification() {
+        graph.simplify.getRules().forEach((rule) => {
+          controls.find((control) => control.id === rule.id).toggle.checked = rule.enabled;
+        });
+        const { shown, total, groups, folded } = graph.simplify.summary();
+        panel.querySelector(".graph-simplify-status").textContent = `${shown} shown of ${total} records · ${groups} groups · ${folded} folded.`;
+      }
+      graph.simplify.onChange(syncSimplification);
+      syncSimplification();
+    }
 
     function inspect(data) {
       selection.replaceChildren();
@@ -75,7 +120,13 @@
           })),
         }, {
           isDirected: true,
-          UI: { mode: "viewer", theme: document.documentElement.dataset.theme || "light", navigation: { enabled: false } },
+          UI: {
+            mode: "viewer", theme: document.documentElement.dataset.theme || "light", navigation: { enabled: false },
+            // Keep rules off until the user chooses how to simplify this view.
+            simplify: {
+              rules: ["neighbours", "chains", "degree", "kcore"].map((kind) => ({ kind, enabled: false })),
+            },
+          },
           simulation: {
             useWorker: true,
             // Keep the fallback short if browser policy prevents worker creation.
@@ -108,10 +159,23 @@
             },
           },
           callbacks: {
-            onNodeClick: (_, node) => { picker.value = node.id; inspect(node.getData()); },
-            onEdgeClick: (_, edge) => { picker.value = ""; inspect(edge.getData()); },
+            onNodeClick: (_, node) => {
+              picker.value = node.isGroup ? "" : node.id;
+              inspect(node.isGroup ? {
+                label: graph.simplify.labelOf(node.info),
+                rationale: `${node.info.members.length} records in this group. Double-click the group to show its members, or use the record picker to inspect an individual record.`,
+              } : node.getData());
+            },
+            onEdgeClick: (_, edge) => {
+              picker.value = "";
+              inspect(edge.isSynthetic && edge.representedEdges.length > 1 ? {
+                label: `${edge.representedEdges.length} links`,
+                rationale: "These links connect grouped records. Open the groups to inspect the individual links.",
+              } : edge.getData());
+            },
           },
         });
+        setupSimplification();
         syncTheme();
         picker.replaceChildren(new Option("Choose a record", ""));
         payload.nodes.forEach((node) => picker.add(new Option(`${node.data.kind.toUpperCase()} · ${node.data.label}`, node.id)));
@@ -142,6 +206,16 @@
       }
     });
     retry.addEventListener("click", load);
+    simplify.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        simplify.open = false;
+        simplify.querySelector("summary").focus();
+        event.stopPropagation();
+      }
+    });
+    document.addEventListener("click", (event) => {
+      if (!simplify.contains(event.target)) simplify.open = false;
+    });
     picker.addEventListener("change", () => {
       const node = payload.nodes.find((node) => node.id === picker.value);
       if (node) inspect(node.data);
@@ -161,6 +235,7 @@
       if (graph && panel.open && canvas.clientWidth) graph.renderer.fitAndCenterWhenSettled();
     }).observe(canvas);
     window.addEventListener("pagehide", () => {
+      simplify.open = false;
       graph?.destroy();
       graph = null;
       canvas.replaceChildren();
