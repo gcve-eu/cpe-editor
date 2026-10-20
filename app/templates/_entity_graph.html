@@ -5,6 +5,7 @@
   <summary><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Relationship graph</summary>
   <p class="muted">{% if graph_include_alias %}Explore this alias's member products, their vendors, approved relationships, and CPE entries.{% else %}Explore approved relationships and the records in the combined view{% if graph_include_cpes %}, including CPE entries{% endif %}.{% endif %} Arrows follow the source → target direction; dashed links show ownership. The outlined node is the current record.</p>
   <p class="muted">Drag nodes to arrange them, scroll to zoom, and drag the background to pan. Select a node or use the record picker to inspect it.</p>
+  <p class="muted">Use <strong>Simplify graph</strong> to group records in this view. Double-click a group to show its members; switch rules off to restore the full view.</p>
   <p class="graph-status muted" role="status" aria-live="polite"></p>
   <button class="secondary graph-retry" type="button" hidden>Retry loading graph</button>
   <div class="graph-content" hidden>
@@ -12,6 +13,15 @@
       <button class="secondary" type="button" data-graph-action="fit">Fit graph</button>
       <button class="secondary" type="button" data-graph-action="in" aria-label="Zoom in">Zoom in</button>
       <button class="secondary" type="button" data-graph-action="out" aria-label="Zoom out">Zoom out</button>
+      <details class="graph-simplify">
+        <summary title="Simplify this view with Pivotick's graph grouping rules">Simplify graph</summary>
+        <div class="graph-simplify-popover">
+          <p class="muted">Choose rules to simplify this view. Switch them off to show every record again.</p>
+          <div class="graph-simplify-rules"></div>
+          <p class="graph-simplify-status muted" role="status" aria-live="polite"></p>
+          <a href="https://pivotick.github.io/Pivotick/simplify.html" target="_blank" rel="noopener noreferrer">About Pivotick simplification</a>
+        </div>
+      </details>
       <span class="graph-legend">{% if graph_include_alias %}<span class="graph-alias-key">◆ Alias</span> {% endif %}<span class="graph-vendor-key">■ Vendor</span> <span class="graph-product-key">● Product</span>{% if graph_include_cpes %} <span class="graph-cpe-key">⬡ CPE</span>{% endif %}</span>
     </div>
     <div class="graph-canvas" role="region" aria-label="Interactive relationship graph"></div>

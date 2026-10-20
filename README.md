@@ -38,8 +38,12 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   replacement and provenance do not establish a shared product identity.
 - Expand the **Relationship graph** on vendor, product, and alias detail pages to explore
   approved relationships alongside the combined view. The read-only [Pivotick](https://github.com/Pivotick/Pivotick)
-  graph supports pan, zoom, node inspection, and links to the original records;
-  product and alias graphs also include CPE entries. Alias graphs link the alias
+  graph supports pan, zoom, node inspection, and links to the original records.
+  Its **Simplify graph** toolbar control opens a popover with Pivotick's rules to group repeated
+  neighbours or chains and fold nodes with few links or outside the core. Rules
+  start off and can be toggled or adjusted for the current view without changing
+  records; double-click a group to open it. The record picker keeps every record.
+  Product and alias graphs also include CPE entries. Alias graphs link the alias
   to its member products and their vendors. It loads on demand and shows a notice
   when the 200-record / 400-link limit omits data. Existing lists remain available.
 - Submit anonymous proposals to:

@@ -76,6 +76,14 @@ summary { cursor: pointer; }
 .entity-graph summary { font-size: 1.05rem; font-weight: 650; }
 .entity-graph [hidden] { display: none !important; }
 .graph-toolbar { margin: .75rem 0; }
+.graph-simplify { position: relative; }
+.graph-simplify > summary { padding: .5rem .8rem; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); font-size: .85rem; font-weight: 600; }
+.graph-simplify > summary:hover { background: var(--table-row-hover); }
+.graph-simplify-popover { position: absolute; top: 100%; left: 0; z-index: 10; width: min(340px, 75vw); max-height: 60vh; overflow-y: auto; margin-top: .4rem; padding: .8rem; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgb(0 0 0 / .15); font-size: .85rem; }
+.graph-simplify-rules fieldset { min-width: 0; margin: .75rem 0; padding: .5rem .65rem; border: 1px solid var(--border); border-radius: 6px; }
+.graph-simplify-rules legend label { margin: 0; }
+.graph-simplify-rules p { color: var(--muted); font-size: .8rem; }
+.graph-simplify-rules input[type="number"] { width: 5rem; margin-left: .4rem; }
 .graph-legend { display: flex; flex-wrap: wrap; gap: .75rem; font-size: .85rem; }
 .graph-vendor-key { color: #0a6e6f; }
 .graph-product-key { color: #6366f1; }
