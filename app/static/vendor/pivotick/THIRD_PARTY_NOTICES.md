@@ -1,7 +1,7 @@
 # Third-party notices
 
-Runtime dependencies bundled in the official Pivotick v2.0.1 browser release.
-Versions and package URLs come from the upstream v2.0.1 lockfile.
+Runtime dependencies bundled in the official Pivotick v3.0.0 browser release.
+Versions and package URLs come from the upstream v3.0.0 lockfile.
 
 
 ## d3-color 3.1.0

@@ -1,7 +1,7 @@
 import pytest
 
 from app.graphs import GRAPH_EDGE_LIMIT, GRAPH_NODE_LIMIT
-from app.models import CPEEntry, EntityRelationship, Product, Proposal, Vendor, db
+from app.models import CPEEntry, EntityRelationship, Product, ProductAlias, ProductAliasMember, Proposal, Vendor, db
 
 
 def _node_id(record):
@@ -143,4 +143,107 @@ def test_contributed_labels_are_returned_as_data_and_html_is_escaped(client, app
     assert current["data"]["label"] == root.title
     html = client.get(f"/products/{root.uuid}").get_data(as_text=True)
     assert root.title not in html
+    assert "&lt;/script&gt;&lt;img" in html
+
+
+def _create_alias(products, name="Graph alias"):
+    alias = ProductAlias(name=name, description="An approved product group")
+    db.session.add(alias)
+    for product in products:
+        alias.members.append(ProductAliasMember(vendor=product.vendor, product=product))
+    db.session.commit()
+    return alias
+
+
+def test_alias_graph_links_members_owners_cpes_and_approved_relationships(client, app):
+    products = Product.query.order_by(Product.id).limit(2).all()
+    alias = _create_alias(products)
+    neighbor = Product(vendor=products[0].vendor, name="alias_graph_neighbor")
+    relationship = EntityRelationship(
+        source_product=neighbor, target_product=products[0], relationship_type="derived-from",
+    )
+    db.session.add(relationship)
+    db.session.add(Proposal(
+        proposal_type="new_product_alias", status="pending",
+        proposed_alias_name="Pending graph alias",
+        proposed_alias_members=[{"vendor_id": neighbor.vendor_id, "product_id": neighbor.id}],
+    ))
+    db.session.commit()
+
+    response = client.get(f"/aliases/{alias.uuid}/graph")
+    assert response.status_code == 200
+    payload = response.get_json()
+    _assert_integrity(payload)
+    assert payload["truncated"] is False
+    assert payload["root"] == f"alias:{alias.uuid}"
+    nodes = {node["id"]: node["data"] for node in payload["nodes"]}
+    assert nodes[payload["root"]]["url"] == f"/aliases/{alias.uuid}"
+    assert nodes[payload["root"]]["kind"] == "alias"
+    assert len([node for node in nodes.values() if node["kind"] == "alias"]) == 1
+    edges = {edge["id"]: edge for edge in payload["edges"]}
+    for product in products:
+        member_edge = edges[f"alias-product:{alias.uuid}:{product.uuid}"]
+        assert member_edge["from"] == payload["root"]
+        assert member_edge["to"] == _node_id(product)
+        assert member_edge["data"]["kind"] == "membership"
+        assert nodes[_node_id(product)]["url"] == f"/products/{product.uuid}"
+        assert edges[f"vendor-product:{product.uuid}"]["from"] == _node_id(product.vendor)
+        for cpe in product.cpes:
+            assert edges[f"product-cpe:{cpe.id}"]["to"] == f"cpe:{cpe.id}"
+    assert not any(edge["from"] == payload["root"] and edge["to"] == _node_id(neighbor) for edge in payload["edges"])
+    assert edges[f"relationship:{relationship.id}"]["from"] == _node_id(neighbor)
+    assert edges[f"relationship:{relationship.id}"]["to"] == _node_id(products[0])
+
+    html = client.get(f"/aliases/{alias.uuid}").get_data(as_text=True)
+    assert f'data-graph-url="/aliases/{alias.uuid}/graph"' in html
+    assert "Relationship graph" in html
+    assert "graph-alias-key" in html
+    assert "Vendor/product tuples" in html
+    assert "<noscript>" in html
+
+
+def test_empty_alias_graph_and_missing_alias(client, app):
+    alias = _create_alias([])
+    payload = client.get(f"/aliases/{alias.uuid}/graph").get_json()
+    _assert_integrity(payload)
+    assert len(payload["nodes"]) == 1
+    assert payload["edges"] == []
+    assert payload["truncated"] is False
+    assert client.get("/aliases/missing/graph").status_code == 404
+
+
+@pytest.mark.parametrize("overflow", ["members", "cpes", "relationships"])
+def test_alias_graph_is_bounded_and_preserves_membership(client, app, overflow):
+    product = Product.query.first()
+    alias = _create_alias([product])
+    if overflow == "members":
+        for index in range(GRAPH_NODE_LIMIT + 20):
+            member_product = Product(vendor=product.vendor, name=f"alias_bulk_{index:03d}")
+            alias.members.append(ProductAliasMember(vendor=product.vendor, product=member_product))
+    elif overflow == "cpes":
+        for index in range(GRAPH_NODE_LIMIT + 20):
+            db.session.add(CPEEntry(
+                vendor=product.vendor, product=product,
+                cpe_uri=f"cpe:2.3:a:alias:bulk:{index}:*:*:*:*:*:*:*", part="a", version=str(index),
+            ))
+    else:
+        for _ in range(GRAPH_EDGE_LIMIT + 20):
+            db.session.add(EntityRelationship(
+                source_product=product, target_vendor=product.vendor, relationship_type="derived-from",
+            ))
+    db.session.commit()
+    payload = client.get(f"/aliases/{alias.uuid}/graph").get_json()
+    _assert_integrity(payload)
+    assert payload["truncated"] is True
+    assert payload == client.get(f"/aliases/{alias.uuid}/graph").get_json()
+    assert any(edge["from"] == payload["root"] and edge["to"] == _node_id(product) for edge in payload["edges"])
+    assert any(edge["from"] == _node_id(product.vendor) and edge["to"] == _node_id(product) for edge in payload["edges"])
+
+
+def test_alias_graph_contributed_labels_are_data_and_html_is_escaped(client, app):
+    alias = _create_alias([], name='</script><img src=x onerror="window.graphXss=true">')
+    payload = client.get(f"/aliases/{alias.uuid}/graph").get_json()
+    assert payload["nodes"][0]["data"]["label"] == alias.name
+    html = client.get(f"/aliases/{alias.uuid}").get_data(as_text=True)
+    assert alias.name not in html
     assert "&lt;/script&gt;&lt;img" in html

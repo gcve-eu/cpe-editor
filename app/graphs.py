@@ -4,7 +4,7 @@ from flask import url_for
 from sqlalchemy import case, or_
 from sqlalchemy.orm import selectinload
 
-from .models import CPEEntry, EntityRelationship, Product, Vendor
+from .models import CPEEntry, EntityRelationship, Product, ProductAlias, Vendor
 
 
 GRAPH_NODE_LIMIT = 200
@@ -23,7 +23,13 @@ def build_entity_graph(root, vendors, products, *, include_cpes=False):
         nonlocal truncated
         if record is None:
             return None
-        if isinstance(record, Vendor):
+        if isinstance(record, ProductAlias):
+            kind, identity = "alias", record.uuid
+            label = record.name
+            detail = record.description or record.name
+            href = url_for("main.alias_detail", alias_uuid=record.uuid)
+            combined = False
+        elif isinstance(record, Vendor):
             kind, identity = "vendor", record.uuid
             label = record.title or record.name
             detail = record.name
@@ -75,17 +81,36 @@ def build_entity_graph(root, vendors, products, *, include_cpes=False):
         }
 
     root_id = add_node(root)
-    root_filter = (
-        or_(
+    if isinstance(root, ProductAlias):
+        # Keep the alias and its tuples connected before adding neighbors or CPEs.
+        for product in products:
+            # Avoid leaving a product without its owner at the node limit.
+            required = {f"product:{product.uuid}", f"vendor:{product.vendor.uuid}"}
+            if len(nodes) + len(required - nodes.keys()) > GRAPH_NODE_LIMIT:
+                truncated = True
+                continue
+            product_id = add_node(product)
+            owner_id = add_node(product.vendor)
+            add_edge(
+                f"alias-product:{root.uuid}:{product.uuid}", root_id, product_id,
+                "has member", "membership",
+            )
+            add_edge(
+                f"vendor-product:{product.uuid}", owner_id, product_id,
+                "has product", "contains",
+            )
+    if isinstance(root, Vendor):
+        root_filter = or_(
             EntityRelationship.source_vendor_id == root.id,
             EntityRelationship.target_vendor_id == root.id,
         )
-        if isinstance(root, Vendor)
-        else or_(
+    elif isinstance(root, Product):
+        root_filter = or_(
             EntityRelationship.source_product_id == root.id,
             EntityRelationship.target_product_id == root.id,
         )
-    )
+    else:
+        root_filter = False
     relationships = (
         EntityRelationship.query.filter(
             or_(
@@ -116,10 +141,11 @@ def build_entity_graph(root, vendors, products, *, include_cpes=False):
             relationship.relationship_type, "relationship", relationship.rationale,
         )
 
-    for vendor in vendors:
-        add_node(vendor)
-    for product in products:
-        add_node(product)
+    if not isinstance(root, ProductAlias):
+        for vendor in vendors:
+            add_node(vendor)
+        for product in products:
+            add_node(product)
     # Include ownership for relationship neighbors as well as combined members.
     for node_id, record in list(records.items()):
         if isinstance(record, Product):
@@ -132,11 +158,12 @@ def build_entity_graph(root, vendors, products, *, include_cpes=False):
             record.id for record in records.values()
             if isinstance(record, Product) and record.id in product_ids
         ]
+        current_product_filter = CPEEntry.product_id == root.id if isinstance(root, Product) else False
         cpes = (
             CPEEntry.query.filter(CPEEntry.product_id.in_(visible_product_ids))
             .options(selectinload(CPEEntry.product).selectinload(Product.vendor))
             .order_by(
-                case((CPEEntry.product_id == root.id, 0), else_=1),
+                case((current_product_filter, 0), else_=1),
                 CPEEntry.cpe_uri.asc(), CPEEntry.id.asc(),
             )
             .limit(GRAPH_NODE_LIMIT + 1)

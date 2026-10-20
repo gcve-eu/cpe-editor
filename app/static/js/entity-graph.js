@@ -79,13 +79,14 @@
           simulation: {
             useWorker: true,
             // Keep the fallback short if browser policy prevents worker creation.
-            // Pivotick 2.0.1 also runs a cooling stage after its warmup ticks.
+            // Pivotick also runs a cooling stage after its warmup ticks.
             warmupTicks: 1, cooldownTime: 250, d3AlphaDecay: 0.2,
             d3LinkDistance: 150, d3ManyBodyStrength: -600,
           },
           render: {
             nodeTypeAccessor: (node) => node.getData().kind,
             nodeStyleMap: {
+              alias: { shape: { d: "M 0 -22 L 22 0 L 0 22 L -22 0 Z" }, color: "#be185d" },
               vendor: { shape: "square", color: "#0a6e6f" },
               product: { shape: "circle", color: "#6366f1" },
               cpe: { shape: "hexagon", color: "#b45309" },
@@ -119,7 +120,7 @@
         graph.renderer.fitAndCenterWhenSettled();
         status.textContent = `${payload.nodes.length} records · ${payload.edges.length} links.`;
         if (payload.truncated) {
-          status.textContent += ` This graph is limited to ${payload.limits.nodes} records and ${payload.limits.edges} links. Explore a linked record for more; the lists below show the full combined view.`;
+          status.textContent += ` This graph is limited to ${payload.limits.nodes} records and ${payload.limits.edges} links. Explore a linked record for more; the lists below remain available.`;
         }
       } catch (error) {
         console.error("Unable to load relationship graph", error);
@@ -127,7 +128,7 @@
         graph = null;
         canvas.replaceChildren();
         content.hidden = true;
-        status.textContent = "The graph could not load. You can retry or use the relationship lists and combined view below.";
+        status.textContent = "The graph could not load. You can retry or use the record lists below.";
         retry.hidden = false;
       } finally {
         loading = false;
