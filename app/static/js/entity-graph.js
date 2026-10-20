@@ -18,6 +18,88 @@
     return assets;
   }
 
+  function containPinnedTooltips(graph, canvas) {
+    // Pivotick v3 portals tooltips to <body> and drags them in page coordinates.
+    // Keep this graph's pins in its canvas, using canvas coordinates throughout.
+    const tooltip = graph.UIManager.tooltip;
+    const updateShadowLinks = tooltip.updateShadowLinks;
+    let drag;
+
+    // The connector SVG remains a page portal, so its endpoints need page coordinates.
+    tooltip.updateShadowLinks = () => {
+      for (const [pin, record] of tooltip.tooltipDataMap) {
+        const source = pin.getBoundingClientRect();
+        const target = tooltip.linkTarget(record);
+        target.x += window.scrollX;
+        target.y += window.scrollY;
+        tooltip.shadowLinkManager?.setBoundingBox(pin, { source, target });
+        tooltip.shadowLinkManager?.updateShadowLink(pin, {
+          x: source.left + window.scrollX, y: source.top + window.scrollY,
+        });
+      }
+    };
+
+    function constrain() {
+      tooltip.shadowLinkContainer.style.display = canvas.clientWidth ? "" : "none";
+      if (!canvas.clientWidth || !canvas.clientHeight) return;
+      for (const pin of tooltip.tooltipDataMap.keys()) {
+        if (pin.parentElement !== canvas) continue;
+        const left = Math.max(0, Math.min(parseFloat(pin.style.left) || 0, canvas.clientWidth - pin.offsetWidth));
+        const top = Math.max(0, Math.min(parseFloat(pin.style.top) || 0, canvas.clientHeight - pin.offsetHeight));
+        pin.style.left = `${left}px`;
+        pin.style.top = `${top}px`;
+      }
+      tooltip.updateShadowLinks(true);
+    }
+
+    const resize = new ResizeObserver(constrain);
+    resize.observe(canvas);
+    const portals = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const pin of mutation.addedNodes) {
+          if (!tooltip.tooltipDataMap.has(pin)) continue;
+          const bounds = pin.getBoundingClientRect();
+          const origin = canvas.getBoundingClientRect();
+          pin.style.left = `${bounds.left - origin.left - canvas.clientLeft}px`;
+          pin.style.top = `${bounds.top - origin.top - canvas.clientTop}px`;
+          canvas.appendChild(pin);
+          resize.observe(pin);
+          pin.querySelector(".close-button").addEventListener("click", () => resize.unobserve(pin));
+          const handle = pin.querySelector(".pvt-tooltip-topbar");
+          // Replace the library's page-based drag behavior while retaining buttons.
+          handle.addEventListener("mousedown", (event) => {
+            event.stopImmediatePropagation();
+            if (event.button !== 0 || event.target.closest("button")) return;
+            event.preventDefault();
+            drag?.abort();
+            drag = new AbortController();
+            const { signal } = drag;
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const left = parseFloat(pin.style.left);
+            const top = parseFloat(pin.style.top);
+            document.addEventListener("mousemove", (move) => {
+              pin.style.left = `${left + move.clientX - startX}px`;
+              pin.style.top = `${top + move.clientY - startY}px`;
+              constrain();
+            }, { signal });
+            document.addEventListener("mouseup", () => drag.abort(), { signal, once: true });
+          }, { capture: true });
+        }
+      }
+      constrain();
+    });
+    portals.observe(document.body, { childList: true });
+
+    return () => {
+      portals.disconnect();
+      resize.disconnect();
+      drag?.abort();
+      for (const pin of tooltip.tooltipDataMap.keys()) pin.querySelector(".close-button").click();
+      tooltip.updateShadowLinks = updateShadowLinks;
+    };
+  }
+
   document.querySelectorAll(".entity-graph").forEach((panel) => {
     const status = panel.querySelector(".graph-status");
     const retry = panel.querySelector(".graph-retry");
@@ -29,6 +111,7 @@
     let graph;
     let payload;
     let loading = false;
+    let releaseTooltips = () => {};
 
     function setupSimplification() {
       const rules = panel.querySelector(".graph-simplify-rules");
@@ -176,6 +259,7 @@
           },
         });
         setupSimplification();
+        releaseTooltips = containPinnedTooltips(graph, canvas);
         syncTheme();
         picker.replaceChildren(new Option("Choose a record", ""));
         payload.nodes.forEach((node) => picker.add(new Option(`${node.data.kind.toUpperCase()} · ${node.data.label}`, node.id)));
@@ -188,6 +272,7 @@
         }
       } catch (error) {
         console.error("Unable to load relationship graph", error);
+        releaseTooltips();
         graph?.destroy();
         graph = null;
         canvas.replaceChildren();
@@ -236,6 +321,7 @@
     }).observe(canvas);
     window.addEventListener("pagehide", () => {
       simplify.open = false;
+      releaseTooltips();
       graph?.destroy();
       graph = null;
       canvas.replaceChildren();

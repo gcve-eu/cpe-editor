@@ -94,6 +94,8 @@ summary { cursor: pointer; }
 [data-theme="dark"] .graph-cpe-key { color: #fbbf24; }
 [data-theme="dark"] .graph-alias-key { color: #f9a8d4; }
 .graph-canvas { position: relative; width: 100%; height: clamp(320px, 55vh, 600px); overflow: hidden; border: 1px solid var(--border); border-radius: 6px; }
+.graph-canvas > .pvt-tooltip-floating { display: flex; flex-direction: column; width: max-content; max-width: 100%; max-height: 100%; box-sizing: border-box; }
+.graph-canvas > .pvt-tooltip-floating > .pvt-tooltip-container { flex-shrink: 1; min-width: 0; min-height: 0; max-width: 100%; }
 .graph-selection { overflow-wrap: anywhere; }
 .graph-record-picker { max-width: 100%; }
 .grid { display: grid; gap: .8rem 1rem; }
