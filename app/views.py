@@ -2361,6 +2361,21 @@ def alias_detail(alias_uuid):
     return render_template("alias_detail.html", alias=alias)
 
 
+@bp.route("/aliases/<string:alias_uuid>/graph")
+def alias_graph(alias_uuid):
+    alias = ProductAlias.query.filter_by(uuid=alias_uuid).first_or_404()
+    products = (
+        Product.query.join(ProductAliasMember, ProductAliasMember.product_id == Product.id)
+        .filter(ProductAliasMember.alias_id == alias.id)
+        .options(selectinload(Product.vendor))
+        .order_by(ProductAliasMember.id.asc())
+        .limit(GRAPH_NODE_LIMIT + 1)
+        .all()
+    )
+    vendors = list({product.vendor_id: product.vendor for product in products}.values())
+    return jsonify(build_entity_graph(alias, vendors, products, include_cpes=True))
+
+
 def _admin_alias_form_context(alias=None):
     q = (request.values.get("q") or "").strip()
     page = max(request.args.get("page", default=1, type=int) or 1, 1)

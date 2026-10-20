@@ -36,10 +36,11 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   linked products and same-token products under related vendors. `superseded-by`
   and `derived-from` remain visible as relationships but do not combine records:
   replacement and provenance do not establish a shared product identity.
-- Expand the **Relationship graph** on vendor and product detail pages to explore
+- Expand the **Relationship graph** on vendor, product, and alias detail pages to explore
   approved relationships alongside the combined view. The read-only [Pivotick](https://github.com/Pivotick/Pivotick)
   graph supports pan, zoom, node inspection, and links to the original records;
-  product graphs also include CPE entries. It loads on demand and shows a notice
+  product and alias graphs also include CPE entries. Alias graphs link the alias
+  to its member products and their vendors. It loads on demand and shows a notice
   when the 200-record / 400-link limit omits data. Existing lists remain available.
 - Submit anonymous proposals to:
   - edit an existing CPE
@@ -115,6 +116,7 @@ The `wsgi.py` entry point creates the Flask application without enabling debug m
 - Product detail: `GET /products/{product_uuid}`
 - Vendor graph data: `GET /vendors/{vendor_uuid}/graph`
 - Product graph data: `GET /products/{product_uuid}/graph`
+- Alias graph data: `GET /aliases/{alias_uuid}/graph`
 - CPE detail: `GET /cpes/{cpe_id}`
 - Statistics: `GET /statistics`
 - Proposal form: `GET|POST /proposals/new`

@@ -20,6 +20,11 @@
   <p class="muted">Approved {{ alias.approved_at or alias.created_at }} · {{ alias.members|length }} member(s)</p>
 </div>
 
+{% set graph_url = url_for('main.alias_graph', alias_uuid=alias.uuid) %}
+{% set graph_include_cpes = true %}
+{% set graph_include_alias = true %}
+{% include "_entity_graph.html" %}
+
 <div class="card">
   <h2>Vendor/product tuples</h2>
   <table>
