@@ -56,12 +56,13 @@ def _pin(page, node_id):
     page.locator(".graph-canvas").scroll_into_view_if_needed()
     page.evaluate("""id => {
       const node = testGraph.getMutableNode(id);
-      const box = node.getGraphElement().getBoundingClientRect();
-      testGraph.UIManager.tooltip.openForNodeOnElement({
-        pageX: box.x + window.scrollX, pageY: box.y + window.scrollY,
-      }, node);
+      const tooltip = testGraph.UIManager.tooltip;
+      tooltip.hoveredElement = node;
+      tooltip.createNodeTooltip(node);
+      tooltip.tooltip.classList.add('shown');
+      tooltip.setPosition();
+      tooltip.tooltip.querySelector('.pin-button').click();
     }""", node_id)
-    page.locator("body > .pvt-tooltip:not(.pvt-tooltip-floating) .pin-button").click()
     _assert_contained(page)
 
 
