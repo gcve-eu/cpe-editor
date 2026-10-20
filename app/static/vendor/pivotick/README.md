@@ -30,5 +30,11 @@ default visibility threshold (hidden below 9 rendered pixels). The integration
 does not use the cluster APIs removed in v3; pan, zoom, record inspection, and
 the embedded worker retain the same API.
 
+`entity-graph.js` contains a v3 tooltip adapter: it moves this graph's pinned
+tooltips into the canvas, constrains dragging and resizing there, and converts
+their connector endpoints back to page coordinates. It uses the tooltip
+module's pin map and connector methods; recheck these when upgrading Pivotick.
+The vendored release files remain unmodified.
+
 See LICENSE for Pivotick's license and THIRD_PARTY_NOTICES.md for bundled
 dependency licenses.

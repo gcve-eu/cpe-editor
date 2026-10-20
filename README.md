@@ -203,6 +203,11 @@ pytest -q
 
 CI runs this same suite via `.github/workflows/api-tests.yml`.
 
+The optional `tests/test_graph_tooltips_browser.py` regression also checks pinned
+tooltips in Chromium. Install `playwright` and run `playwright install chromium`
+to enable it; an installed `chromium` or `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`
+can also supply the browser. It is skipped when Playwright or Chromium is absent.
+
 ## CLI commands
 
 ### Database lifecycle
