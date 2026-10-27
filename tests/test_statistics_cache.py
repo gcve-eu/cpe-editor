@@ -85,7 +85,7 @@ def test_statistics_payload_populates_cache_on_miss(app, monkeypatch):
         payload = views._build_statistics_payload()
 
     assert payload["counts"]["vendors"] == 2
-    assert writes == [("cpe-editor:statistics:payload:v1", payload)]
+    assert writes == [("cpe-editor:statistics:payload:v2", payload)]
 
 
 def test_statistics_page_renders_cached_top_vendor_names(client, monkeypatch):
@@ -147,3 +147,54 @@ def test_statistics_page_renders_cached_top_vendor_names(client, monkeypatch):
     assert b"cached_vendor" not in response.data
     assert b"17904" in response.data
     assert b"11111111-1111-1111-1111-111111111111" in response.data
+
+
+def test_statistics_snapshot_and_rankings_are_reused_without_database_queries(app, client, monkeypatch):
+    from sqlalchemy import event
+    from app.models import Vendor, db
+
+    fake_client = FakeValkeyClient()
+    app.config.update(STATISTICS_CACHE_TTL_SECONDS=42)
+    monkeypatch.setattr(cache, "get_valkey_client", lambda: fake_client)
+    # Simulate a pre-deployment cache entry: the new schema must use a new key.
+    fake_client.values["cpe-editor:statistics:payload:v1"] = json.dumps({"old": True})
+    first = client.get("/api/statistics").get_json()
+    assert "coverage" in first
+    assert fake_client.ttls[views._statistics_payload_cache_key()] == 42
+    assert client.get("/statistics").status_code == 200
+
+    db.session.add(Vendor(name="added_after_snapshot"))
+    db.session.commit()
+
+    def unexpected_query(*args):
+        raise AssertionError("A warm statistics cache must not query the database")
+
+    event.listen(db.engine, "before_cursor_execute", unexpected_query)
+    try:
+        assert client.get("/api/statistics").get_json() == first
+        response = client.get("/statistics")
+        assert response.status_code == 200
+        assert first["generated_at"].encode() in response.data
+        assert b"added_after_snapshot" not in response.data
+    finally:
+        event.remove(db.engine, "before_cursor_execute", unexpected_query)
+
+    # Expired/missing keys refresh both the API snapshot and the page's rankings.
+    fake_client.values.clear()
+    refreshed = client.get("/api/statistics").get_json()
+    assert refreshed["counts"]["vendors"] == first["counts"]["vendors"] + 1
+    assert refreshed["generated_at"] != first["generated_at"]
+    assert b"added_after_snapshot" in client.get("/statistics").data
+
+
+def test_statistics_remains_available_when_valkey_commands_fail(app, client, monkeypatch):
+    class UnavailableValkey(FakeValkeyClient):
+        def get(self, key):
+            raise ConnectionError("Valkey unavailable")
+
+        def setex(self, key, ttl, value):
+            raise ConnectionError("Valkey unavailable")
+
+    monkeypatch.setattr(cache, "get_valkey_client", lambda: UnavailableValkey())
+    assert client.get("/api/statistics").get_json()["counts"]["cpes"] == 3
+    assert client.get("/statistics").status_code == 200

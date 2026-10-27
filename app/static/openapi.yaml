@@ -23,7 +23,7 @@ paths:
     get:
       tags: [Statistics]
       summary: Get dataset statistics
-      description: Returns the aggregate counts, contribution counts, averages, CPE part distribution, metadata and relationship distributions, and top vendor shown on the statistics page as clean JSON.
+      description: Returns the cached dataset snapshot shown on the statistics page, including aggregate and contribution counts, averages, record coverage percentages, distributions, top vendor, and generation time. Coverage counts each record once regardless of its number of mappings or references. All CPE totals include deprecated records.
       responses:
         '200':
           description: Dataset statistics
@@ -1486,6 +1486,16 @@ components:
           type: integer
         cpes_with_purl_mappings:
           type: integer
+        cpes_with_vulnerability_references:
+          type: integer
+        products_with_cpes:
+          type: integer
+        products_without_cpes:
+          type: integer
+        active_cpes:
+          type: integer
+        deprecated_cpes:
+          type: integer
         vendors_with_products:
           type: integer
         vendors_without_products:
@@ -1515,6 +1525,29 @@ components:
         products_per_vendor:
           type: number
           format: float
+        cpes_per_product:
+          type: number
+          format: float
+    StatisticsCoverage:
+      type: object
+      description: Percentages rounded to two decimals; zero when the denominator is zero. CPE coverage uses all CPEs; product coverage uses all products. Reference coverage does not measure vulnerability prevalence.
+      properties:
+        cpes_with_purl_mappings_percent:
+          type: number
+          minimum: 0
+          maximum: 100
+        cpes_with_vulnerability_references_percent:
+          type: number
+          minimum: 0
+          maximum: 100
+        products_with_cpes_percent:
+          type: number
+          minimum: 0
+          maximum: 100
+        active_cpes_percent:
+          type: number
+          minimum: 0
+          maximum: 100
     StatisticsCPEPartCount:
       type: object
       properties:
@@ -1594,10 +1627,16 @@ components:
     StatisticsSummary:
       type: object
       properties:
+        generated_at:
+          type: string
+          format: date-time
+          description: UTC time at which this snapshot was computed; unchanged on cache hits.
         counts:
           $ref: '#/components/schemas/StatisticsCounts'
         averages:
           $ref: '#/components/schemas/StatisticsAverages'
+        coverage:
+          $ref: '#/components/schemas/StatisticsCoverage'
         top_vendor:
           $ref: '#/components/schemas/StatisticsTopVendor'
           nullable: true

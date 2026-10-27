@@ -342,8 +342,10 @@ def test_statistics_page_renders_cpe_part_distribution_counts(client):
     response = client.get("/statistics")
 
     assert response.status_code == 200
-    assert b"<code>a</code>: 2" in response.data
-    assert b"<code>o</code>: 1" in response.data
+    assert b"Applications <code>a</code>" in response.data
+    assert b"Operating systems <code>o</code>" in response.data
+    assert b"<strong>2</strong> <span class=\"muted\">66.7%</span>" in response.data
+    assert b"<strong>1</strong> <span class=\"muted\">33.3%</span>" in response.data
     assert b"built-in method count" not in response.data
 
 
@@ -358,6 +360,11 @@ def test_statistics_api_returns_clean_dataset_summary(client):
         "cpes": 3,
         "purl_mappings": 2,
         "cpes_with_purl_mappings": 2,
+        "cpes_with_vulnerability_references": 2,
+        "products_with_cpes": 3,
+        "products_without_cpes": 0,
+        "active_cpes": 3,
+        "deprecated_cpes": 0,
         "vendors_with_products": 2,
         "vendors_without_products": 0,
         "contributed_inputs": 2,
@@ -372,6 +379,13 @@ def test_statistics_api_returns_clean_dataset_summary(client):
     assert payload["averages"] == {
         "purls_per_cpe": 0.67,
         "products_per_vendor": 1.5,
+        "cpes_per_product": 1.0,
+    }
+    assert payload["coverage"] == {
+        "cpes_with_purl_mappings_percent": 66.67,
+        "cpes_with_vulnerability_references_percent": 66.67,
+        "products_with_cpes_percent": 100.0,
+        "active_cpes_percent": 100.0,
     }
     assert payload["top_vendor"]["name"] == "microsoft"
     assert payload["top_vendor"]["product_count"] == 2

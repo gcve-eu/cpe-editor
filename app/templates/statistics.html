@@ -1,153 +1,180 @@
 {% extends "base.html" %}
 {% block title %}Statistics{% endblock %}
+{% macro number(value) -%}{{ '{:,}'.format(value) }}{%- endmacro %}
+{% macro percentage(count, total) -%}
+  {% if total and 0 < 100 * count / total < 0.1 %}&lt;0.1%{% else %}{{ '%.1f'|format(100 * count / total) if total else '0.0' }}%{% endif %}
+{%- endmacro %}
+{% macro bar_row(label, count, total, code=none) %}
+  <li class="stat-bar-row">
+    <div class="stat-bar-label">
+      <span>{{ label }}{% if code %} <code>{{ code }}</code>{% endif %}</span>
+      <span class="stat-bar-value"><strong>{{ number(count) }}</strong> <span class="muted">{{ percentage(count, total) }}</span></span>
+    </div>
+    <div class="stat-bar-track" aria-hidden="true"><span style="width: {{ 100 * count / total if total else 0 }}%"></span></div>
+  </li>
+{% endmacro %}
 {% block content %}
-  <h1><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Dataset statistics</h1>
-  <p class="muted">A quick overview of vendors, products, CPE records, and approved contributed data in this instance.</p>
+  {% set counts = snapshot.counts %}
+  {% set coverage = snapshot.coverage|default({}) %}
+  <div class="page-header statistics-header">
+    <div>
+      <p class="eyebrow">Dataset overview</p>
+      <h1><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Dataset statistics</h1>
+      <p class="muted">Explore the catalog, record coverage, and contributed data in this instance.</p>
+    </div>
+    <a class="button secondary" href="{{ url_for('main.api_statistics') }}"><i class="fa-solid fa-code" aria-hidden="true"></i>View JSON</a>
+  </div>
+  {% if snapshot.generated_at %}
+    <p class="muted statistics-snapshot">Snapshot generated <time datetime="{{ snapshot.generated_at }}">{{ snapshot.generated_at[:19]|replace('T', ' ') }} UTC</time>. Recent changes appear after the next refresh.</p>
+  {% endif %}
 
-  <section class="grid grid-2">
-    <article class="card">
-      <h2><i class="fa-solid fa-building" aria-hidden="true"></i> Total vendors</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ total_vendors }}</strong></p>
-    </article>
-    <article class="card">
-      <h2><i class="fa-solid fa-cube" aria-hidden="true"></i> Total products</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ total_products }}</strong></p>
-    </article>
-    <article class="card">
-      <h2><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Total CPE entries</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ total_cpes }}</strong></p>
-    </article>
-    <article class="card">
-      <h2><i class="fa-solid fa-link" aria-hidden="true"></i> Total PURL mappings</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ total_purl_mappings }}</strong></p>
-    </article>
-    <article class="card">
-      <h2><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Average products per vendor</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ average_products_per_vendor }}</strong></p>
-    </article>
-    <article class="card">
-      <h2><i class="fa-solid fa-percent" aria-hidden="true"></i> Average PURLs per CPE</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ average_purls_per_cpe }}</strong></p>
-    </article>
-    <article class="card">
-      <h2><i class="fa-solid fa-hands-helping" aria-hidden="true"></i> Contributed inputs</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ contributed_inputs }}</strong></p>
-    </article>
-    <article class="card">
-      <h2><i class="fa-solid fa-tags" aria-hidden="true"></i> Metadata entries</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ metadata_entries }}</strong></p>
-    </article>
-    <article class="card">
-      <h2><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Relationships</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ relationships }}</strong></p>
-    </article>
-    <article class="card">
-      <h2><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Product aliases</h2>
-      <p style="font-size: 1.8rem; margin: .3rem 0 0;"><strong>{{ product_aliases }}</strong></p>
-    </article>
+  <section class="statistics-kpis" aria-label="Catalog totals">
+    {% for label, value, icon, detail in [
+      ('Total vendors', total_vendors, 'building', 'Distinct vendor records'),
+      ('Total products', total_products, 'cube', 'Products across all vendors'),
+      ('Total CPE entries', total_cpes, 'shield-halved', 'Includes active and deprecated records'),
+      ('Total PURL mappings', total_purl_mappings, 'link', 'A CPE may have several mappings')
+    ] %}
+      <article class="card statistics-kpi">
+        <h2><i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i>{{ label }}</h2>
+        <p class="statistics-number">{{ number(value) }}</p>
+        <p class="muted">{{ detail }}</p>
+      </article>
+    {% endfor %}
   </section>
 
-  <section class="card">
-    <h2><i class="fa-solid fa-lightbulb" aria-hidden="true"></i> Additional insights</h2>
-    <ul>
-      {% if top_vendor %}
-        <li>
-          Top vendor by product count:
-          <a href="{{ url_for('main.vendor_detail', vendor_uuid=top_vendor.uuid or top_vendor.vendor_uuid) }}">
-            {{ top_vendor.title or top_vendor.name or top_vendor.vendor_title or top_vendor.vendor_name }}
-          </a>
-          ({{ top_vendor.product_count }} products)
-        </li>
-      {% else %}
-        <li>No vendor has products yet.</li>
-      {% endif %}
-      <li>Vendors without products: {{ vendors_without_products }}</li>
-      <li>CPE records with at least one PURL mapping: {{ cpes_with_purl_mappings }}</li>
-      <li>Contributed CPE records: {{ contributed_cpes }}</li>
-      <li>Alias memberships: {{ product_alias_members }}</li>
-      <li>Approved notes: {{ notes }}</li>
-      <li>Approved vulnerability references: {{ vulnerability_references }}</li>
-    </ul>
-
-    {% if cpe_part_counts %}
-      <h3>CPE part distribution</h3>
-      <ul>
-        {% for part_stat in cpe_part_counts %}
-          <li><code>{{ part_stat.part }}</code>: {{ part_stat.count }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-
-    {% if metadata_key_counts %}
-      <h3>Metadata by key</h3>
-      <ul>
-        {% for metadata_stat in metadata_key_counts %}
-          <li><code>{{ metadata_stat.metadata_key }}</code>: {{ metadata_stat.count }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-
-    {% if relationship_type_counts %}
-      <h3>Relationships by type</h3>
-      <ul>
-        {% for relationship_stat in relationship_type_counts %}
-          <li><code>{{ relationship_stat.relationship_type }}</code>: {{ relationship_stat.count }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-
-    {% if proposal_status_counts %}
-      <h3>Proposal statuses</h3>
-      <ul>
-        {% for status, count in proposal_status_counts|dictsort %}
-          <li><code>{{ status }}</code>: {{ count }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
+  <section class="card statistics-averages" aria-label="Dataset averages">
+    <p><strong>{{ average_products_per_vendor }}</strong><span>Average products per vendor</span></p>
+    <p><strong>{{ snapshot.averages.get('cpes_per_product', 0) }}</strong><span>Average CPEs per product</span></p>
+    <p><strong>{{ average_purls_per_cpe }}</strong><span>Average PURLs per CPE</span></p>
   </section>
 
-  <section class="card">
-    <h2><i class="fa-solid fa-list-ol" aria-hidden="true"></i> Vendors sorted by number of products</h2>
-    {% if vendor_product_counts %}
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Vendor</th>
-            <th>Products</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in vendor_product_counts %}
-            <tr>
-              <td>{{ vendor_rank_start + loop.index0 }}</td>
-              <td>
-                <a href="{{ url_for('main.vendor_detail', vendor_uuid=item.uuid or item.vendor_uuid) }}">
-                  {{ item.title or item.name or item.vendor_title or item.vendor_name }}
-                </a>
-              </td>
-              <td>{{ item.product_count }}</td>
-            </tr>
+  <div class="statistics-panels">
+    <section class="card" aria-labelledby="coverage-heading">
+      <h2 id="coverage-heading">Record coverage</h2>
+      <p class="muted statistics-description">Each record is counted once, even when it has multiple mappings or references.</p>
+      <ul class="stat-bars">
+        {% for label, value, total, percent in [
+          ('CPEs with PURL mappings', cpes_with_purl_mappings, total_cpes, coverage.get('cpes_with_purl_mappings_percent', 0)),
+          ('CPEs with vulnerability references', counts.get('cpes_with_vulnerability_references', 0), total_cpes, coverage.get('cpes_with_vulnerability_references_percent', 0)),
+          ('Products with CPE records', counts.get('products_with_cpes', 0), total_products, coverage.get('products_with_cpes_percent', 0)),
+          ('Active CPE records', counts.get('active_cpes', 0), total_cpes, coverage.get('active_cpes_percent', 0))
+        ] %}
+          <li class="stat-bar-row">
+            <div class="stat-bar-label"><span>{{ label }}</span><strong>{{ percentage(value, total) if total else '—' }}</strong></div>
+            <div class="stat-bar-track" aria-hidden="true"><span style="width: {{ percent }}%"></span></div>
+            <p class="muted stat-bar-note">{{ number(value) }} of {{ number(total) }}{% if not total %} · No records yet{% endif %}</p>
+          </li>
+        {% endfor %}
+      </ul>
+      <p class="muted statistics-footnote">Reference coverage reflects linked records; it does not measure how many CPEs are vulnerable.</p>
+    </section>
+
+    <section class="card" aria-labelledby="parts-heading">
+      <h2 id="parts-heading">CPE part distribution</h2>
+      <p class="muted statistics-description">Share of all {{ number(total_cpes) }} CPE records by platform type.</p>
+      {% if cpe_part_counts %}
+        {% set part_labels = {'a': 'Applications', 'o': 'Operating systems', 'h': 'Hardware'} %}
+        <ul class="stat-bars">
+          {% for item in cpe_part_counts %}
+            {{ bar_row(part_labels.get(item.part, 'Other'), item.count, total_cpes, item.part) }}
           {% endfor %}
-        </tbody>
-      </table>
-      <div class="muted" style="margin-top: 0.75rem;">
-        <p>Page {{ vendor_page }} of {{ vendor_total_pages }}</p>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          {% if vendor_has_prev %}
-            <a class="button" href="{{ url_for('main.statistics', vendor_page=vendor_page - 1) }}">
-              <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
-            </a>
-          {% endif %}
-          {% if vendor_has_next %}
-            <a class="button" href="{{ url_for('main.statistics', vendor_page=vendor_page + 1) }}">
-              Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-            </a>
-          {% endif %}
+        </ul>
+      {% else %}
+        <p class="statistics-empty">No CPE records available yet.</p>
+      {% endif %}
+      <dl class="statistics-facts">
+        <div><dt>Deprecated CPEs</dt><dd>{{ number(counts.get('deprecated_cpes', 0)) }}</dd></div>
+        <div><dt>Products without CPEs</dt><dd>{{ number(counts.get('products_without_cpes', 0)) }}</dd></div>
+        <div><dt>Vendors without products</dt><dd>{{ number(vendors_without_products) }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="card" aria-labelledby="contributions-heading">
+      <div class="statistics-section-heading"><h2 id="contributions-heading">Contributed inputs</h2><strong class="pill">{{ number(contributed_inputs) }} total</strong></div>
+      <p class="muted statistics-description">Stored contributions by type, including approved proposals and imported enrichment.</p>
+      {% if contributed_inputs %}
+        <ul class="stat-bars">
+          {% for label, value in [('Contributed CPE records', contributed_cpes), ('Metadata entries', metadata_entries), ('Relationships', relationships), ('Product aliases', product_aliases), ('Approved notes', notes), ('Approved vulnerability references', vulnerability_references)] %}
+            {{ bar_row(label, value, contributed_inputs) }}
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="statistics-empty">No contributed inputs available yet.</p>
+      {% endif %}
+      <p class="muted statistics-footnote">{{ number(product_alias_members) }} alias memberships connect products to aliases. Memberships are excluded from the contribution total.</p>
+    </section>
+
+    <section class="card" aria-labelledby="proposals-heading">
+      <h2 id="proposals-heading">Proposal statuses</h2>
+      {% set total_proposals = proposal_status_counts.values()|sum %}
+      <p class="muted statistics-description">{{ number(total_proposals) }} submitted proposals. Accepted proposals and stored contributions are counted separately.</p>
+      {% if total_proposals %}
+        <ul class="stat-bars">
+          {% for status, count in proposal_status_counts|dictsort %}
+            {{ bar_row(status|replace('_', ' ')|capitalize, count, total_proposals) }}
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="statistics-empty">No proposals submitted yet.</p>
+      {% endif %}
+      {% if top_vendor %}
+        <div class="statistics-highlight">
+          <p class="eyebrow">Top vendor by product count</p>
+          <p><a href="{{ url_for('main.vendor_detail', vendor_uuid=top_vendor.uuid or top_vendor.vendor_uuid) }}"><strong>{{ top_vendor.title or top_vendor.name or top_vendor.vendor_title or top_vendor.vendor_name }}</strong></a></p>
+          <p class="muted">{{ number(top_vendor.product_count) }} products · {{ percentage(top_vendor.product_count, total_products) }} of the catalog</p>
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="metadata-heading">
+      <h2 id="metadata-heading">Metadata by key</h2>
+      <p class="muted statistics-description">Share of {{ number(metadata_entries) }} metadata entries.</p>
+      {% if metadata_key_counts %}
+        <ul class="stat-bars js-collapsible-list" data-collapse-limit="10">
+          {% for item in metadata_key_counts %}{{ bar_row(item.metadata_key, item.count, metadata_entries) }}{% endfor %}
+        </ul>
+      {% else %}<p class="statistics-empty">No metadata entries available yet.</p>{% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="relationships-heading">
+      <h2 id="relationships-heading">Relationships by type</h2>
+      <p class="muted statistics-description">Share of {{ number(relationships) }} relationships.</p>
+      {% if relationship_type_counts %}
+        <ul class="stat-bars js-collapsible-list" data-collapse-limit="10">
+          {% for item in relationship_type_counts %}{{ bar_row(item.relationship_type, item.count, relationships) }}{% endfor %}
+        </ul>
+      {% else %}<p class="statistics-empty">No relationships available yet.</p>{% endif %}
+    </section>
+  </div>
+
+  <section class="card statistics-ranking" aria-labelledby="vendors-heading" id="vendor-ranking">
+    <h2 id="vendors-heading">Vendors sorted by number of products</h2>
+    <p class="muted statistics-description">Bars compare each vendor with the largest vendor. Catalog share uses all {{ number(total_products) }} products.</p>
+    {% if vendor_product_counts %}
+      {% set largest_count = top_vendor.product_count if top_vendor else 0 %}
+      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="vendors-heading">
+        <table>
+          <thead><tr><th scope="col">Rank</th><th scope="col">Vendor</th><th scope="col">Products</th><th scope="col">Catalog share</th></tr></thead>
+          <tbody>
+            {% for item in vendor_product_counts %}
+              <tr>
+                <td>{{ number(vendor_rank_start + loop.index0) }}</td>
+                <th scope="row"><a href="{{ url_for('main.vendor_detail', vendor_uuid=item.uuid or item.vendor_uuid) }}">{{ item.title or item.name or item.vendor_title or item.vendor_name }}</a></th>
+                <td class="statistics-ranking-value"><strong>{{ number(item.product_count) }}</strong><div class="stat-bar-track" aria-hidden="true"><span style="width: {{ 100 * item.product_count / largest_count if largest_count else 0 }}%"></span></div></td>
+                <td>{{ percentage(item.product_count, total_products) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="statistics-pagination">
+        <p class="muted">Page {{ vendor_page }} of {{ number(vendor_total_pages) }}</p>
+        <div class="action-row">
+          {% if vendor_has_prev %}<a class="button secondary" rel="prev" href="{{ url_for('main.statistics', vendor_page=vendor_page - 1, _anchor='vendor-ranking') }}"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous</a>{% endif %}
+          {% if vendor_has_next %}<a class="button secondary" rel="next" href="{{ url_for('main.statistics', vendor_page=vendor_page + 1, _anchor='vendor-ranking') }}">Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
         </div>
       </div>
-    {% else %}
-      <p class="muted">No vendors available yet.</p>
-    {% endif %}
+    {% else %}<p class="statistics-empty">No vendors available yet.</p>{% endif %}
   </section>
 {% endblock %}
