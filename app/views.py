@@ -794,7 +794,7 @@ def _count_proposals_by_status():
 
 
 def _statistics_payload_cache_key():
-    return "cpe-editor:statistics:payload:v1"
+    return "cpe-editor:statistics:payload:v2"
 
 
 def _statistics_top_list_cache_key(entity, page, per_page):
@@ -827,7 +827,27 @@ def _build_statistics_payload_uncached():
         + total_vulnerability_references
     )
     cpes_with_purl_mappings = (
-        db.session.query(func.count(func.distinct(CPEPurlMapping.cpe_name_id))).scalar()
+        db.session.query(func.count(func.distinct(CPEEntry.id)))
+        .join(CPEPurlMapping, CPEPurlMapping.cpe_name_id == CPEEntry.cpe_name_id)
+        .scalar()
+        or 0
+    )
+    cpes_with_vulnerability_references = (
+        db.session.query(func.count(func.distinct(CPEVulnerabilityReference.cpe_entry_id)))
+        .join(CPEEntry, CPEEntry.id == CPEVulnerabilityReference.cpe_entry_id)
+        .scalar()
+        or 0
+    )
+    products_with_cpes = (
+        db.session.query(func.count(func.distinct(CPEEntry.product_id)))
+        .join(Product, Product.id == CPEEntry.product_id)
+        .scalar()
+        or 0
+    )
+    deprecated_cpes = (
+        db.session.query(func.count(CPEEntry.id))
+        .filter(CPEEntry.deprecated.is_(True))
+        .scalar()
         or 0
     )
     vendors_with_products = (
@@ -867,13 +887,22 @@ def _build_statistics_payload_uncached():
         .all()
     )
 
+    def percentage(count, total):
+        return round(100 * count / total, 2) if total else 0
+
     return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "counts": {
             "vendors": total_vendors,
             "products": total_products,
             "cpes": total_cpes,
             "purl_mappings": total_purl_mappings,
             "cpes_with_purl_mappings": cpes_with_purl_mappings,
+            "cpes_with_vulnerability_references": cpes_with_vulnerability_references,
+            "products_with_cpes": products_with_cpes,
+            "products_without_cpes": total_products - products_with_cpes,
+            "active_cpes": total_cpes - deprecated_cpes,
+            "deprecated_cpes": deprecated_cpes,
             "vendors_with_products": vendors_with_products,
             "vendors_without_products": vendors_without_products,
             "contributed_inputs": contribution_total,
@@ -892,6 +921,19 @@ def _build_statistics_payload_uncached():
             "products_per_vendor": (
                 round(total_products / total_vendors, 2) if total_vendors else 0
             ),
+            "cpes_per_product": (
+                round(total_cpes / total_products, 2) if total_products else 0
+            ),
+        },
+        "coverage": {
+            "cpes_with_purl_mappings_percent": percentage(
+                cpes_with_purl_mappings, total_cpes
+            ),
+            "cpes_with_vulnerability_references_percent": percentage(
+                cpes_with_vulnerability_references, total_cpes
+            ),
+            "products_with_cpes_percent": percentage(products_with_cpes, total_products),
+            "active_cpes_percent": percentage(total_cpes - deprecated_cpes, total_cpes),
         },
         "top_vendor": _serialize_top_vendor(top_vendor, rank=1) if top_vendor else None,
         "cpe_part_counts": [
@@ -2717,6 +2759,7 @@ def statistics():
 
     return render_template(
         "statistics.html",
+        snapshot=statistics_payload,
         total_vendors=total_vendors,
         total_products=total_products,
         total_cpes=total_cpes,

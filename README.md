@@ -110,6 +110,16 @@ The `wsgi.py` entry point creates the Flask application without enabling debug m
 - `ADMIN_PASSWORD`
 - `PROPOSAL_RATE_LIMIT_PER_HOUR` (default `10`; set `0` or negative to disable)
 - `SQLITE_BUSY_TIMEOUT_SECONDS` (default `30`)
+- `VALKEY_URL` (default `redis://127.0.0.1:6379/0`; set empty to disable statistics caching)
+- `STATISTICS_CACHE_TTL_SECONDS` (default `300`; set `0` or negative to disable statistics caching)
+
+The statistics page and `/api/statistics` share a cached snapshot, including
+record coverage, distributions, and a UTC `generated_at` timestamp. Vendor and
+product rankings are cached separately by entity, page, and page size. Changes
+appear after the cache TTL expires; if Valkey is unavailable, statistics are
+computed directly from the database. Coverage counts distinct records, while
+mapping and reference totals count individual links. All CPE totals include
+deprecated records. Charts and their numeric labels work without JavaScript.
 
 ## Web routes
 
