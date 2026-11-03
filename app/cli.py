@@ -10,7 +10,7 @@ from pathlib import Path
 
 import click
 from sqlalchemy import func, inspect, schema, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import aliased
 
 from .models import (
@@ -43,6 +43,30 @@ DEFAULT_NVD_CPE_MATCH_FEED = (
 APP_DATASET_VERSION = "1"
 DEFAULT_PURL2CPE_DIR = "../purl2cpe"
 DEFAULT_GCVE_ENRICHED_DUMPS_DIR = "../gcve-enriched-dumps"
+
+
+def _insert_nvd_entity(entity):
+    """Skip a UUID inserted since the importer's cache snapshot was taken."""
+    # Flush previous work outside the handler so its errors are never mistaken
+    # for a conflict on this entity (begin_nested also flushes pending work).
+    db.session.flush()
+    connection = db.session.connection()
+    if connection.dialect.name == "sqlite":
+        # sqlite3's legacy transaction mode does not BEGIN before a SAVEPOINT.
+        # Without an outer transaction, RELEASE would commit the entity early.
+        if not connection.connection.driver_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN")
+    try:
+        # A full session rollback would discard other CPEs in the current batch.
+        with db.session.begin_nested():
+            db.session.add(entity)
+            db.session.flush()
+    except IntegrityError:
+        # Only recover from an occupied UUID; surface unrelated integrity errors.
+        if type(entity).query.filter_by(uuid=entity.uuid).first() is None:
+            raise
+        return False
+    return True
 
 
 def _render_default_literal(value):
@@ -249,8 +273,10 @@ def register_cli(app):
                     name=vendor_name,
                     title=titleize_token(vendor_name),
                 )
-                db.session.add(vendor)
-                db.session.flush()
+                if not _insert_nvd_entity(vendor):
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
+                    continue
                 vendor_cache[vendor_name] = vendor
                 vendor_uuid_to_id[vendor.uuid] = vendor.id
                 created_vendors += 1
@@ -279,8 +305,10 @@ def register_cli(app):
                     name=product_name,
                     title=titleize_token(product_name),
                 )
-                db.session.add(product)
-                db.session.flush()
+                if not _insert_nvd_entity(product):
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
+                    continue
                 product_cache[product_key] = product
                 product_uuid_to_id[product.uuid] = product.id
                 created_products += 1
@@ -471,8 +499,10 @@ def register_cli(app):
                         name=vendor_name,
                         title=titleize_token(vendor_name),
                     )
-                    db.session.add(vendor)
-                    db.session.flush()
+                    if not _insert_nvd_entity(vendor):
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
                     vendor_cache[vendor_name] = vendor
                     vendor_uuid_to_id[vendor.uuid] = vendor.id
                     created_vendors += 1
@@ -501,8 +531,10 @@ def register_cli(app):
                         name=product_name,
                         title=titleize_token(product_name),
                     )
-                    db.session.add(product)
-                    db.session.flush()
+                    if not _insert_nvd_entity(product):
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
                     product_cache[product_key] = product
                     product_uuid_to_id[product.uuid] = product.id
                     created_products += 1
@@ -1319,16 +1351,32 @@ def parse_simple_yaml_list(path: Path, root_key: str) -> list[str]:
 
 
 def backfill_missing_uuids():
-    for vendor in Vendor.query.all():
+    vendors = Vendor.query.all()
+    vendor_uuid_to_id = {vendor.uuid: vendor.id for vendor in vendors if vendor.uuid}
+    for vendor in vendors:
         expected_uuid = vendor_uuid_for_name(vendor.name)
         if vendor.uuid != expected_uuid:
+            # Legacy names can normalize to the same deterministic UUID. Keep
+            # both rows and their references when that UUID is already owned.
+            if expected_uuid in vendor_uuid_to_id:
+                continue
+            vendor_uuid_to_id.pop(vendor.uuid, None)
             vendor.uuid = expected_uuid
+            vendor_uuid_to_id[expected_uuid] = vendor.id
     db.session.flush()
 
-    for product in Product.query.all():
+    products = Product.query.all()
+    product_uuid_to_id = {
+        product.uuid: product.id for product in products if product.uuid
+    }
+    for product in products:
         expected_uuid = product_uuid_for_names(product.vendor.name, product.name)
         if product.uuid != expected_uuid:
+            if expected_uuid in product_uuid_to_id:
+                continue
+            product_uuid_to_id.pop(product.uuid, None)
             product.uuid = expected_uuid
+            product_uuid_to_id[expected_uuid] = product.id
     db.session.flush()
 
 
