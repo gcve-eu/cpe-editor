@@ -3110,32 +3110,22 @@ def api_statistics_top_list():
     )
 
 
-def _export_filters(entity):
+def _catalog_scope_filters(entity):
+    """Parse the UUID and combined scope shared by listings and downloads."""
     names = {
-        "vendors": ("q",),
-        "products": ("q", "vendor_uuid"),
-        "cpes": ("q", "vendor_q", "product_q", "purl_q", "part", "vendor_uuid", "product_uuid"),
+        "vendors": (),
+        "products": ("vendor_uuid",),
+        "cpes": ("vendor_uuid", "product_uuid"),
     }[entity]
     filters = {}
     for name in names:
         value = (request.args.get(name) or "").strip()
         if not value:
             continue
-        if name.endswith("_uuid"):
-            try:
-                value = str(UUID(value))
-            except ValueError:
-                abort(400, description=f"{name} must be a valid UUID.")
-        else:
-            value = value.lower()
-        if name == "q":
-            # LIKE adds '%' around q already. Collapse redundant wildcards so
-            # equivalent full-catalog searches share the unfiltered snapshot.
-            value = re.sub(r"%+", "%", value).strip("%")
-            if not value:
-                continue
-        if name == "part" and value not in {"a", "o", "h"}:
-            abort(400, description="part must be a, o, or h.")
+        try:
+            value = str(UUID(value))
+        except ValueError:
+            abort(400, description=f"{name} must be a valid UUID.")
         filters[name] = value
     if entity in {"products", "cpes"}:
         combined = (request.args.get("combined") or "").strip().lower()
@@ -3148,13 +3138,52 @@ def _export_filters(entity):
     return filters
 
 
-def _export_vendor_ids(filters):
+def _export_filters(entity):
+    names = {
+        "vendors": ("q",),
+        "products": ("q",),
+        "cpes": ("q", "vendor_q", "product_q", "purl_q", "part"),
+    }[entity]
+    filters = _catalog_scope_filters(entity)
+    for name in names:
+        value = (request.args.get(name) or "").strip().lower()
+        if name == "q":
+            # LIKE adds '%' around q already. Normalize equivalent snapshots.
+            value = re.sub(r"%+", "%", value).strip("%")
+        if not value:
+            continue
+        if name == "part" and value not in {"a", "o", "h"}:
+            abort(400, description="part must be a, o, or h.")
+        filters[name] = value
+    return filters
+
+
+def _catalog_vendor_ids(filters):
     if not filters.get("combined"):
         return select(Vendor.id).where(Vendor.uuid == filters["vendor_uuid"])
     vendor = Vendor.query.filter_by(uuid=filters["vendor_uuid"]).first()
     if vendor is None:
         return []
     return [related.id for related in _collect_related_vendors_for_combined_view(vendor)]
+
+
+def _apply_catalog_scope(query, entity, filters):
+    if filters.get("vendor_uuid"):
+        vendor_ids = _catalog_vendor_ids(filters)
+        if entity == "products":
+            query = query.filter(Product.vendor_id.in_(vendor_ids))
+        elif filters.get("combined"):
+            # Match the products shown in the vendor's combined view.
+            query = query.filter(CPEEntry.product_id.in_(
+                select(Product.id).where(Product.vendor_id.in_(vendor_ids))
+            ))
+        else:
+            query = query.filter(CPEEntry.vendor_id.in_(vendor_ids))
+    if entity == "cpes" and filters.get("product_uuid"):
+        query = query.filter(CPEEntry.product_id.in_(
+            select(Product.id).where(Product.uuid == filters["product_uuid"])
+        ))
+    return query
 
 
 def _export_entity_load_options(model):
@@ -3186,7 +3215,7 @@ def _export_entity_load_options(model):
 
 def _iter_export_items(entity, filters):
     model = {"vendors": Vendor, "products": Product, "cpes": CPEEntry}[entity]
-    query = model.query
+    query = _apply_catalog_scope(model.query, entity, filters)
     q = filters.get("q")
     if entity == "cpes":
         query = _apply_cpe_search_filters(
@@ -3194,19 +3223,6 @@ def _iter_export_items(entity, filters):
         )
         if q:
             query = apply_cpe_text_search(query, q)
-        if filters.get("vendor_uuid"):
-            vendor_ids = _export_vendor_ids(filters)
-            if filters.get("combined"):
-                # Match the products shown in the vendor's combined view.
-                query = query.filter(CPEEntry.product_id.in_(
-                    select(Product.id).where(Product.vendor_id.in_(vendor_ids))
-                ))
-            else:
-                query = query.filter(CPEEntry.vendor_id.in_(vendor_ids))
-        if filters.get("product_uuid"):
-            query = query.filter(CPEEntry.product_id.in_(
-                select(Product.id).where(Product.uuid == filters["product_uuid"])
-            ))
         query = query.options(
             selectinload(CPEEntry.vendor),
             selectinload(CPEEntry.product),
@@ -3222,8 +3238,6 @@ def _iter_export_items(entity, filters):
             query = query.filter(or_(
                 func.lower(model.name).like(like), func.lower(model.title).like(like)
             ))
-        if entity == "products" and filters.get("vendor_uuid"):
-            query = query.filter(Product.vendor_id.in_(_export_vendor_ids(filters)))
         child, parent_id = (
             (Product, Product.vendor_id) if model is Vendor
             else (CPEEntry, CPEEntry.product_id)
@@ -3337,12 +3351,13 @@ def api_vendor_detail(vendor_uuid):
 @bp.route("/api/products")
 def api_products():
     q = (request.args.get("q") or "").strip()
+    scope = _catalog_scope_filters("products")
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
     per_page = min(
         max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
     )
 
-    query = Product.query
+    query = _apply_catalog_scope(Product.query, "products", scope)
     if q:
         like = f"%{q.lower()}%"
         query = query.filter(
@@ -3601,12 +3616,13 @@ def api_cpes():
     product_q = (request.args.get("product_q") or "").strip()
     purl_q = (request.args.get("purl_q") or "").strip()
     part = (request.args.get("part") or "").strip()
+    scope = _catalog_scope_filters("cpes")
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
     per_page = min(
         max(request.args.get("per_page", default=25, type=int) or 25, 1), 100
     )
 
-    query = CPEEntry.query
+    query = _apply_catalog_scope(CPEEntry.query, "cpes", scope)
     query = _apply_cpe_search_filters(
         query, vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part
     )

@@ -180,6 +180,22 @@ curl "http://127.0.0.1:5000/api/cpes?vendor_q=microsoft&part=a&per_page=10"
 curl "http://127.0.0.1:5000/api/changes?per_page=10"
 ```
 
+Product and CPE lists support the same combined vendor scope as their exports:
+pass `vendor_uuid=VENDOR_UUID&combined=true` to `/api/products` or `/api/cpes`.
+This follows approved vendor relationships, including `superseded-by`, in either
+direction and through chains. Each record appears once with its original vendor
+and product UUIDs. Search filters intersect the scope; `page`, `per_page`, `total`,
+and `total_pages` describe the combined results. CPE lists also accept an exact
+`product_uuid`, which intersects any vendor scope. Without `combined=true`, UUID
+filters remain exact. Unknown valid UUIDs return empty lists; malformed UUIDs,
+invalid `combined` values, and `combined=true` without `vendor_uuid` return 400.
+These parameters are available in the Swagger request console at `/api/docs`.
+
+```bash
+curl "http://127.0.0.1:5000/api/products?vendor_uuid=VENDOR_UUID&combined=true&per_page=25"
+curl "http://127.0.0.1:5000/api/cpes?vendor_uuid=VENDOR_UUID&combined=true&part=o&page=1"
+```
+
 ### Bulk JSON exports
 
 Download all matching records with `GET /api/vendors/export`,
