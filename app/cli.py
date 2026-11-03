@@ -10,7 +10,7 @@ from pathlib import Path
 
 import click
 from sqlalchemy import func, inspect, schema, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import aliased
 
 from .models import (
@@ -43,6 +43,36 @@ DEFAULT_NVD_CPE_MATCH_FEED = (
 APP_DATASET_VERSION = "1"
 DEFAULT_PURL2CPE_DIR = "../purl2cpe"
 DEFAULT_GCVE_ENRICHED_DUMPS_DIR = "../gcve-enriched-dumps"
+
+
+def _save_entity_with_uuid(entity, *, expected_uuid=None):
+    """Insert or update an entity without losing the batch on UUID conflicts."""
+    target_uuid = entity.uuid if expected_uuid is None else expected_uuid
+    # Flush previous work outside the handler so its errors are never mistaken
+    # for a conflict on this entity (begin_nested also flushes pending work).
+    db.session.flush()
+    connection = db.session.connection()
+    if connection.dialect.name == "sqlite":
+        # sqlite3's legacy transaction mode does not BEGIN before a SAVEPOINT.
+        # Without an outer transaction, RELEASE would commit the entity early.
+        if not connection.connection.driver_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN")
+    try:
+        # A full session rollback would discard other CPEs in the current batch.
+        with db.session.begin_nested():
+            # Apply UUID changes only after the savepoint's initial autoflush.
+            entity.uuid = target_uuid
+            db.session.add(entity)
+            db.session.flush()
+    except IntegrityError:
+        # Only recover from an occupied UUID; surface unrelated integrity errors.
+        # A failed UPDATE expires the entity and restores its old UUID, so keep
+        # the attempted UUID separately when checking who owns it now.
+        owner = type(entity).query.filter_by(uuid=target_uuid).first()
+        if owner is None or owner.id == entity.id:
+            raise
+        return False
+    return True
 
 
 def _render_default_literal(value):
@@ -249,16 +279,22 @@ def register_cli(app):
                     name=vendor_name,
                     title=titleize_token(vendor_name),
                 )
-                db.session.add(vendor)
-                db.session.flush()
+                if not _save_entity_with_uuid(vendor):
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
+                    continue
                 vendor_cache[vendor_name] = vendor
                 vendor_uuid_to_id[vendor.uuid] = vendor.id
                 created_vendors += 1
             elif vendor.uuid != vendor_uuid:
                 existing_vendor_id = vendor_uuid_to_id.get(vendor_uuid)
                 if existing_vendor_id is None or existing_vendor_id == vendor.id:
-                    vendor_uuid_to_id.pop(vendor.uuid, None)
-                    vendor.uuid = vendor_uuid
+                    old_uuid = vendor.uuid
+                    if not _save_entity_with_uuid(vendor, expected_uuid=vendor_uuid):
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
+                    vendor_uuid_to_id.pop(old_uuid, None)
                     vendor_uuid_to_id[vendor.uuid] = vendor.id
                 else:
                     skipped += 1
@@ -279,16 +315,22 @@ def register_cli(app):
                     name=product_name,
                     title=titleize_token(product_name),
                 )
-                db.session.add(product)
-                db.session.flush()
+                if not _save_entity_with_uuid(product):
+                    skipped += 1
+                    skipped_uuid_conflicts += 1
+                    continue
                 product_cache[product_key] = product
                 product_uuid_to_id[product.uuid] = product.id
                 created_products += 1
             elif product.uuid != product_uuid:
                 existing_product_id = product_uuid_to_id.get(product_uuid)
                 if existing_product_id is None or existing_product_id == product.id:
-                    product_uuid_to_id.pop(product.uuid, None)
-                    product.uuid = product_uuid
+                    old_uuid = product.uuid
+                    if not _save_entity_with_uuid(product, expected_uuid=product_uuid):
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
+                    product_uuid_to_id.pop(old_uuid, None)
                     product_uuid_to_id[product.uuid] = product.id
                 else:
                     skipped += 1
@@ -471,16 +513,22 @@ def register_cli(app):
                         name=vendor_name,
                         title=titleize_token(vendor_name),
                     )
-                    db.session.add(vendor)
-                    db.session.flush()
+                    if not _save_entity_with_uuid(vendor):
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
                     vendor_cache[vendor_name] = vendor
                     vendor_uuid_to_id[vendor.uuid] = vendor.id
                     created_vendors += 1
                 elif vendor.uuid != vendor_uuid:
                     existing_vendor_id = vendor_uuid_to_id.get(vendor_uuid)
                     if existing_vendor_id is None or existing_vendor_id == vendor.id:
-                        vendor_uuid_to_id.pop(vendor.uuid, None)
-                        vendor.uuid = vendor_uuid
+                        old_uuid = vendor.uuid
+                        if not _save_entity_with_uuid(vendor, expected_uuid=vendor_uuid):
+                            skipped += 1
+                            skipped_uuid_conflicts += 1
+                            continue
+                        vendor_uuid_to_id.pop(old_uuid, None)
                         vendor_uuid_to_id[vendor.uuid] = vendor.id
                     else:
                         skipped += 1
@@ -501,16 +549,22 @@ def register_cli(app):
                         name=product_name,
                         title=titleize_token(product_name),
                     )
-                    db.session.add(product)
-                    db.session.flush()
+                    if not _save_entity_with_uuid(product):
+                        skipped += 1
+                        skipped_uuid_conflicts += 1
+                        continue
                     product_cache[product_key] = product
                     product_uuid_to_id[product.uuid] = product.id
                     created_products += 1
                 elif product.uuid != product_uuid:
                     existing_product_id = product_uuid_to_id.get(product_uuid)
                     if existing_product_id is None or existing_product_id == product.id:
-                        product_uuid_to_id.pop(product.uuid, None)
-                        product.uuid = product_uuid
+                        old_uuid = product.uuid
+                        if not _save_entity_with_uuid(product, expected_uuid=product_uuid):
+                            skipped += 1
+                            skipped_uuid_conflicts += 1
+                            continue
+                        product_uuid_to_id.pop(old_uuid, None)
                         product_uuid_to_id[product.uuid] = product.id
                     else:
                         skipped += 1
@@ -1319,16 +1373,36 @@ def parse_simple_yaml_list(path: Path, root_key: str) -> list[str]:
 
 
 def backfill_missing_uuids():
-    for vendor in Vendor.query.all():
+    vendors = Vendor.query.all()
+    vendor_uuid_to_id = {vendor.uuid: vendor.id for vendor in vendors if vendor.uuid}
+    for vendor in vendors:
         expected_uuid = vendor_uuid_for_name(vendor.name)
         if vendor.uuid != expected_uuid:
-            vendor.uuid = expected_uuid
+            # Legacy names can normalize to the same deterministic UUID. Keep
+            # both rows and their references when that UUID is already owned.
+            if expected_uuid in vendor_uuid_to_id:
+                continue
+            old_uuid = vendor.uuid
+            if not _save_entity_with_uuid(vendor, expected_uuid=expected_uuid):
+                continue
+            vendor_uuid_to_id.pop(old_uuid, None)
+            vendor_uuid_to_id[expected_uuid] = vendor.id
     db.session.flush()
 
-    for product in Product.query.all():
+    products = Product.query.all()
+    product_uuid_to_id = {
+        product.uuid: product.id for product in products if product.uuid
+    }
+    for product in products:
         expected_uuid = product_uuid_for_names(product.vendor.name, product.name)
         if product.uuid != expected_uuid:
-            product.uuid = expected_uuid
+            if expected_uuid in product_uuid_to_id:
+                continue
+            old_uuid = product.uuid
+            if not _save_entity_with_uuid(product, expected_uuid=expected_uuid):
+                continue
+            product_uuid_to_id.pop(old_uuid, None)
+            product_uuid_to_id[expected_uuid] = product.id
     db.session.flush()
 
 

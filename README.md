@@ -325,6 +325,11 @@ From a local archive:
 python -m flask --app run import-nvd-cpes --source /path/to/nvdcpe-2.0.tar.gz
 ```
 
+Imports can be rerun against an existing database. UUID conflicts are skipped and
+reported as `uuid-conflicts` in the final summary; other rows in the batch are
+preserved. Legacy vendor/product UUIDs are retained when assigning their
+deterministic UUID would collide with another row.
+
 Replace existing vendor/product/CPE data first:
 
 ```bash
