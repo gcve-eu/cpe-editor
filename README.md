@@ -33,9 +33,11 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
 - Combined views follow approved `synonym-of`, `canonical-of`, `equivalent-to`,
   `renamed-to`, and `vendor-merge-into` relationships in either direction, including
   chains. Vendor views combine products; product views combine CPE entries from
-  linked products and same-token products under related vendors. `superseded-by`
-  and `derived-from` remain visible as relationships but do not combine records:
-  replacement and provenance do not establish a shared product identity.
+  linked products and same-token products under related vendors. Vendor
+  `superseded-by` relationships also combine vendor catalogs and connect same-token
+  products under those vendors, including in the graph views. Product
+  `superseded-by` and all `derived-from` relationships remain visible as graph
+  edges without combining their records.
 - Expand the **Relationship graph** on vendor, product, and alias detail pages to explore
   approved relationships alongside the combined view. The read-only [Pivotick](https://github.com/Pivotick/Pivotick)
   graph supports pan, zoom, node inspection, and links to the original records.
