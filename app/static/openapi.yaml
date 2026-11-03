@@ -19,6 +19,82 @@ tags:
   - name: Proposals
   - name: Admin
 paths:
+  /api/vendors/export:
+    get:
+      tags: [Vendors]
+      summary: Export all matching vendors as JSON
+      description: |
+        Supports the vendor list q search on name and title.
+        Returns every matching public record in deterministic order; page, per_page,
+        and sort are ignored. No filters exports the whole collection. Valid scopes
+        without matches return an empty export. Records are serialized incrementally
+        to temporary files and downloaded in bounded chunks. Artifacts up to 4 MiB
+        use a bounded 64-slot Valkey cache with a 3600-second TTL by default,
+        independently of statistics caching. Slot collisions evict older snapshots.
+        Cache hits avoid database queries and do not extend expiry. Larger exports
+        or unavailable/disabled caches return a complete uncached download.
+        Redundant percent wildcards in q are normalized; q=%, q=%%, and no q share
+        the same snapshot. Cache size, slot count, and TTL are configurable.
+      parameters:
+        - $ref: '#/components/parameters/Export_q'
+      responses:
+        '200':
+          $ref: '#/components/responses/BulkExportResponse'
+        '400':
+          description: Invalid UUID or CPE part filter.
+  /api/products/export:
+    get:
+      tags: [Products]
+      summary: Export all matching products as JSON
+      description: |
+        Supports the product list q search on name and title, and exact vendor UUID scoping.
+        Returns every matching public record in deterministic order; page, per_page,
+        and sort are ignored. No filters exports the whole collection. Valid scopes
+        without matches return an empty export. Records are serialized incrementally
+        to temporary files and downloaded in bounded chunks. Artifacts up to 4 MiB
+        use a bounded 64-slot Valkey cache with a 3600-second TTL by default,
+        independently of statistics caching. Slot collisions evict older snapshots.
+        Cache hits avoid database queries and do not extend expiry. Larger exports
+        or unavailable/disabled caches return a complete uncached download.
+        Redundant percent wildcards in q are normalized; q=%, q=%%, and no q share
+        the same snapshot. Cache size, slot count, and TTL are configurable.
+      parameters:
+        - $ref: '#/components/parameters/Export_q'
+        - $ref: '#/components/parameters/Export_vendor_uuid'
+      responses:
+        '200':
+          $ref: '#/components/responses/BulkExportResponse'
+        '400':
+          description: Invalid UUID or CPE part filter.
+  /api/cpes/export:
+    get:
+      tags: [CPE Entries]
+      summary: Export all matching CPEs as JSON
+      description: |
+        Supports the CPE list search filters, plus exact vendor and product UUID scoping. Includes PURL mappings and vulnerability references.
+        Returns every matching public record in deterministic order; page, per_page,
+        and sort are ignored. No filters exports the whole collection. Valid scopes
+        without matches return an empty export. Records are serialized incrementally
+        to temporary files and downloaded in bounded chunks. Artifacts up to 4 MiB
+        use a bounded 64-slot Valkey cache with a 3600-second TTL by default,
+        independently of statistics caching. Slot collisions evict older snapshots.
+        Cache hits avoid database queries and do not extend expiry. Larger exports
+        or unavailable/disabled caches return a complete uncached download.
+        Redundant percent wildcards in q are normalized; q=%, q=%%, and no q share
+        the same snapshot. Cache size, slot count, and TTL are configurable.
+      parameters:
+        - $ref: '#/components/parameters/Export_q'
+        - $ref: '#/components/parameters/Export_vendor_q'
+        - $ref: '#/components/parameters/Export_product_q'
+        - $ref: '#/components/parameters/Export_purl_q'
+        - $ref: '#/components/parameters/Export_part'
+        - $ref: '#/components/parameters/Export_vendor_uuid'
+        - $ref: '#/components/parameters/Export_product_uuid'
+      responses:
+        '200':
+          $ref: '#/components/responses/BulkExportResponse'
+        '400':
+          description: Invalid UUID or CPE part filter.
   /api/statistics:
     get:
       tags: [Statistics]
@@ -558,7 +634,95 @@ components:
       type: http
       scheme: bearer
       description: "API key issued by an admin via `/admin/api-clients`. Send as `Authorization: Bearer <key>`."
+  parameters:
+    Export_q:
+      in: query
+      name: q
+      description: Case-insensitive substring search, matching the corresponding list endpoint.
+      schema:
+        type: string
+    Export_vendor_q:
+      in: query
+      name: vendor_q
+      description: Case-insensitive vendor name or title prefix.
+      schema:
+        type: string
+    Export_product_q:
+      in: query
+      name: product_q
+      description: Case-insensitive product name or title prefix.
+      schema:
+        type: string
+    Export_purl_q:
+      in: query
+      name: purl_q
+      description: Case-insensitive PURL prefix.
+      schema:
+        type: string
+    Export_part:
+      in: query
+      name: part
+      description: CPE part.
+      schema:
+        type: string
+        enum: [a, o, h]
+    Export_vendor_uuid:
+      in: query
+      name: vendor_uuid
+      description: Exact vendor UUID.
+      schema:
+        type: string
+        format: uuid
+    Export_product_uuid:
+      in: query
+      name: product_uuid
+      description: Exact product UUID.
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BulkExportResponse:
+      description: JSON attachment containing all matching public records.
+      headers:
+        Content-Disposition:
+          schema:
+            type: string
+          description: Attachment filename for the JSON download.
+        X-Export-Cache:
+          schema:
+            type: string
+            enum: [HIT, MISS, BYPASS]
+          description: Cached snapshot, generated and cached, or generated without caching.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BulkExport'
   schemas:
+    BulkExport:
+      type: object
+      required: [entity, filters, generated_at, total, items]
+      properties:
+        entity:
+          type: string
+          enum: [vendors, products, cpes]
+        filters:
+          type: object
+          additionalProperties:
+            type: string
+          description: Normalized, nonempty search filters used to generate the snapshot.
+        generated_at:
+          type: string
+          format: date-time
+        total:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            anyOf:
+              - $ref: '#/components/schemas/Vendor'
+              - $ref: '#/components/schemas/Product'
+              - $ref: '#/components/schemas/CPEEntry'
     ProposalSubmission:
       type: object
       required: [proposal_type]

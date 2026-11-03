@@ -110,8 +110,11 @@ The `wsgi.py` entry point creates the Flask application without enabling debug m
 - `ADMIN_PASSWORD`
 - `PROPOSAL_RATE_LIMIT_PER_HOUR` (default `10`; set `0` or negative to disable)
 - `SQLITE_BUSY_TIMEOUT_SECONDS` (default `30`)
-- `VALKEY_URL` (default `redis://127.0.0.1:6379/0`; set empty to disable statistics caching)
+- `VALKEY_URL` (default `redis://127.0.0.1:6379/0`; set empty to disable caching)
 - `STATISTICS_CACHE_TTL_SECONDS` (default `300`; set `0` or negative to disable statistics caching)
+- `EXPORT_CACHE_TTL_SECONDS` (default `3600`; set `0` or negative to disable export caching)
+- `EXPORT_CACHE_MAX_BYTES` (default `4194304`, 4 MiB per JSON artifact; larger exports bypass caching)
+- `EXPORT_CACHE_SLOTS` (default `64`; maximum number of cached export snapshots; set `0` to disable)
 
 The statistics page and `/api/statistics` share a cached snapshot, including
 record coverage, distributions, and a UTC `generated_at` timestamp. Vendor and
@@ -151,14 +154,17 @@ deprecated records. Charts and their numeric labels work without JavaScript.
 Documented endpoints include:
 
 - `GET /api/vendors`
+- `GET /api/vendors/export`
 - `GET /api/vendors/{vendor_uuid}`
 - `GET /api/vendors/suggest`
 - `GET /api/products`
+- `GET /api/products/export`
 - `GET /api/products/{product_uuid}`
 - `GET /api/products/suggest`
 - `GET /api/changes`
 - `GET /api/changes/{proposal_id}`
 - `GET /api/cpes`
+- `GET /api/cpes/export`
 - `GET /api/cpes/{cpe_id}`
 - `GET /api/cpes/{cpe_id}/vulnerability-references`
 - `GET /api/vulnerability-references`
@@ -171,6 +177,59 @@ curl "http://127.0.0.1:5000/api/products?q=windows&page=1&per_page=5"
 curl "http://127.0.0.1:5000/api/cpes?vendor_q=microsoft&part=a&per_page=10"
 curl "http://127.0.0.1:5000/api/changes?per_page=10"
 ```
+
+### Bulk JSON exports
+
+Download all matching records with `GET /api/vendors/export`,
+`GET /api/products/export`, or `GET /api/cpes/export`. These public endpoints
+return a JSON attachment containing `entity`, `filters`, `generated_at`, `total`,
+and `items`. Items use the same fields as the existing detail API. Exports
+include all matches, including deprecated CPEs, and ignore pagination and sorting
+parameters. With no filters, they export the entire entity collection.
+
+Vendor and product exports support the existing `q` substring search on name
+and title. Product exports also accept an exact `vendor_uuid`. CPE exports
+support `q`, `vendor_q`, `product_q`, `purl_q`, and `part` with the existing search
+semantics, plus exact `vendor_uuid` and `product_uuid` filters. Filters combine
+with AND. Invalid UUIDs or CPE parts return 400; valid filters without matches
+return an empty export. CPE exports include PURL mappings and vulnerability
+references. Vendor/product exports contain their own records; use a scoped CPE
+export to download their CPEs.
+
+```bash
+curl -OJ "http://127.0.0.1:5000/api/vendors/export?q=micro"
+curl -OJ "http://127.0.0.1:5000/api/products/export?vendor_uuid=VENDOR_UUID"
+curl -OJ "http://127.0.0.1:5000/api/cpes/export?product_uuid=PRODUCT_UUID"
+curl -OJ "http://127.0.0.1:5000/api/cpes/export?vendor_q=microsoft&part=o"
+```
+
+The vendor/product directories and CPE search page offer **Export all matching**
+downloads that preserve current filters across all pages. Vendor details also
+offer all-product and all-CPE downloads; product details offer all-CPE downloads.
+
+Exports are serialized incrementally to temporary files and downloaded in bounded
+chunks, so a full-catalog download does not retain the full result in worker
+memory. Temporary files are closed after the download, on cancellation, or if
+generation fails.
+
+Valkey stores eligible entity/filter snapshots for one hour by default.
+Equivalent requests (including reordered parameters, surrounding whitespace,
+text case, and redundant SQL `LIKE` percent wildcards in `q`) share a cache entry.
+For example, `q=%`, `q=%%`, and no `q` reuse the same full-catalog snapshot.
+Cache hits do not query the database and do not extend expiry.
+`generated_at` identifies the snapshot, and `X-Export-Cache` reports `HIT`,
+`MISS` (generated and cached), or `BYPASS` (generated without caching). Changes
+appear after expiry or cache eviction. Export caching is independent of the
+statistics TTL. If Valkey is unavailable or caching is disabled, exports are
+generated directly.
+
+To bound storage for these public endpoints, only artifacts up to 4 MiB are
+cached by default, in 64 shared slots across all export entities (at most
+256 MiB of artifact data, plus small key/fingerprint overhead). A slot collision
+evicts the previous snapshot; full fingerprints prevent serving another query's
+data. Larger exports still download completely from disk with `BYPASS`. Adjust
+`EXPORT_CACHE_MAX_BYTES` and `EXPORT_CACHE_SLOTS` to change this budget. Existing
+entries expire naturally when reducing these settings.
 
 ### Faster CPE partial searches (SQLite)
 
