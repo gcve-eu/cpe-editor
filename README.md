@@ -110,8 +110,9 @@ The `wsgi.py` entry point creates the Flask application without enabling debug m
 - `ADMIN_PASSWORD`
 - `PROPOSAL_RATE_LIMIT_PER_HOUR` (default `10`; set `0` or negative to disable)
 - `SQLITE_BUSY_TIMEOUT_SECONDS` (default `30`)
-- `VALKEY_URL` (default `redis://127.0.0.1:6379/0`; set empty to disable statistics caching)
+- `VALKEY_URL` (default `redis://127.0.0.1:6379/0`; set empty to disable caching)
 - `STATISTICS_CACHE_TTL_SECONDS` (default `300`; set `0` or negative to disable statistics caching)
+- `EXPORT_CACHE_TTL_SECONDS` (default `3600`; set `0` or negative to disable export caching)
 
 The statistics page and `/api/statistics` share a cached snapshot, including
 record coverage, distributions, and a UTC `generated_at` timestamp. Vendor and
@@ -151,14 +152,17 @@ deprecated records. Charts and their numeric labels work without JavaScript.
 Documented endpoints include:
 
 - `GET /api/vendors`
+- `GET /api/vendors/export`
 - `GET /api/vendors/{vendor_uuid}`
 - `GET /api/vendors/suggest`
 - `GET /api/products`
+- `GET /api/products/export`
 - `GET /api/products/{product_uuid}`
 - `GET /api/products/suggest`
 - `GET /api/changes`
 - `GET /api/changes/{proposal_id}`
 - `GET /api/cpes`
+- `GET /api/cpes/export`
 - `GET /api/cpes/{cpe_id}`
 - `GET /api/cpes/{cpe_id}/vulnerability-references`
 - `GET /api/vulnerability-references`
@@ -171,6 +175,43 @@ curl "http://127.0.0.1:5000/api/products?q=windows&page=1&per_page=5"
 curl "http://127.0.0.1:5000/api/cpes?vendor_q=microsoft&part=a&per_page=10"
 curl "http://127.0.0.1:5000/api/changes?per_page=10"
 ```
+
+### Bulk JSON exports
+
+Download all matching records with `GET /api/vendors/export`,
+`GET /api/products/export`, or `GET /api/cpes/export`. These public endpoints
+return a JSON attachment containing `entity`, `filters`, `generated_at`, `total`,
+and `items`. Items use the same fields as the existing detail API. Exports
+include all matches, including deprecated CPEs, and ignore pagination and sorting
+parameters. With no filters, they export the entire entity collection.
+
+Vendor and product exports support the existing `q` substring search on name
+and title. Product exports also accept an exact `vendor_uuid`. CPE exports
+support `q`, `vendor_q`, `product_q`, `purl_q`, and `part` with the existing search
+semantics, plus exact `vendor_uuid` and `product_uuid` filters. Filters combine
+with AND. Invalid UUIDs or CPE parts return 400; valid filters without matches
+return an empty export. CPE exports include PURL mappings and vulnerability
+references. Vendor/product exports contain their own records; use a scoped CPE
+export to download their CPEs.
+
+```bash
+curl -OJ "http://127.0.0.1:5000/api/vendors/export?q=micro"
+curl -OJ "http://127.0.0.1:5000/api/products/export?vendor_uuid=VENDOR_UUID"
+curl -OJ "http://127.0.0.1:5000/api/cpes/export?product_uuid=PRODUCT_UUID"
+curl -OJ "http://127.0.0.1:5000/api/cpes/export?vendor_q=microsoft&part=o"
+```
+
+The vendor/product directories and CPE search page offer **Export all matching**
+downloads that preserve current filters across all pages. Vendor details also
+offer all-product and all-CPE downloads; product details offer all-CPE downloads.
+
+Valkey stores each entity/filter snapshot for one hour by default. Equivalent
+requests (including reordered parameters, whitespace, and text case) share a
+cache entry. Cache hits do not query the database and do not extend expiry.
+`generated_at` identifies the snapshot, and `X-Export-Cache` reports `HIT`,
+`MISS` (generated and cached), or `BYPASS` (generated without caching). Changes
+appear after expiry. Export caching is independent of the statistics TTL;
+if Valkey is unavailable or caching is disabled, exports are generated directly.
 
 ### Faster CPE partial searches (SQLite)
 

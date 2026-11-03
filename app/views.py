@@ -2,12 +2,14 @@ from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from time import monotonic
 from functools import wraps
+from hashlib import sha256
 from hmac import compare_digest
 import json
 import secrets
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+from uuid import UUID
 from xml.sax.saxutils import escape
 
 from flask import (
@@ -577,7 +579,7 @@ def api_key_required(view):
     return wrapped
 
 
-def _serialize_vendor(vendor):
+def _serialize_vendor(vendor, *, product_count=None):
     return {
         "id": vendor.id,
         "uuid": vendor.uuid,
@@ -586,7 +588,7 @@ def _serialize_vendor(vendor):
         "notes": vendor.notes,
         "created_at": vendor.created_at.isoformat() if vendor.created_at else None,
         "updated_at": vendor.updated_at.isoformat() if vendor.updated_at else None,
-        "product_count": len(vendor.products),
+        "product_count": len(vendor.products) if product_count is None else product_count,
         "approved_notes": [
             _serialize_entity_note(note)
             for note in sorted(
@@ -3099,6 +3101,144 @@ def api_statistics_top_list():
     return jsonify(
         _build_statistics_top_list_payload(normalized_entity, page, per_page)
     )
+
+
+def _export_filters(entity):
+    names = {
+        "vendors": ("q",),
+        "products": ("q", "vendor_uuid"),
+        "cpes": ("q", "vendor_q", "product_q", "purl_q", "part", "vendor_uuid", "product_uuid"),
+    }[entity]
+    filters = {}
+    for name in names:
+        value = (request.args.get(name) or "").strip()
+        if not value:
+            continue
+        if name.endswith("_uuid"):
+            try:
+                value = str(UUID(value))
+            except ValueError:
+                abort(400, description=f"{name} must be a valid UUID.")
+        else:
+            value = value.lower()
+        if name == "part" and value not in {"a", "o", "h"}:
+            abort(400, description="part must be a, o, or h.")
+        filters[name] = value
+    return filters
+
+
+def _export_entity_load_options(model):
+    options = [
+        selectinload(model.note_entries),
+        selectinload(model.metadata_entries),
+    ]
+    for relation in (
+        EntityRelationship.source_vendor,
+        EntityRelationship.target_vendor,
+    ):
+        options.append(selectinload(model.outgoing_relationships).joinedload(relation))
+    for relation in (
+        EntityRelationship.source_product,
+        EntityRelationship.target_product,
+    ):
+        options.append(
+            selectinload(model.outgoing_relationships)
+            .joinedload(relation).joinedload(Product.vendor)
+        )
+    if model is Product:
+        options.extend([
+            selectinload(Product.vendor),
+            selectinload(Product.alias_memberships)
+            .joinedload(ProductAliasMember.alias).selectinload(ProductAlias.members),
+        ])
+    return options + [raiseload("*")]
+
+
+def _build_export_payload(entity, filters):
+    model = {"vendors": Vendor, "products": Product, "cpes": CPEEntry}[entity]
+    query = model.query
+    q = filters.get("q")
+    if entity == "cpes":
+        query = _apply_cpe_search_filters(
+            query, **{name: filters.get(name) for name in ("vendor_q", "product_q", "purl_q", "part")}
+        )
+        if q:
+            query = apply_cpe_text_search(query, q)
+        if filters.get("vendor_uuid"):
+            query = query.filter(CPEEntry.vendor_id.in_(
+                select(Vendor.id).where(Vendor.uuid == filters["vendor_uuid"])
+            ))
+        if filters.get("product_uuid"):
+            query = query.filter(CPEEntry.product_id.in_(
+                select(Product.id).where(Product.uuid == filters["product_uuid"])
+            ))
+        query = query.options(
+            selectinload(CPEEntry.vendor),
+            selectinload(CPEEntry.product),
+            selectinload(CPEEntry.vulnerability_links),
+            selectinload(CPEEntry.purl_mappings),
+            raiseload("*"),
+        ).order_by(CPEEntry.cpe_uri.asc(), CPEEntry.id.asc())
+        items = [_serialize_cpe(cpe) for cpe in query.yield_per(500)]
+    else:
+        if q:
+            like = f"%{q}%"
+            query = query.filter(or_(
+                func.lower(model.name).like(like), func.lower(model.title).like(like)
+            ))
+        if entity == "products" and filters.get("vendor_uuid"):
+            query = query.filter(Product.vendor_id.in_(
+                select(Vendor.id).where(Vendor.uuid == filters["vendor_uuid"])
+            ))
+        child, parent_id = (
+            (Product, Product.vendor_id) if model is Vendor
+            else (CPEEntry, CPEEntry.product_id)
+        )
+        child_count = (
+            select(func.count(child.id)).where(parent_id == model.id)
+            .correlate(model).scalar_subquery()
+        )
+        query = query.options(*_export_entity_load_options(model)).add_columns(child_count)
+        query = query.order_by(model.name.asc(), model.id.asc())
+        if model is Vendor:
+            items = [
+                _serialize_vendor(record, product_count=count)
+                for record, count in query.yield_per(500)
+            ]
+        else:
+            items = [
+                _serialize_product(record, cpe_count=count)
+                for record, count in query.yield_per(500)
+            ]
+    return {
+        "entity": entity,
+        "filters": filters,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "total": len(items),
+        "items": items,
+    }
+
+
+@bp.route("/api/vendors/export", defaults={"entity": "vendors"})
+@bp.route("/api/products/export", defaults={"entity": "products"})
+@bp.route("/api/cpes/export", defaults={"entity": "cpes"})
+def api_bulk_export(entity):
+    """Download all matching public records, independent of list pagination."""
+    filters = _export_filters(entity)
+    digest = sha256(json.dumps(filters, sort_keys=True).encode()).hexdigest()
+    cache_key = f"cpe-editor:export:v1:{entity}:{digest}"
+    ttl = current_app.config["EXPORT_CACHE_TTL_SECONDS"]
+    payload = cache_get_json(cache_key, ttl_seconds=ttl)
+    cache_status = "HIT"
+    if payload is None:
+        payload = _build_export_payload(entity, filters)
+        stored = cache_set_json(cache_key, payload, ttl_seconds=ttl)
+        cache_status = "MISS" if stored else "BYPASS"
+    response = jsonify(payload)
+    response.headers["Content-Disposition"] = f'attachment; filename="{entity}-export.json"'
+    response.headers["X-Export-Cache"] = cache_status
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @bp.route("/api/vendors")

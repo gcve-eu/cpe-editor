@@ -13,8 +13,8 @@ def _cache_config():
 
 def get_valkey_client():
     """Return a ping-verified Valkey client, or None when unavailable."""
-    url, ttl = _cache_config()
-    if not url or ttl <= 0:
+    url, _ = _cache_config()
+    if not url:
         return None
 
     extensions = current_app.extensions.setdefault("cpe_editor", {})
@@ -36,7 +36,11 @@ def get_valkey_client():
     return client
 
 
-def cache_get_json(key):
+def cache_get_json(key, *, ttl_seconds=None):
+    if ttl_seconds is None:
+        _, ttl_seconds = _cache_config()
+    if ttl_seconds <= 0:
+        return None
     client = get_valkey_client()
     if client is None:
         return None
@@ -53,13 +57,16 @@ def cache_get_json(key):
         return None
 
 
-def cache_set_json(key, value):
+def cache_set_json(key, value, *, ttl_seconds=None):
+    if ttl_seconds is None:
+        _, ttl_seconds = _cache_config()
+    if ttl_seconds <= 0:
+        return False
     client = get_valkey_client()
     if client is None:
         return False
-    _, ttl = _cache_config()
     try:
-        client.setex(key, ttl, json.dumps(value))
+        client.setex(key, ttl_seconds, json.dumps(value))
     except Exception:
         current_app.extensions.setdefault("cpe_editor", {}).pop("valkey_client", None)
         return False

@@ -78,6 +78,8 @@
 
 <div class="card">
   <h2>Results</h2>
+  <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='cpes', vendor_q=vendor_q or none, product_q=product_q or none, purl_q=purl_q or none, part=part or none) }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all matching CPEs (JSON)</a>
+  <p class="muted">Exports include every matching record across all pages. Repeated exports may be up to one hour old.</p>
   {% if has_search_filters %}
     <p class="muted">
       Showing up to {{ results|length }} result{% if results|length != 1 %}s{% endif %}

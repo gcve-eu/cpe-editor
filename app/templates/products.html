@@ -23,6 +23,7 @@
   </form>
 
   <div class="vendor-sort-controls">
+    <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='products', q=product_q or none) }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all matching products (JSON)</a>
     <span class="muted">Sort by:</span>
     <a href="{{ url_for('main.products', q=product_q or none, sort='name') }}" class="button secondary{% if sort_by == 'name' %} active{% endif %}">
       <i class="fa-solid fa-arrow-down-a-z" aria-hidden="true"></i>Name
@@ -31,6 +32,7 @@
       <i class="fa-solid fa-cube" aria-hidden="true"></i>CPE entries
     </a>
   </div>
+  <p class="muted">Exports include every matching record across all pages. Repeated exports may be up to one hour old.</p>
 
   {% if products %}
     <div class="muted vendor-results-meta">

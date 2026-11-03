@@ -30,6 +30,7 @@ def create_app():
         STATISTICS_CACHE_TTL_SECONDS=int(
             os.getenv("STATISTICS_CACHE_TTL_SECONDS", "300")
         ),
+        EXPORT_CACHE_TTL_SECONDS=int(os.getenv("EXPORT_CACHE_TTL_SECONDS", "3600")),
     )
     if database_uri.startswith("sqlite"):
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
