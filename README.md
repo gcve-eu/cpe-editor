@@ -198,16 +198,25 @@ return an empty export. CPE exports include PURL mappings and vulnerability
 references. Vendor/product exports contain their own records; use a scoped CPE
 export to download their CPEs.
 
+For product and CPE exports, add `combined=true` with `vendor_uuid` to include
+all products from the vendor's combined view, or all CPEs belonging to those
+products. This follows the same approved vendor relationships in both
+directions and through chains, without duplicates. Other filters still combine
+with AND; `product_uuid` remains exact. Omitting `combined` (or setting it to
+`false`) keeps exact vendor scoping. Combined exports use separate cache snapshots.
+
 ```bash
 curl -OJ "http://127.0.0.1:5000/api/vendors/export?q=micro"
 curl -OJ "http://127.0.0.1:5000/api/products/export?vendor_uuid=VENDOR_UUID"
+curl -OJ "http://127.0.0.1:5000/api/cpes/export?vendor_uuid=VENDOR_UUID&combined=true"
 curl -OJ "http://127.0.0.1:5000/api/cpes/export?product_uuid=PRODUCT_UUID"
 curl -OJ "http://127.0.0.1:5000/api/cpes/export?vendor_q=microsoft&part=o"
 ```
 
 The vendor/product directories and CPE search page offer **Export all matching**
 downloads that preserve current filters across all pages. Vendor details also
-offer all-product and all-CPE downloads; product details offer all-CPE downloads.
+offer all-product and all-CPE downloads that include the combined products view;
+product details offer all-CPE downloads.
 
 Exports are serialized incrementally to temporary files and downloaded in bounded
 chunks, so a full-catalog download does not retain the full result in worker

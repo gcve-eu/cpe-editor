@@ -3137,7 +3137,24 @@ def _export_filters(entity):
         if name == "part" and value not in {"a", "o", "h"}:
             abort(400, description="part must be a, o, or h.")
         filters[name] = value
+    if entity in {"products", "cpes"}:
+        combined = (request.args.get("combined") or "").strip().lower()
+        if combined not in {"", "true", "false"}:
+            abort(400, description="combined must be true or false.")
+        if combined == "true":
+            if "vendor_uuid" not in filters:
+                abort(400, description="combined=true requires vendor_uuid.")
+            filters["combined"] = True
     return filters
+
+
+def _export_vendor_ids(filters):
+    if not filters.get("combined"):
+        return select(Vendor.id).where(Vendor.uuid == filters["vendor_uuid"])
+    vendor = Vendor.query.filter_by(uuid=filters["vendor_uuid"]).first()
+    if vendor is None:
+        return []
+    return [related.id for related in _collect_related_vendors_for_combined_view(vendor)]
 
 
 def _export_entity_load_options(model):
@@ -3178,9 +3195,14 @@ def _iter_export_items(entity, filters):
         if q:
             query = apply_cpe_text_search(query, q)
         if filters.get("vendor_uuid"):
-            query = query.filter(CPEEntry.vendor_id.in_(
-                select(Vendor.id).where(Vendor.uuid == filters["vendor_uuid"])
-            ))
+            vendor_ids = _export_vendor_ids(filters)
+            if filters.get("combined"):
+                # Match the products shown in the vendor's combined view.
+                query = query.filter(CPEEntry.product_id.in_(
+                    select(Product.id).where(Product.vendor_id.in_(vendor_ids))
+                ))
+            else:
+                query = query.filter(CPEEntry.vendor_id.in_(vendor_ids))
         if filters.get("product_uuid"):
             query = query.filter(CPEEntry.product_id.in_(
                 select(Product.id).where(Product.uuid == filters["product_uuid"])
@@ -3201,9 +3223,7 @@ def _iter_export_items(entity, filters):
                 func.lower(model.name).like(like), func.lower(model.title).like(like)
             ))
         if entity == "products" and filters.get("vendor_uuid"):
-            query = query.filter(Product.vendor_id.in_(
-                select(Vendor.id).where(Vendor.uuid == filters["vendor_uuid"])
-            ))
+            query = query.filter(Product.vendor_id.in_(_export_vendor_ids(filters)))
         child, parent_id = (
             (Product, Product.vendor_id) if model is Vendor
             else (CPEEntry, CPEEntry.product_id)
