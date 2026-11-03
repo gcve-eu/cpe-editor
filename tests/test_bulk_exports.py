@@ -216,7 +216,6 @@ def test_ui_download_links_preserve_filters_and_scope(client):
         ("/vendors?q=micro&page=2", "/api/vendors/export?q=micro"),
         ("/products?q=windows", "/api/products/export?q=windows"),
         ("/?vendor_q=micro&product_q=windows&part=o", "/api/cpes/export?vendor_q=micro&product_q=windows&part=o"),
-        ("/", "/api/cpes/export"),
     ]
     vendor = Vendor.query.filter_by(name="microsoft").one()
     product = Product.query.filter_by(name="windows_11").one()
@@ -233,6 +232,11 @@ def test_ui_download_links_preserve_filters_and_scope(client):
         assert f'href="{link}"' in unescape(response.get_data(as_text=True))
         db.session.remove()
         assert client.get(link).status_code == 200
+    for page in ("/", "/?vendor_q=&product_q=&purl_q=&part=", "/?vendor_q=%20&product_q=%20"):
+        html = client.get(page).get_data(as_text=True)
+        assert "/api/cpes/export" not in html
+        assert "Export all matching CPEs" not in html
+        assert "Exports include every matching record" not in html
 
 
 @pytest.mark.parametrize("entity", ["vendors", "products", "cpes"])
