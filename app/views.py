@@ -189,6 +189,10 @@ PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES = {
     "renamed-to",
     "vendor-merge-into",
 }
+# Vendor replacements also connect catalogs for combined vendor views and graphs.
+VENDOR_COMBINED_VIEW_RELATIONSHIP_TYPES = (
+    PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES | {"superseded-by"}
+)
 ALLOWED_PROPOSAL_TYPES = {
     "edit_cpe",
     "new_cpe",
@@ -2100,7 +2104,7 @@ def _collect_related_products_for_combined_view(product: Product):
         current_vendor_id = vendor_queue.pop(0)
         vendor_relationships = EntityRelationship.query.filter(
             EntityRelationship.relationship_type.in_(
-                PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+                VENDOR_COMBINED_VIEW_RELATIONSHIP_TYPES
             ),
             or_(
                 EntityRelationship.source_vendor_id == current_vendor_id,
@@ -2168,7 +2172,7 @@ def _collect_related_vendors_for_combined_view(vendor: Vendor):
         current_vendor_id = vendor_queue.pop(0)
         vendor_relationships = EntityRelationship.query.filter(
             EntityRelationship.relationship_type.in_(
-                PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+                VENDOR_COMBINED_VIEW_RELATIONSHIP_TYPES
             ),
             or_(
                 EntityRelationship.source_vendor_id == current_vendor_id,
@@ -2874,7 +2878,7 @@ def vendor_detail(vendor_uuid):
         combined_view_vendors=combined_view_vendors,
         combined_view_products=combined_view_products,
         combined_view_relationship_types=sorted(
-            PRODUCT_COMBINED_VIEW_RELATIONSHIP_TYPES
+            VENDOR_COMBINED_VIEW_RELATIONSHIP_TYPES
         ),
         product_purl_mappings=product_purl_mappings,
         relationship_type_descriptions=RELATIONSHIP_TYPE_DESCRIPTIONS,

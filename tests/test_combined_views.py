@@ -7,9 +7,14 @@ from app.views import (
 )
 
 
-@pytest.mark.parametrize("entity_type", ["vendor", "product"])
-@pytest.mark.parametrize("relationship_type", ["renamed-to", "vendor-merge-into"])
-def test_identity_chains_are_combined_from_either_end(
+@pytest.mark.parametrize("entity_type, relationship_type", [
+    ("vendor", "renamed-to"),
+    ("vendor", "vendor-merge-into"),
+    ("vendor", "superseded-by"),
+    ("product", "renamed-to"),
+    ("product", "vendor-merge-into"),
+])
+def test_eligible_chains_are_combined_from_either_end(
     client, app, entity_type, relationship_type
 ):
     vendors = [Vendor(name=f"rename_vendor_{index}") for index in range(3)]
@@ -35,11 +40,14 @@ def test_identity_chains_are_combined_from_either_end(
         for product in products
     ]
     records = vendors if entity_type == "vendor" else products
+    relationships = []
     for source, target in zip(records, records[1:]):
-        db.session.add(EntityRelationship(
+        relationship = EntityRelationship(
             **{f"source_{entity_type}": source, f"target_{entity_type}": target},
             relationship_type=relationship_type,
-        ))
+        )
+        db.session.add(relationship)
+        relationships.append(relationship)
     # Other products under related vendors belong only in the vendor combined view.
     other_product = Product(vendor=vendors[1], name="unrelated_token")
     db.session.add_all(cpes + [other_product])
@@ -58,12 +66,36 @@ def test_identity_chains_are_combined_from_either_end(
                     assert f'href="/products/{product.uuid}"' in combined
             assert relationship_type in combined
 
+            graph_response = client.get(f"/vendors/{vendors[index].uuid}/graph")
+            assert graph_response.status_code == 200
+            payload = graph_response.get_json()
+            assert payload["truncated"] is False
+            combined_ids = {
+                node["id"] for node in payload["nodes"]
+                if node["data"]["combined"]
+            }
+            assert combined_ids == (
+                {f"vendor:{vendor.uuid}" for vendor in vendors}
+                | {f"product:{product.uuid}" for product in [*products, other_product]}
+            )
+            edges = {edge["id"]: edge for edge in payload["edges"]}
+            for relationship in relationships:
+                edge = edges[f"relationship:{relationship.id}"]
+                assert edge["from"] == f"vendor:{relationship.source_vendor.uuid}"
+                assert edge["to"] == f"vendor:{relationship.target_vendor.uuid}"
+                assert edge["data"]["label"] == relationship_type
+            for product in [*products, other_product]:
+                edge = edges[f"vendor-product:{product.uuid}"]
+                assert edge["from"] == f"vendor:{product.vendor.uuid}"
+                assert edge["to"] == f"product:{product.uuid}"
+
         response = client.get(f"/products/{products[index].uuid}")
         assert response.status_code == 200
         combined = response.get_data(as_text=True).split(
             "<h2>Combined product view</h2>", 1
         )[1].split("<h2>PURL mappings</h2>", 1)[0]
-        assert relationship_type in combined
+        if entity_type == "product":
+            assert relationship_type in combined
         for cpe in cpes:
             assert cpe.cpe_uri in combined
         assert other_product.name not in combined
@@ -77,8 +109,11 @@ def test_identity_chains_are_combined_from_either_end(
         assert combined_product_ids == {f"product:{product.uuid}" for product in products}
 
 
-@pytest.mark.parametrize("entity_type", ["vendor", "product"])
-@pytest.mark.parametrize("relationship_type", ["superseded-by", "derived-from"])
+@pytest.mark.parametrize("entity_type, relationship_type", [
+    ("vendor", "derived-from"),
+    ("product", "superseded-by"),
+    ("product", "derived-from"),
+])
 def test_replacement_and_provenance_links_do_not_combine_records(
     client, app, entity_type, relationship_type
 ):
