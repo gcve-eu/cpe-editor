@@ -113,6 +113,8 @@ The `wsgi.py` entry point creates the Flask application without enabling debug m
 - `VALKEY_URL` (default `redis://127.0.0.1:6379/0`; set empty to disable caching)
 - `STATISTICS_CACHE_TTL_SECONDS` (default `300`; set `0` or negative to disable statistics caching)
 - `EXPORT_CACHE_TTL_SECONDS` (default `3600`; set `0` or negative to disable export caching)
+- `EXPORT_CACHE_MAX_BYTES` (default `4194304`, 4 MiB per JSON artifact; larger exports bypass caching)
+- `EXPORT_CACHE_SLOTS` (default `64`; maximum number of cached export snapshots; set `0` to disable)
 
 The statistics page and `/api/statistics` share a cached snapshot, including
 record coverage, distributions, and a UTC `generated_at` timestamp. Vendor and
@@ -205,13 +207,29 @@ The vendor/product directories and CPE search page offer **Export all matching**
 downloads that preserve current filters across all pages. Vendor details also
 offer all-product and all-CPE downloads; product details offer all-CPE downloads.
 
-Valkey stores each entity/filter snapshot for one hour by default. Equivalent
-requests (including reordered parameters, whitespace, and text case) share a
-cache entry. Cache hits do not query the database and do not extend expiry.
+Exports are serialized incrementally to temporary files and downloaded in bounded
+chunks, so a full-catalog download does not retain the full result in worker
+memory. Temporary files are closed after the download, on cancellation, or if
+generation fails.
+
+Valkey stores eligible entity/filter snapshots for one hour by default.
+Equivalent requests (including reordered parameters, surrounding whitespace,
+text case, and redundant SQL `LIKE` percent wildcards in `q`) share a cache entry.
+For example, `q=%`, `q=%%`, and no `q` reuse the same full-catalog snapshot.
+Cache hits do not query the database and do not extend expiry.
 `generated_at` identifies the snapshot, and `X-Export-Cache` reports `HIT`,
 `MISS` (generated and cached), or `BYPASS` (generated without caching). Changes
-appear after expiry. Export caching is independent of the statistics TTL;
-if Valkey is unavailable or caching is disabled, exports are generated directly.
+appear after expiry or cache eviction. Export caching is independent of the
+statistics TTL. If Valkey is unavailable or caching is disabled, exports are
+generated directly.
+
+To bound storage for these public endpoints, only artifacts up to 4 MiB are
+cached by default, in 64 shared slots across all export entities (at most
+256 MiB of artifact data, plus small key/fingerprint overhead). A slot collision
+evicts the previous snapshot; full fingerprints prevent serving another query's
+data. Larger exports still download completely from disk with `BYPASS`. Adjust
+`EXPORT_CACHE_MAX_BYTES` and `EXPORT_CACHE_SLOTS` to change this budget. Existing
+entries expire naturally when reducing these settings.
 
 ### Faster CPE partial searches (SQLite)
 

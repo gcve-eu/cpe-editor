@@ -5,6 +5,7 @@ from functools import wraps
 from hashlib import sha256
 from hmac import compare_digest
 import json
+import re
 import secrets
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -22,6 +23,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     send_from_directory,
     session,
     url_for,
@@ -32,6 +34,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import contains_eager, raiseload, selectinload
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
+from .exports import build_export_artifact, cache_export, get_cached_export
 from .graphs import GRAPH_NODE_LIMIT, build_entity_graph
 from .search import apply_cpe_text_search
 from .models import (
@@ -3121,6 +3124,12 @@ def _export_filters(entity):
                 abort(400, description=f"{name} must be a valid UUID.")
         else:
             value = value.lower()
+        if name == "q":
+            # LIKE adds '%' around q already. Collapse redundant wildcards so
+            # equivalent full-catalog searches share the unfiltered snapshot.
+            value = re.sub(r"%+", "%", value).strip("%")
+            if not value:
+                continue
         if name == "part" and value not in {"a", "o", "h"}:
             abort(400, description="part must be a, o, or h.")
         filters[name] = value
@@ -3154,7 +3163,7 @@ def _export_entity_load_options(model):
     return options + [raiseload("*")]
 
 
-def _build_export_payload(entity, filters):
+def _iter_export_items(entity, filters):
     model = {"vendors": Vendor, "products": Product, "cpes": CPEEntry}[entity]
     query = model.query
     q = filters.get("q")
@@ -3179,7 +3188,8 @@ def _build_export_payload(entity, filters):
             selectinload(CPEEntry.purl_mappings),
             raiseload("*"),
         ).order_by(CPEEntry.cpe_uri.asc(), CPEEntry.id.asc())
-        items = [_serialize_cpe(cpe) for cpe in query.yield_per(500)]
+        for cpe in query.yield_per(500):
+            yield _serialize_cpe(cpe)
     else:
         if q:
             like = f"%{q}%"
@@ -3201,22 +3211,11 @@ def _build_export_payload(entity, filters):
         query = query.options(*_export_entity_load_options(model)).add_columns(child_count)
         query = query.order_by(model.name.asc(), model.id.asc())
         if model is Vendor:
-            items = [
-                _serialize_vendor(record, product_count=count)
-                for record, count in query.yield_per(500)
-            ]
+            for record, count in query.yield_per(500):
+                yield _serialize_vendor(record, product_count=count)
         else:
-            items = [
-                _serialize_product(record, cpe_count=count)
-                for record, count in query.yield_per(500)
-            ]
-    return {
-        "entity": entity,
-        "filters": filters,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "total": len(items),
-        "items": items,
-    }
+            for record, count in query.yield_per(500):
+                yield _serialize_product(record, cpe_count=count)
 
 
 @bp.route("/api/vendors/export", defaults={"entity": "vendors"})
@@ -3225,17 +3224,24 @@ def _build_export_payload(entity, filters):
 def api_bulk_export(entity):
     """Download all matching public records, independent of list pagination."""
     filters = _export_filters(entity)
-    digest = sha256(json.dumps(filters, sort_keys=True).encode()).hexdigest()
-    cache_key = f"cpe-editor:export:v1:{entity}:{digest}"
-    ttl = current_app.config["EXPORT_CACHE_TTL_SECONDS"]
-    payload = cache_get_json(cache_key, ttl_seconds=ttl)
+    fingerprint = sha256(
+        json.dumps([entity, filters], sort_keys=True).encode()
+    ).hexdigest()
+    artifact = get_cached_export(fingerprint)
     cache_status = "HIT"
-    if payload is None:
-        payload = _build_export_payload(entity, filters)
-        stored = cache_set_json(cache_key, payload, ttl_seconds=ttl)
+    if artifact is None:
+        artifact = build_export_artifact(entity, filters, _iter_export_items(entity, filters))
+        stored = cache_export(fingerprint, artifact)
         cache_status = "MISS" if stored else "BYPASS"
-    response = jsonify(payload)
-    response.headers["Content-Disposition"] = f'attachment; filename="{entity}-export.json"'
+    try:
+        response = send_file(
+            artifact, mimetype="application/json", as_attachment=True,
+            download_name=f"{entity}-export.json", conditional=False, etag=False,
+        )
+    except BaseException:
+        artifact.close()
+        raise
+    response.call_on_close(artifact.close)
     response.headers["X-Export-Cache"] = cache_status
     response.headers["Cache-Control"] = "no-cache"
     return response

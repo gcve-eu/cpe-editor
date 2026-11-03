@@ -3,8 +3,11 @@ from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import event
+from werkzeug.http import parse_options_header
 
 from app import cache
+from app import exports
+from app import views
 from app.models import (
     CPEEntry, CPEPurlMapping, EntityMetadata, EntityNote, EntityRelationship,
     Product, ProductAlias, ProductAliasMember, Vendor, db,
@@ -43,7 +46,9 @@ def test_export_returns_all_public_records_and_matches_detail(client, entity, to
     response = client.get(f"/api/{entity}/export?page=99&per_page=1")
     assert response.status_code == 200
     assert response.mimetype == "application/json"
-    assert response.headers["Content-Disposition"] == f'attachment; filename="{entity}-export.json"'
+    disposition, options = parse_options_header(response.headers["Content-Disposition"])
+    assert disposition == "attachment"
+    assert options["filename"] == f"{entity}-export.json"
     payload = response.get_json()
     assert payload["entity"] == entity
     assert payload["total"] == len(payload["items"]) == total
@@ -228,3 +233,154 @@ def test_ui_download_links_preserve_filters_and_scope(client):
         assert f'href="{link}"' in unescape(response.get_data(as_text=True))
         db.session.remove()
         assert client.get(link).status_code == 200
+
+
+@pytest.mark.parametrize("entity", ["vendors", "products", "cpes"])
+def test_equivalent_wildcard_exports_reuse_one_snapshot(client, export_cache, entity):
+    first = client.get(f"/api/{entity}/export")
+    assert first.headers["X-Export-Cache"] == "MISS"
+    for q in ("%", "%%", "%%%", "%" * 1000):
+        repeated = client.get(f"/api/{entity}/export", query_string={"q": q})
+        assert repeated.headers["X-Export-Cache"] == "HIT"
+        assert repeated.data == first.data
+    assert len(export_cache.values) == 1
+
+
+@pytest.mark.parametrize("entity", ["vendors", "products", "cpes"])
+def test_wildcard_normalization_preserves_results(client, entity):
+    for q in ("%%micro%%", "mi%%%cro", "%%_%%", "a%b", "%a__%"):
+        exported = client.get(f"/api/{entity}/export", query_string={"q": q}).get_json()
+        listed = client.get(f"/api/{entity}", query_string={"q": q}).get_json()
+        assert {item["id"] for item in exported["items"]} == {
+            item["id"] for item in listed["items"]
+        }
+
+
+def test_cache_slots_bound_storage_and_collisions_never_return_wrong_data(app, client, export_cache):
+    app.config.update(EXPORT_CACHE_SLOTS=2, EXPORT_CACHE_MAX_BYTES=4096)
+    for index in range(20):
+        response = client.get("/api/vendors/export", query_string={"q": f"absent-{index}"})
+        assert response.headers["X-Export-Cache"] == "MISS"
+        assert response.get_json()["filters"] == {"q": f"absent-{index}"}
+        assert len(export_cache.values) <= 2
+        # Fingerprint + newline adds 65 bytes per slot beyond the artifact limit.
+        assert sum(len(value[0]) for value in export_cache.values.values()) <= 2 * (4096 + 65)
+
+
+def test_cache_collision_replaces_snapshot_and_keeps_its_own_ttl(app, client, export_cache):
+    app.config["EXPORT_CACHE_SLOTS"] = 1
+    first = client.get("/api/vendors/export?q=micro").get_json()
+    export_cache.now = 100
+    other = client.get("/api/vendors/export?q=apache")
+    assert other.headers["X-Export-Cache"] == "MISS"
+    assert other.get_json()["items"][0]["name"] == "apache"
+    assert client.get("/api/vendors/export?q=apache").headers["X-Export-Cache"] == "HIT"
+    replaced = client.get("/api/vendors/export?q=micro")
+    assert replaced.headers["X-Export-Cache"] == "MISS"
+    assert replaced.get_json()["items"] == first["items"]
+
+
+def test_large_exports_use_disk_and_never_read_full_artifact_into_cache(app, client, monkeypatch, export_cache):
+    import os
+
+    app.config["EXPORT_CACHE_MAX_BYTES"] = 4096
+    artifacts = []
+    peak_read = 0
+    read_sizes = []
+    source = "large record " + "x" * 4096
+
+    def items(*args):
+        for index in range(500):
+            yield {"id": index, "notes": source}
+
+    class CheckedArtifact:
+        def __init__(self, file):
+            self.file = file
+
+        def __getattr__(self, name):
+            return getattr(self.file, name)
+
+        def read(self, size=-1):
+            nonlocal peak_read
+            read_sizes.append(size)
+            assert 0 < size <= 8192, "Downloads must use bounded file reads"
+            peak_read = max(peak_read, size)
+            return self.file.read(size)
+
+    def temporary_file(*args, **kwargs):
+        import tempfile
+        artifact = CheckedArtifact(tempfile.TemporaryFile(*args, **kwargs))
+        artifacts.append(artifact)
+        return artifact
+
+    monkeypatch.setattr(views, "_iter_export_items", items)
+    monkeypatch.setattr(exports, "TemporaryFile", temporary_file)
+    response = client.get("/api/cpes/export", buffered=False)
+    assert response.headers["X-Export-Cache"] == "BYPASS"
+    assert response.is_streamed
+    assert os.fstat(artifacts[0].fileno()).st_size > 2_000_000
+    size = sum(len(chunk) for chunk in response.response)
+    assert size > 2_000_000
+    assert peak_read == 8192
+    assert all(0 < size <= 8192 for size in read_sizes)
+    assert not export_cache.values
+    response.close()
+    assert artifacts[0].closed
+
+
+def test_export_artifact_does_not_retain_serialized_rows():
+    import gc
+    import weakref
+
+    live = weakref.WeakSet()
+    peak_live = 0
+
+    class Record(dict):
+        __hash__ = object.__hash__
+
+    def items():
+        nonlocal peak_live
+        for index in range(2000):
+            row = Record(id=index, notes="x" * 1000)
+            live.add(row)
+            gc.collect(0)
+            peak_live = max(peak_live, len(live))
+            yield row
+
+    artifact = exports.build_export_artifact("cpes", {}, items())
+    try:
+        assert artifact.seek(0, 2) > 2_000_000
+        assert peak_live <= 2
+    finally:
+        artifact.close()
+
+
+def test_export_artifact_closes_on_generation_failure(monkeypatch):
+    import tempfile
+
+    artifact = tempfile.TemporaryFile(mode="w+b")
+    monkeypatch.setattr(exports, "TemporaryFile", lambda **kw: artifact)
+
+    def broken_items():
+        yield {"id": 1}
+        raise RuntimeError("query failed")
+
+    with pytest.raises(RuntimeError, match="query failed"):
+        exports.build_export_artifact("cpes", {}, broken_items())
+    assert artifact.closed
+
+
+def test_export_artifact_closes_when_download_is_cancelled(app, client, monkeypatch):
+    artifacts = []
+    build = views.build_export_artifact
+
+    def capture(*args):
+        artifact = build(*args)
+        artifacts.append(artifact)
+        return artifact
+
+    app.config["EXPORT_CACHE_TTL_SECONDS"] = 0
+    monkeypatch.setattr(views, "build_export_artifact", capture)
+    response = client.get("/api/cpes/export", buffered=False)
+    response.close()
+    assert artifacts[0].closed

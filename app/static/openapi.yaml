@@ -27,10 +27,14 @@ paths:
         Supports the vendor list q search on name and title.
         Returns every matching public record in deterministic order; page, per_page,
         and sort are ignored. No filters exports the whole collection. Valid scopes
-        without matches return an empty export. Snapshots are cached in Valkey for
-        3600 seconds by default, independently of statistics caching. Cache hits
-        avoid database queries and do not extend expiry. If Valkey is unavailable,
-        the export is generated directly.
+        without matches return an empty export. Records are serialized incrementally
+        to temporary files and downloaded in bounded chunks. Artifacts up to 4 MiB
+        use a bounded 64-slot Valkey cache with a 3600-second TTL by default,
+        independently of statistics caching. Slot collisions evict older snapshots.
+        Cache hits avoid database queries and do not extend expiry. Larger exports
+        or unavailable/disabled caches return a complete uncached download.
+        Redundant percent wildcards in q are normalized; q=%, q=%%, and no q share
+        the same snapshot. Cache size, slot count, and TTL are configurable.
       parameters:
         - $ref: '#/components/parameters/Export_q'
       responses:
@@ -46,10 +50,14 @@ paths:
         Supports the product list q search on name and title, and exact vendor UUID scoping.
         Returns every matching public record in deterministic order; page, per_page,
         and sort are ignored. No filters exports the whole collection. Valid scopes
-        without matches return an empty export. Snapshots are cached in Valkey for
-        3600 seconds by default, independently of statistics caching. Cache hits
-        avoid database queries and do not extend expiry. If Valkey is unavailable,
-        the export is generated directly.
+        without matches return an empty export. Records are serialized incrementally
+        to temporary files and downloaded in bounded chunks. Artifacts up to 4 MiB
+        use a bounded 64-slot Valkey cache with a 3600-second TTL by default,
+        independently of statistics caching. Slot collisions evict older snapshots.
+        Cache hits avoid database queries and do not extend expiry. Larger exports
+        or unavailable/disabled caches return a complete uncached download.
+        Redundant percent wildcards in q are normalized; q=%, q=%%, and no q share
+        the same snapshot. Cache size, slot count, and TTL are configurable.
       parameters:
         - $ref: '#/components/parameters/Export_q'
         - $ref: '#/components/parameters/Export_vendor_uuid'
@@ -66,10 +74,14 @@ paths:
         Supports the CPE list search filters, plus exact vendor and product UUID scoping. Includes PURL mappings and vulnerability references.
         Returns every matching public record in deterministic order; page, per_page,
         and sort are ignored. No filters exports the whole collection. Valid scopes
-        without matches return an empty export. Snapshots are cached in Valkey for
-        3600 seconds by default, independently of statistics caching. Cache hits
-        avoid database queries and do not extend expiry. If Valkey is unavailable,
-        the export is generated directly.
+        without matches return an empty export. Records are serialized incrementally
+        to temporary files and downloaded in bounded chunks. Artifacts up to 4 MiB
+        use a bounded 64-slot Valkey cache with a 3600-second TTL by default,
+        independently of statistics caching. Slot collisions evict older snapshots.
+        Cache hits avoid database queries and do not extend expiry. Larger exports
+        or unavailable/disabled caches return a complete uncached download.
+        Redundant percent wildcards in q are normalized; q=%, q=%%, and no q share
+        the same snapshot. Cache size, slot count, and TTL are configurable.
       parameters:
         - $ref: '#/components/parameters/Export_q'
         - $ref: '#/components/parameters/Export_vendor_q'
