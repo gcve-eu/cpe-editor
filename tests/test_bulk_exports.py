@@ -10,7 +10,7 @@ from app import exports
 from app import views
 from app.models import (
     CPEEntry, CPEPurlMapping, EntityMetadata, EntityNote, EntityRelationship,
-    Product, ProductAlias, ProductAliasMember, Vendor, db,
+    Product, ProductAlias, ProductAliasMember, Proposal, Vendor, db,
 )
 
 
@@ -146,6 +146,106 @@ def test_invalid_export_filters_return_400(client, query):
     assert client.get(f"/api/cpes/export?{query}").status_code == 400
 
 
+@pytest.mark.parametrize("entity", ["products", "cpes"])
+@pytest.mark.parametrize("relationship_type", [
+    "synonym-of", "canonical-of", "equivalent-to", "renamed-to", "vendor-merge-into",
+    "superseded-by",
+])
+def test_vendor_combined_exports_follow_view_membership(client, entity, relationship_type):
+    root = Vendor.query.filter_by(name="microsoft").one()
+    unrelated = Vendor.query.filter_by(name="apache").one()
+    unrelated_product = unrelated.products[0]
+    related = [Vendor(name=f"combined_vendor_{index}") for index in range(2)]
+    db.session.add_all(related)
+    db.session.flush()
+    # Include both same-token and differently named products, plus an empty one.
+    products = [
+        Product(vendor=related[0], name="windows_11"),
+        Product(vendor=related[1], name="different_product"),
+        Product(vendor=related[1], name="empty_product"),
+    ]
+    db.session.add_all(products)
+    db.session.flush()
+    cpes = [
+        CPEEntry(
+            vendor=product.vendor, product=product, part="a", deprecated=True,
+            cpe_uri=f"cpe:2.3:a:{product.vendor.name}:{product.name}:1:*:*:*:*:*:*:*",
+        )
+        for product in products[:2]
+    ]
+    # A cycle exercises deduplication; traversal must work in both directions.
+    db.session.add_all(cpes + [
+        EntityRelationship(source_vendor=root, target_vendor=related[0], relationship_type=relationship_type),
+        EntityRelationship(source_vendor=related[1], target_vendor=related[0], relationship_type=relationship_type),
+        EntityRelationship(source_vendor=related[0], target_vendor=root, relationship_type=relationship_type),
+        EntityRelationship(source_vendor=root, target_vendor=unrelated, relationship_type="related-to"),
+        EntityRelationship(source_vendor=unrelated, target_vendor=related[0], relationship_type="derived-from"),
+        EntityRelationship(source_product=products[0], target_product=unrelated_product, relationship_type="equivalent-to"),
+        Proposal(proposal_type="new_record_relationship", vendor=root,
+                 target_vendor_id=unrelated.id, proposed_relationship_type="synonym-of", status="pending"),
+    ])
+    db.session.commit()
+    model = Product if entity == "products" else CPEEntry
+    expected = {record.id for record in model.query.filter(
+        model.vendor_id.in_([root.id, *[vendor.id for vendor in related]])
+    )}
+    root_uuid = root.uuid
+    direct_ids = {record.id for record in model.query.filter_by(vendor_id=root.id)}
+    for vendor_uuid in [root_uuid, related[1].uuid]:
+        # Match production request teardown; this fixture keeps one app context.
+        db.session.remove()
+        page = unescape(client.get(f"/vendors/{vendor_uuid}").get_data(as_text=True))
+        link = f"/api/{entity}/export?vendor_uuid={vendor_uuid}&combined=true"
+        assert f'href="{link}"' in page
+        db.session.remove()
+        response = client.get(link + "&page=99&per_page=1")
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["filters"] == {"vendor_uuid": vendor_uuid, "combined": True}
+        assert payload["total"] == len(payload["items"]) == len(expected)
+        assert {item["id"] for item in payload["items"]} == expected
+
+    # Other filters still intersect the combined scope.
+    narrowed = client.get(link + "&q=different_product").get_json()
+    assert narrowed["total"] == 1
+    direct = client.get(f"/api/{entity}/export?vendor_uuid={root_uuid}").get_json()
+    assert {item["id"] for item in direct["items"]} == direct_ids
+
+
+@pytest.mark.parametrize("entity", ["products", "cpes"])
+def test_combined_export_scope_validation_and_empty_results(client, entity):
+    vendor = Vendor.query.first()
+    for query in ("combined=true", "combined=yes", "combined=true&vendor_uuid=bad"):
+        assert client.get(f"/api/{entity}/export?{query}").status_code == 400
+    for uuid in (vendor.uuid, "00000000-0000-0000-0000-000000000000"):
+        response = client.get(f"/api/{entity}/export?vendor_uuid={uuid}&combined=true")
+        direct = client.get(f"/api/{entity}/export?vendor_uuid={uuid}")
+        assert response.status_code == 200
+        assert response.get_json()["items"] == direct.get_json()["items"]
+    assert client.get(f"/api/{entity}/export?combined=false").get_json()["filters"] == {}
+
+
+@pytest.mark.parametrize("entity", ["products", "cpes"])
+def test_combined_export_cache_is_distinct_and_hits_without_queries(client, entity):
+    vendor = Vendor.query.first()
+    path = f"/api/{entity}/export?vendor_uuid={vendor.uuid}"
+    assert client.get(path).headers["X-Export-Cache"] == "MISS"
+    assert client.get(path + "&combined=false").headers["X-Export-Cache"] == "HIT"
+    first = client.get(path + "&combined=true")
+    assert first.headers["X-Export-Cache"] == "MISS"
+
+    def unexpected_query(*args):
+        raise AssertionError("Warm combined exports must not query the database")
+
+    event.listen(db.engine, "before_cursor_execute", unexpected_query)
+    try:
+        repeated = client.get(path + "&combined=%20TRUE%20&per_page=1")
+        assert repeated.headers["X-Export-Cache"] == "HIT"
+        assert repeated.data == first.data
+    finally:
+        event.remove(db.engine, "before_cursor_execute", unexpected_query)
+
+
 @pytest.mark.parametrize("entity", ["vendors", "products", "cpes"])
 def test_hourly_cache_reuses_snapshot_without_queries_and_expires(client, export_cache, entity):
     first = client.get(f"/api/{entity}/export?q=%20MICRO%20")
@@ -179,7 +279,7 @@ def test_cache_separates_entities_filters_and_scopes(client):
     ]
     for path in paths:
         assert client.get(path).headers["X-Export-Cache"] == "MISS"
-    for path in paths:
+        # Bounded cache slots may evict earlier scopes on a hash collision.
         assert client.get(path).headers["X-Export-Cache"] == "HIT"
 
 
@@ -220,8 +320,8 @@ def test_ui_download_links_preserve_filters_and_scope(client):
     vendor = Vendor.query.filter_by(name="microsoft").one()
     product = Product.query.filter_by(name="windows_11").one()
     pages_and_links.extend([
-        (f"/vendors/{vendor.uuid}", f"/api/products/export?vendor_uuid={vendor.uuid}"),
-        (f"/vendors/{vendor.uuid}", f"/api/cpes/export?vendor_uuid={vendor.uuid}"),
+        (f"/vendors/{vendor.uuid}", f"/api/products/export?vendor_uuid={vendor.uuid}&combined=true"),
+        (f"/vendors/{vendor.uuid}", f"/api/cpes/export?vendor_uuid={vendor.uuid}&combined=true"),
         (f"/products/{product.uuid}", f"/api/cpes/export?product_uuid={product.uuid}"),
     ])
     for page, link in pages_and_links:

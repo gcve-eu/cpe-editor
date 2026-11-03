@@ -48,6 +48,9 @@ paths:
       summary: Export all matching products as JSON
       description: |
         Supports the product list q search on name and title, and exact vendor UUID scoping.
+        With combined=true and vendor_uuid, includes all products in the vendor's
+        combined view across approved vendor relationship chains in either direction,
+        including vendor superseded-by relationships.
         Returns every matching public record in deterministic order; page, per_page,
         and sort are ignored. No filters exports the whole collection. Valid scopes
         without matches return an empty export. Records are serialized incrementally
@@ -61,17 +64,20 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Export_q'
         - $ref: '#/components/parameters/Export_vendor_uuid'
+        - $ref: '#/components/parameters/Export_combined'
       responses:
         '200':
           $ref: '#/components/responses/BulkExportResponse'
         '400':
-          description: Invalid UUID or CPE part filter.
+          description: Invalid UUID, invalid combined value, or combined=true without vendor_uuid.
   /api/cpes/export:
     get:
       tags: [CPE Entries]
       summary: Export all matching CPEs as JSON
       description: |
         Supports the CPE list search filters, plus exact vendor and product UUID scoping. Includes PURL mappings and vulnerability references.
+        With combined=true and vendor_uuid, includes CPEs belonging to all products
+        in the vendor's combined view. Other filters intersect this scope; product_uuid remains exact.
         Returns every matching public record in deterministic order; page, per_page,
         and sort are ignored. No filters exports the whole collection. Valid scopes
         without matches return an empty export. Records are serialized incrementally
@@ -90,11 +96,12 @@ paths:
         - $ref: '#/components/parameters/Export_part'
         - $ref: '#/components/parameters/Export_vendor_uuid'
         - $ref: '#/components/parameters/Export_product_uuid'
+        - $ref: '#/components/parameters/Export_combined'
       responses:
         '200':
           $ref: '#/components/responses/BulkExportResponse'
         '400':
-          description: Invalid UUID or CPE part filter.
+          description: Invalid UUID, CPE part or combined value, or combined=true without vendor_uuid.
   /api/statistics:
     get:
       tags: [Statistics]
@@ -669,7 +676,7 @@ components:
     Export_vendor_uuid:
       in: query
       name: vendor_uuid
-      description: Exact vendor UUID.
+      description: Exact vendor UUID; combined=true expands to the vendor's combined products view.
       schema:
         type: string
         format: uuid
@@ -680,6 +687,13 @@ components:
       schema:
         type: string
         format: uuid
+    Export_combined:
+      in: query
+      name: combined
+      description: Include products from the vendor's combined view, or their CPEs. Requires vendor_uuid when true. Other filters still apply.
+      schema:
+        type: boolean
+        default: false
   responses:
     BulkExportResponse:
       description: JSON attachment containing all matching public records.
@@ -708,7 +722,9 @@ components:
         filters:
           type: object
           additionalProperties:
-            type: string
+            oneOf:
+              - type: string
+              - type: boolean
           description: Normalized, nonempty search filters used to generate the snapshot.
         generated_at:
           type: string
