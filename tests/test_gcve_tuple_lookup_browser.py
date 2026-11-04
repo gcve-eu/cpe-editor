@@ -24,7 +24,9 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
     identifier = product.uuid if view == "products" else product.vendor.uuid
     requests = []
     fail = [False]
+    large_page = [False]
     long_summary = '<img src=x onerror="window.lookupXss=true"> ' + "A long vulnerability description, with quoted \"text\". " * 30 + "unique-summary-ending"
+    oversized_summary = "A" * 2_097_152 + " oversized-summary-ending"
     formula_values = [
         "=1+1", "+SUM(1,1)", "-1+1", "@SUM(1,1)",
         " \t=1+1", "\r\n+SUM(1,1)", "\x1f@SUM(1,1)", "\ufeff-1+1",
@@ -38,7 +40,7 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
         page_number = int(parse_qs(urlsplit(request.full_url).query)["page"][0])
         data = {
             "results": {"cvelistv5": [
-                [f"cve-2026-{page_number:04d}", {"summary": long_summary, "modified": "2026-07-10T14:40:55.735Z"}],
+                [f"cve-2026-{page_number:04d}", {"summary": oversized_summary if large_page[0] else long_summary, "modified": "2026-07-10T14:40:55.735Z"}],
                 ["CVE-2026-8888", {"summary": "An older advisory.\nWith a second paragraph.", "modified": "2025-08-01T10:30:00"}],
                 ["CVE-2026-9999", {"summary": "An advisory without a valid date.", "modified": "unknown"}],
                 ["CVE-2026-9998", {"summary": "'=1+1"}],
@@ -200,6 +202,30 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
                 panel.locator(".gcve-tuple-select").select_option(label="microsoft / office")
                 assert panel.locator("table").count() == 0
                 assert not pagination.is_visible()
+
+            # Vitrine rejects oversized CSV by event, without throwing. Keep
+            # every readable result and link, then allow a normal-page retry.
+            large_page[0] = True
+            page.evaluate("""() => {
+                document.querySelector('.gcve-tuple-lookup').addEventListener('vt-error', event => {
+                    window.tableError = event.detail.cause.code;
+                }, {once: true});
+            }""")
+            panel.get_by_role("button", name="Find vulnerabilities on GCVE").click()
+            page.wait_for_function("document.querySelector('.gcve-tuple-results').textContent.includes('Table controls could not load')")
+            assert page.evaluate("window.tableError") == "tooLarge"
+            assert panel.locator("gcve-results-table").count() == 0
+            assert panel.locator("table").count() == 1
+            assert panel.locator("tbody tr").count() == expected_rows
+            summary = panel.locator(".gcve-result-summary").first
+            assert summary.evaluate("cell => cell.textContent.length") == len(oversized_summary)
+            assert summary.evaluate("cell => cell.textContent.endsWith('oversized-summary-ending')")
+            assert panel.get_by_role("link", name="CVE-2026-0001", exact=True).get_attribute("href").endswith("cve-2026-0001")
+            large_page[0] = False
+            panel.get_by_role("button", name="Find vulnerabilities on GCVE").click()
+            panel.locator("gcve-results-table table").wait_for()
+            assert panel.locator("table").count() == 1
+            assert panel.get_by_text("Table controls could not load", exact=False).count() == 0
 
             # An unavailable module must leave exactly one readable fallback.
             page.route("**/vt-csv.js", lambda route: route.abort())
