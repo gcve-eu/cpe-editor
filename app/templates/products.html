@@ -56,16 +56,20 @@
       </div>
     </div>
   {% endif %}
-  <ul class="vendor-list">
+  <table aria-label="Product directory">
+    <thead><tr><th>Product</th><th>Vendor</th><th>Token</th>{% if product_cpe_counts is not none %}<th>CPE entries</th>{% endif %}<th>Export</th></tr></thead>
+    <tbody>
     {% for product in products %}
-      <li class="vendor-list-item">
-        <div class="vendor-list-info">
+      <tr>
+        <td>
           <a class="vendor-list-link" href="{{ url_for('main.product_detail', product_uuid=product.uuid) }}">{{ product.title or product.name }}</a>
-          <span class="muted"><a href="{{ url_for('main.vendor_detail', vendor_uuid=product.vendor.uuid) }}">{{ product.vendor.title or product.vendor.name }}</a> / <code>{{ product.name }}</code></span>
+        </td>
+        <td><a href="{{ url_for('main.vendor_detail', vendor_uuid=product.vendor.uuid) }}">{{ product.vendor.title or product.vendor.name }}</a></td>
+        <td><code>{{ product.name }}</code></td>
           {% if sort_by == 'cpes' and product_cpe_counts is not none %}
-            <span class="vendor-product-count pill">{{ product_cpe_counts.get(product.id, 0) }} CPE entr{% if product_cpe_counts.get(product.id, 0) != 1 %}ies{% else %}y{% endif %}</span>
+            <td>{{ product_cpe_counts.get(product.id, 0) }}</td>
           {% endif %}
-        </div>
+        <td>
         <button
           type="button"
           class="button secondary icon-button js-export-json"
@@ -76,11 +80,13 @@
         >
           <i class="fa-solid fa-file-export" aria-hidden="true"></i>
         </button>
-      </li>
+        </td>
+      </tr>
     {% else %}
-      <li class="vendor-empty-state">No products found{% if product_q %} for <strong>{{ product_q }}</strong>{% endif %}.</li>
+      <tr><td colspan="{{ 5 if product_cpe_counts is not none else 4 }}">No products found{% if product_q %} for <strong>{{ product_q }}</strong>{% endif %}.</td></tr>
     {% endfor %}
-  </ul>
+    </tbody>
+  </table>
   {% if products and (product_has_prev or product_has_next) %}
     <div class="muted vendor-results-meta">
       <p>

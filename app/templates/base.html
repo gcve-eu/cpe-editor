@@ -134,10 +134,11 @@
       if (link.pathname === location.pathname) link.setAttribute("aria-current", "page");
     });
 
-    // Collapsible lists
+    // Tables use Vitrine pagination; collapsible controls remain for lists.
     const collapseLists = document.querySelectorAll(".js-collapsible-list");
 
     collapseLists.forEach((listEl, index) => {
+      if (listEl.closest("table")) return;
       const itemSelector = listEl.dataset.itemSelector || ":scope > li";
       const items = listEl.querySelectorAll(itemSelector);
       const limit = Number(listEl.dataset.collapseLimit || 5);
@@ -221,5 +222,6 @@
     });
   });
 </script>
+<script defer src="{{ url_for('static', filename='js/table-tools.js') }}"></script>
 </body>
 </html>

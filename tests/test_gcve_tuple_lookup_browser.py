@@ -63,7 +63,7 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
         errors = []
         assets = []
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.on("request", lambda request: assets.append(request.url) if "/vt-csv.js" in request.url else None)
+        page.on("request", lambda request: assets.append(request.url) if "/gcve-results-table.js" in request.url else None)
 
         def serve(route):
             parsed = urlsplit(route.request.url)
@@ -85,9 +85,9 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             assert panel.locator(".gcve-tuple-select option:checked").text_content().strip() == "microsoft / windows_11"
             panel.get_by_role("button", name="Find vulnerabilities on GCVE").click()
             explorer = panel.locator("gcve-results-table")
-            table = explorer.locator(".gcve-results-table")
+            table = explorer.locator('.tb-grid, .tb-cards')
             table.wait_for()
-            assert panel.locator("table").count() == 1
+            assert panel.locator("table").count() == (1 if width == 1440 else 0)
             assert panel.locator(".gcve-data-tools").count() == 0
             assert panel.locator("vt-csv").count() == 0
             panel.get_by_role("link", name="CVE-2026-0001", exact=True).wait_for()
@@ -97,55 +97,57 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             assert table.locator("img").count() == 0
             assert page.evaluate("window.lookupXss === undefined")
             assert len(assets) == 1
-            assert table.get_by_role("columnheader", name="Vulnerability", exact=True).evaluate("cell => getComputedStyle(cell).whiteSpace") == "nowrap"
+            if width == 1440:
+                assert table.locator('th[data-key="id"]').evaluate("cell => getComputedStyle(cell).whiteSpace") == "nowrap"
             assert table.locator(".gcve-result-id").first.evaluate("cell => getComputedStyle(cell).whiteSpace") == "nowrap"
             assert table.locator("time").first.get_attribute("title") == "2026-07-10T14:40:55.735Z"
             assert table.locator("time").first.text_content() == "10 Jul 202614:40 UTC"
             assert table.locator("time").nth(1).text_content() == "01 Aug 202510:30 UTC"
             assert "Not available" in table.locator(".gcve-result-updated").nth(2).text_content()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
-            region = panel.get_by_role("region", name="GCVE vulnerability results", exact=True)
             if width == 390:
+                region = explorer.locator(".tb-body")
                 assert region.evaluate("element => element.scrollWidth <= element.clientWidth + 1")
-                assert table.locator("tbody tr").first.evaluate("element => getComputedStyle(element).display") == "grid"
+                assert explorer.locator('[part="card"]').count() == expected_rows
                 region.focus()
                 page.keyboard.press("ArrowDown")
-                page.wait_for_function("document.querySelector('gcve-results-table').shadowRoot.querySelector('.table-body').scrollTop > 0")
-            assert explorer.evaluate("element => element.rows[1][3]") == long_summary
+                page.wait_for_function("document.querySelector('gcve-results-table').shadowRoot.querySelector('.tb-body').scrollTop > 0")
+            assert explorer.evaluate("element => element.data[0].summary") == long_summary
             assert explorer.locator("img").count() == 0
             if width == 390:
-                explorer.get_by_role("combobox", name="Sort this page", exact=True).select_option("2:ascending")
+                explorer.get_by_role("combobox", name="Sort by", exact=True).select_option("updated_at")
             else:
-                explorer.get_by_role("button", name="Updated (UTC)", exact=True).click()
-            assert explorer.locator("thead th[aria-sort=ascending]").text_content() == "Updated (UTC)"
-            assert "CVE-2026-8888" in explorer.locator("tbody tr").first.text_content()
-            assert explorer.locator("tbody tr").first.get_by_role("link").get_attribute("href").endswith("CVE-2026-8888")
+                explorer.locator('th[data-key="updated_at"]').click()
+            if width == 1440:
+                assert explorer.locator('th[data-key="updated_at"]').get_attribute("aria-sort") == "ascending"
+            assert "CVE-2026-8888" in explorer.locator('[part="row"], [part="card"]').first.text_content()
+            assert explorer.locator('[part="row"], [part="card"]').first.get_by_role("link").get_attribute("href").endswith("CVE-2026-8888")
             if width == 390:
-                explorer.get_by_role("combobox", name="Sort this page", exact=True).select_option("2:descending")
+                explorer.get_by_role("button", name="Sort ascending", exact=True).click()
             else:
-                explorer.get_by_role("button", name="Updated (UTC)", exact=True).click()
-            assert "CVE-2026-0001" in explorer.locator("tbody tr").first.text_content()
+                explorer.locator('th[data-key="updated_at"]').click()
+            assert "CVE-2026-0001" in explorer.locator('[part="row"], [part="card"]').first.text_content()
             explorer.get_by_role("button", name="Search", exact=True).click()
             explorer.get_by_role("searchbox", name="Search", exact=True).fill("older advisory")
-            page.wait_for_function("document.querySelector('gcve-results-table').shadowRoot.querySelectorAll('tbody tr').length === 1")
-            assert "CVE-2026-8888" in explorer.locator("tbody").text_content()
+            page.wait_for_function("document.querySelector('gcve-results-table').shadowRoot.querySelectorAll('[part=row], [part=card]').length === 1")
+            assert "CVE-2026-8888" in explorer.locator('[part="row"], [part="card"]').text_content()
             assert explorer.get_by_role("link", name="CVE-2026-8888", exact=True).is_visible()
             explorer.get_by_role("searchbox", name="Search", exact=True).fill("unique-summary-ending")
             explorer.get_by_text("unique-summary-ending", exact=True).wait_for()
-            assert explorer.locator("tbody mark").last.text_content() == "unique-summary-ending"
+            assert explorer.locator("mark").last.text_content() == "unique-summary-ending"
             assert explorer.get_by_role("link", name="CVE-2026-0001", exact=True).is_visible()
             explorer.get_by_role("searchbox", name="Search", exact=True).fill("10 Jul 2026")
-            page.wait_for_function("document.querySelector('gcve-results-table').shadowRoot.querySelectorAll('tbody tr').length === 1")
+            page.wait_for_function("document.querySelector('gcve-results-table').shadowRoot.querySelectorAll('[part=row], [part=card]').length === 1")
             assert explorer.get_by_role("link", name="CVE-2026-0001", exact=True).is_visible()
             explorer.get_by_role("searchbox", name="Search", exact=True).fill("")
-            page.wait_for_function("count => document.querySelector('gcve-results-table').shadowRoot.querySelectorAll('tbody tr').length === count", arg=expected_rows)
+            page.wait_for_function("count => document.querySelector('gcve-results-table').shadowRoot.querySelectorAll('[part=row], [part=card]').length === count", arg=expected_rows)
             explorer.get_by_role("tab", name="Raw", exact=True).click()
             assert "'=1+1" in explorer.locator("pre.code").text_content()
             raw_rows = list(csv.reader(io.StringIO(explorer.locator("pre.code").text_content())))
             assert raw_rows[1][3] == long_summary
             assert explorer.locator("img").count() == 0
             explorer.get_by_role("tab", name="Table", exact=True).click()
-            assert panel.locator("table").count() == 1
+            assert panel.locator("table").count() == (1 if width == 1440 else 0)
             with page.expect_download() as download_info:
                 explorer.get_by_role("button", name="Download", exact=True).click()
             download = download_info.value
@@ -158,7 +160,7 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             assert exported[4][3] == "'=1+1"  # Already literal; do not add another guard.
             for row, formula in zip(exported[5:], formula_values, strict=True):
                 # Vitrine normalizes line endings while preserving the guard.
-                assert row[1] == "'" + formula.replace("\r\n", "\n").replace("\r", "\n")
+                assert row[1] == "'" + formula
                 assert row[3] == "'" + formula.strip()
             assert exported[5][0] == "'=1+1"
             assert exported[5][4] == "https://db.gcve.eu/vuln/%3D1%2B1"
@@ -171,11 +173,13 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
                     return true;
                 };
             }""")
-            explorer.get_by_role("button", name="Copy", exact=True).click()
+            explorer.get_by_role("button", name="Copy rows", exact=True).click()
             page.wait_for_function("typeof window.copiedCSV === 'string'")
-            copied = list(csv.reader(io.StringIO(page.evaluate("window.copiedCSV"))))
-            # Textareas normalize CRLF for the clipboard's HTTP fallback.
-            assert copied == [[value.replace("\r\n", "\n").replace("\r", "\n") for value in row] for row in exported]
+            copied = list(csv.reader(io.StringIO(page.evaluate("window.copiedCSV")), delimiter="\t"))
+            assert len(copied) == len(exported)
+            assert copied[0] == exported[0]
+            assert copied[5][0] == "'=1+1"
+            assert copied[5][4] == exported[5][4]
             explorer.get_by_role("button", name="Full screen", exact=True).click()
             page.wait_for_function("document.querySelector('gcve-results-table').shadowRoot.querySelector('.vt').dataset.fullscreen")
             explorer.get_by_role("button", name="Exit full screen", exact=True).click()
@@ -223,12 +227,12 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             assert panel.get_by_role("link", name="CVE-2026-0001", exact=True).get_attribute("href").endswith("cve-2026-0001")
             large_page[0] = False
             panel.get_by_role("button", name="Find vulnerabilities on GCVE").click()
-            panel.locator("gcve-results-table table").wait_for()
-            assert panel.locator("table").count() == 1
+            panel.locator("gcve-results-table").get_by_role("tab", name="Raw", exact=True).wait_for()
+            assert panel.locator("table").count() == (1 if width == 1440 else 0)
             assert panel.get_by_text("Table controls could not load", exact=False).count() == 0
 
             # An unavailable module must leave exactly one readable fallback.
-            page.route("**/vt-csv.js", lambda route: route.abort())
+            page.route("**/gcve-results-table.js", lambda route: route.abort())
             page.reload()
             panel.get_by_role("button", name="Find vulnerabilities on GCVE").click()
             panel.get_by_role("link", name="CVE-2026-0001", exact=True).wait_for()

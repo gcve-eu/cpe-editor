@@ -1,10 +1,10 @@
-// Rebuild the standalone vt-csv bundle from the pinned upstream checkout.
-// Usage: node tools/build_vitrine_csv.mjs /path/to/vitrine
+// Rebuild the standalone vt-table bundle from the pinned upstream checkout.
+// Usage: node tools/build_vitrine_table.mjs /path/to/vitrine
 import {createRequire} from "node:module";
 import {readFile} from "node:fs/promises";
 import {resolve} from "node:path";
 
-if (!process.argv[2]) throw new Error("Usage: node tools/build_vitrine_csv.mjs /path/to/vitrine");
+if (!process.argv[2]) throw new Error("Usage: node tools/build_vitrine_table.mjs /path/to/vitrine");
 const source = resolve(process.argv[2]);
 const require = createRequire(resolve(source, "package.json"));
 const {build} = require("esbuild");
@@ -22,8 +22,8 @@ const rawCss = {
 };
 await build({
   absWorkingDir: source,
-  entryPoints: ["src/entries/vt-csv.js"],
-  outfile: resolve("app/static/vendor/vitrine/esm/vt-csv.js"),
+  entryPoints: ["src/entries/vt-table.js"],
+  outfile: resolve("app/static/vendor/vitrine/esm/vt-table.js"),
   bundle: true,
   format: "esm",
   minify: true,
@@ -33,7 +33,7 @@ await build({
   plugins: [rawCss],
   define: {__VITRINE_VERSION__: '"0.0.0"'},
   banner: {js: `/*! Vitrine | MIT | https://github.com/ecrou-exact/vitrine
- * Source: 7c379edba7ffb89abcae01b0806f20ed43dbc627. Standalone vt-csv bundle.
+ * Source: e7db1ebd587b27f41988a0da9785310eaa6f2f08. Standalone vt-table bundle.
  * Includes highlight.js (BSD-3-Clause), DOMPurify (Apache-2.0 OR MPL-2.0),
  * and Lucide icons (ISC). See LICENSE and THIRD_PARTY_NOTICES.md. */`},
   logLevel: "info"

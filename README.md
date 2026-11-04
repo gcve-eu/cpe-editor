@@ -16,6 +16,9 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
 - **Moderation dashboard** for reviewing and approving submitted changes.
 - **Approved change feed** with dedicated pages plus RSS/Atom endpoints.
 - **Read-only OpenAPI interface** with interactive Swagger docs.
+- **Vitrine table controls throughout the application**: multi-column sorting,
+  column filters, AND/OR conditions, grouping, selection exports, column controls,
+  mobile cards, Raw CSV and fullscreen.
 - **NVD feed ingestion** for both CPE and CPE Match archives.
 - **PURL → CPE mapping import (`import-purl2cpe`)** with optional replace mode and auto-creation of missing vendor/product/CPE records.
 - **GCVE enriched CVE dump import (`import-gcve-enriched-cves`)** for CVE→CPE references plus missing vendor/product/CPE records.
@@ -29,6 +32,27 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
 ### Public experience
 
 - Browse vendors, products, and CPE records.
+- Every application table, including directories, CPE search, record fields,
+  aliases, statistics, moderation and API clients, uses Vitrine's full table
+  controls. They also apply to dynamically loaded CPE vulnerability results.
+  Tables use the November 4 Vitrine `<vt-table>` component: Shift-click adds sort
+  columns; filters accept comparisons/ranges; condition chips combine with AND
+  or OR. Use column menus for grouping, pinning and aggregates, and **Columns**
+  to hide, show or reorder fields. Resize columns by dragging their edges.
+  Row selection adds CSV/JSON export actions. Density, page size, keyboard help,
+  expandable details and saved layouts are available; small screens use cards.
+  Links, action buttons and form selections remain active after sorting or
+  filtering; selected rows stay included when submitting a form while hidden.
+  Search/sort operate on loaded rows, with 25 rows per local table page.
+  Copy/download include all loaded rows, even rows hidden by a search or local
+  paging; selection exports include selected records. Clipboard output is TSV
+  for spreadsheets; **Raw** shows CSV. Existing server page links fetch more
+  records; **Export all matching … (JSON)** downloads every match across server
+  pages. CSV exports omit hidden
+  form fields and guard spreadsheet formula markers. Dates use readable UTC
+  date/time lines, with exact timestamps on hover and in CSV. Wide tables scroll
+  within their own region. Tables remain usable if the component cannot load or
+  rejects oversized content.
 - Drill into vendor/product detail pages and linked relationships.
 - Combined views follow approved `synonym-of`, `canonical-of`, `equivalent-to`,
   `renamed-to`, and `vendor-merge-into` relationships in either direction, including
@@ -66,11 +90,11 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   times on separate lines (with the original timestamp on hover), and scrolls
   within a bounded region with sticky headers. On phones, rows stack into cards
   so the identifier, date and summary can be read without sideways scrolling.
-  The same table includes Vitrine's typed sorting, search with highlighting,
-  raw CSV, copy/download and fullscreen. Full summaries and clickable
+  The same table includes Vitrine's multi-column sorting, filters, grouping,
+  selection/column controls, raw CSV, copy/download and fullscreen. Full summaries and clickable
   vulnerability identifiers stay available after sorting and filtering.
   Search also recognizes formatted dates and readable source labels.
-  On phones, a **Sort this page** selector controls the card order. Use the GCVE
+  On phones, a **Sort by** selector controls the card order. Use the GCVE
   Previous/Next controls to fetch more results. Copy/download keep all rows on
   the current page, including rows hidden by a local search. The table component
   loads after a lookup; a readable linked table remains if it cannot load.

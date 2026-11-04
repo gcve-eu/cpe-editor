@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from sqlalchemy import event
 
@@ -152,9 +154,9 @@ def test_products_page_sorts_by_cpe_count_including_zero(client, app):
     assert html.index(">windows_11</code>") < html.index(">http_server</code>")
     assert html.index(">http_server</code>") < html.index(">office</code>")
     assert html.index(">office</code>") < html.index(">aaa_empty</code>")
-    assert html.count("1 CPE entry</span>") == 2
-    assert "2 CPE entries</span>" in html
-    assert "0 CPE entries</span>" in html
+    assert "<th>CPE entries</th>" in html
+    for name, count in [("windows_11", 2), ("http_server", 1), ("office", 1), ("aaa_empty", 0)]:
+        assert re.search(rf"<code>{name}</code></td>\s*<td>{count}</td>", html)
 
 
 @pytest.mark.parametrize("page", ["0", "-1", "invalid"])
