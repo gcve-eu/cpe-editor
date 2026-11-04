@@ -75,6 +75,7 @@ p { margin: .5rem 0 .8rem; }
 summary { cursor: pointer; }
 .entity-graph summary { font-size: 1.05rem; font-weight: 650; }
 .entity-graph [hidden] { display: none !important; }
+.gcve-tuple-lookup [hidden] { display: none !important; }
 .graph-toolbar { margin: .75rem 0; }
 .graph-simplify { position: relative; }
 .graph-simplify > summary { padding: .5rem .8rem; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); font-size: .85rem; font-weight: 600; }

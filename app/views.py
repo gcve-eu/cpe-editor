@@ -35,6 +35,7 @@ from sqlalchemy.orm import contains_eager, raiseload, selectinload
 
 from .cache import cache_get_json, cache_set_json, dict_to_namespace
 from .exports import build_export_artifact, cache_export, get_cached_export
+from .gcve import fetch_tuple_matches
 from .graphs import GRAPH_NODE_LIMIT, build_entity_graph
 from .search import apply_cpe_text_search
 from .models import (
@@ -3050,6 +3051,27 @@ def api_gcve_cpe_search():
     result = _fetch_gcve_cpe_matches(cpe_value)
     status_code = 200 if result.get("ok") else 502
     return jsonify(result), status_code
+
+
+@bp.route("/api/gcve/search")
+def api_gcve_tuple_search():
+    tokens = {}
+    for name in ("vendor", "product"):
+        value = (request.args.get(name) or "").strip().lower()
+        if not value or len(value) > 255:
+            return jsonify(ok=False, error=f"{name} must contain 1 to 255 characters."), 400
+        tokens[name] = value
+    pagination = {}
+    for name, default, maximum in (("page", 1, None), ("per_page", 25, 100)):
+        try:
+            value = int(request.args.get(name, str(default)))
+        except ValueError:
+            value = 0
+        if value < 1 or (maximum is not None and value > maximum):
+            return jsonify(ok=False, error=f"Invalid {name}."), 400
+        pagination[name] = value
+    result = fetch_tuple_matches(**tokens, **pagination)
+    return jsonify(result), 200 if result.get("ok") else 502
 
 
 @bp.route("/api/statistics")

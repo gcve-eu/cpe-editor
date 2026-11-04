@@ -1,0 +1,26 @@
+<section class="card gcve-tuple-lookup" data-lookup-url="{{ url_for('main.api_gcve_tuple_search') }}">
+  <h2>GCVE vulnerability lookup</h2>
+  <p class="muted">Find vulnerabilities on db.gcve.eu for a specific vendor/product tuple, across versions. Choose a tuple from this record or its combined view.</p>
+  {% if combined_view_products %}
+    <form class="gcve-tuple-form">
+      <label for="gcve-tuple">Vendor / product</label>
+      <select id="gcve-tuple" class="gcve-tuple-select">
+        {% for lookup_product in combined_view_products %}
+          <option data-vendor="{{ lookup_product.vendor.name }}" data-product="{{ lookup_product.name }}"{% if product is defined and lookup_product.id == product.id %} selected{% endif %}>{{ lookup_product.vendor.name }} / {{ lookup_product.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="button"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Find vulnerabilities on GCVE</button>
+    </form>
+    <p class="gcve-tuple-status muted" role="status" aria-live="polite">Select a tuple and run a lookup.</p>
+    <div class="gcve-tuple-results"></div>
+    <div class="action-row gcve-tuple-pagination" hidden>
+      <button type="button" class="secondary gcve-tuple-prev">Previous</button>
+      <span class="gcve-tuple-page"></span>
+      <button type="button" class="secondary gcve-tuple-next">Next</button>
+    </div>
+    <noscript><p class="muted">Enable JavaScript to run a lookup, or visit <a href="https://db.gcve.eu/search" target="_blank" rel="noopener noreferrer">GCVE search</a>.</p></noscript>
+  {% else %}
+    <p class="muted">No products are available for a vendor/product lookup yet.</p>
+  {% endif %}
+</section>
+<script src="{{ url_for('static', filename='js/gcve-tuple-lookup.js') }}" defer></script>
