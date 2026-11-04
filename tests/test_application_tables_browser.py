@@ -1,6 +1,7 @@
 """Browser regressions for Vitrine controls on native application tables."""
 import csv
 import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -64,10 +65,10 @@ def test_table_controls_preserve_rows_and_forms(app, client, browser_page, width
     page.goto("http://tables.test/table-fixture")
     host = page.locator("application-table")
     host.get_by_role("tab", name="Raw", exact=True).wait_for()
-    assert page.locator("table").count() == 1
-    assert host.locator("tbody tr:visible").count() == 25
+    assert host.locator("table").count() == (1 if width == 1440 else 0)
+    assert host.locator('[part="row"], [part="card"]').count() == 25
     host.get_by_role("button", name="Next page", exact=True).click()
-    assert host.locator("tbody tr:visible").count() == 5
+    assert host.locator('[part="row"], [part="card"]').count() == 5
     host.get_by_role("button", name="Previous page", exact=True).click()
     assert page.locator("img[src=x]").count() == 0
     assert page.evaluate("window.tableXss === undefined")
@@ -75,19 +76,25 @@ def test_table_controls_preserve_rows_and_forms(app, client, browser_page, width
     checkbox = host.locator('input[name=selected][value="1"]')
     checkbox.check()
     assert checkbox.evaluate("input => input.form.id") == "records-form"
-    host.get_by_role("button", name="Count", exact=True).click()
-    assert host.locator("tbody tr:visible").first.get_by_role("link").text_content() == "Row 29"
-    host.get_by_role("button", name="Count", exact=True).click()
-    assert host.locator("tbody tr:visible").first.get_by_role("link").text_content() == "Row 00"
+    if width == 390:
+        host.get_by_role("combobox", name="Sort by", exact=True).select_option("count")
+    else:
+        host.locator('th[data-key="count"]').click()
+    assert host.evaluate("table => table.getRows()[0].name") == "Row 29"
+    if width == 390:
+        host.get_by_role("button", name="Sort ascending", exact=True).click()
+    else:
+        host.locator('th[data-key="count"]').click()
+    assert host.evaluate("table => table.getRows()[0].name") == "Row 00"
     host.locator(".record-action:visible").first.click()
     assert page.evaluate("window.actionClicked")
     host.get_by_role("button", name="Search", exact=True).click()
     host.get_by_role("searchbox", name="Search", exact=True).fill("Row 29")
-    page.wait_for_function("document.querySelector('application-table').querySelectorAll('tbody tr:not([hidden])').length === 1")
+    page.wait_for_function("document.querySelector('application-table').shadowRoot.querySelectorAll('[part=row], [part=card]').length === 1")
     assert host.get_by_role("link", name="Row 29", exact=True).is_visible()
     assert host.locator("mark").count() > 0
     host.get_by_role("searchbox", name="Search", exact=True).press("Enter")
-    assert host.locator("mark.current").count() > 0
+    assert host.locator("mark").count() > 0
     assert page.evaluate("new FormData(document.querySelector('#records-form')).getAll('selected')") == ["1"]
     with page.expect_download() as info:
         host.get_by_role("button", name="Download", exact=True).click()
@@ -106,25 +113,85 @@ def test_table_controls_preserve_rows_and_forms(app, client, browser_page, width
             return true;
         };
     }""")
-    host.get_by_role("button", name="Copy", exact=True).click()
+    host.get_by_role("button", name="Copy rows", exact=True).click()
     page.wait_for_function("window.copiedCSV !== undefined")
-    assert list(csv.reader(io.StringIO(page.evaluate("window.copiedCSV")))) == exported
+    copied = list(csv.reader(io.StringIO(page.evaluate("window.copiedCSV")), delimiter="\t"))
+    assert len(copied) == len(exported)
+    assert copied[0] == exported[0]
+    assert copied[1][3] == exported[1][3]
+    assert "SECRET-TOKEN" not in page.evaluate("window.copiedCSV")
     host.get_by_role("tab", name="Raw", exact=True).click()
     assert "SECRET-TOKEN" not in host.locator("pre.code").text_content()
     host.get_by_role("tab", name="Table", exact=True).click()
     host.get_by_role("searchbox", name="Search", exact=True).fill("summary-tail")
-    page.wait_for_function("document.querySelector('application-table').querySelectorAll('tbody tr:not([hidden])').length === 22")
+    page.wait_for_function("document.querySelector('application-table').shadowRoot.querySelectorAll('[part=row], [part=card]').length === 22")
     assert host.locator("mark").last.text_content() == "summary-tail"
     host.get_by_role("searchbox", name="Search", exact=True).fill("10 Jul 2026")
-    page.wait_for_function("document.querySelector('application-table').querySelectorAll('tbody tr:not([hidden])').length === 25")
+    page.wait_for_function("document.querySelector('application-table').shadowRoot.querySelectorAll('[part=row], [part=card]').length === 25")
     assert host.locator("time").first.text_content() == "10 Jul 2026 14:40 UTC"
     host.get_by_role("button", name="Full screen", exact=True).click()
     host.get_by_role("button", name="Exit full screen", exact=True).click()
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
     page.wait_for_function("document.querySelector('application-table').getAttribute('theme') === 'dark'")
+    host.get_by_role("searchbox", name="Search", exact=True).fill("")
+    page.wait_for_function("document.querySelector('application-table').getRows().length === 30")
+    # New upstream query chips combine column comparisons with AND / OR.
+    query = host.get_by_role("combobox", name="Filter rows", exact=True)
+    query.fill("Count:>=990")
+    query.press("Enter")
+    page.wait_for_function("document.querySelector('application-table').getRows().length === 11")
+    query.fill("Name:Row 29")
+    query.press("Enter")
+    page.wait_for_function("document.querySelector('application-table').getRows().length === 0")
+    host.get_by_role("button", name="Match all", exact=True).click()
+    page.wait_for_function("document.querySelector('application-table').getRows().length === 12")
+    host.get_by_role("button", name="Clear the conditions", exact=True).click()
+    query.press("Escape")
+    page.wait_for_function("document.querySelector('application-table').getRows().length === 30")
+    if width == 1440:
+        page.evaluate("window.copiedCSV = ''")
+        host.locator('[role="gridcell"][data-r="0"][data-c="3"]').focus()
+        page.keyboard.press("Control+c")
+        page.wait_for_function("window.copiedCSV === \"'=1+1\"")
+        host.locator('th[data-key="name"]').click()
+        host.locator('th[data-key="count"]').click(modifiers=["Shift"])
+        assert len(host.evaluate("table => table.state.sort")) == 2
+        host.get_by_role("button", name="Show filters", exact=True).click()
+        host.locator('[aria-label="Filter Count"]').fill(">=990")
+        page.wait_for_function("document.querySelector('application-table').getRows().length === 11")
+        host.locator('[aria-label="Filter Count"]').fill("")
+        page.wait_for_function("document.querySelector('application-table').getRows().length === 30")
+        host.get_by_role("button", name="Include column options", exact=True).click()
+        host.get_by_role("menuitem", name="Group by this column", exact=True).click()
+        assert host.locator('[part="group-row"]').count() == 2
+        host.get_by_role("button", name="Collapse all", exact=True).click()
+        assert host.locator('[part="row"]').count() == 0
+        assert page.evaluate("new FormData(document.querySelector('#records-form')).getAll('selected')") == ["1"]
+        host.get_by_role("button", name="Expand all", exact=True).click()
+        host.get_by_role("button", name="Include column options", exact=True).click()
+        host.get_by_role("menuitem", name="Ungroup", exact=True).click()
+    # Selection exports contain just the selected records, with hidden form
+    # fields omitted. Page-level exports above still include all loaded rows.
+    host.get_by_role("checkbox", name="Select row 1", exact=True).check()
+    with page.expect_download() as selected_info:
+        host.get_by_role("button", name="JSON", exact=True).click()
+    selected = json.loads(Path(selected_info.value.path()).read_text())
+    assert len(selected) == 1
+    assert selected[0]["name"] == "Row 00"
+    assert "SECRET-TOKEN" not in json.dumps(selected)
+    host.get_by_role("button", name="Clear the selection", exact=True).click()
+    host.get_by_role("button", name="Columns", exact=True).click()
+    host.get_by_role("checkbox", name="Summary", exact=True).uncheck()
+    assert host.evaluate("table => table.state.columns.find(c => c.key === 'summary').hidden")
+    host.get_by_role("button", name="Move Summary up", exact=True).click()
+    assert host.evaluate("table => table.state.columns[2].key") == "summary"
+    host.get_by_role("button", name="Reset layout", exact=True).click()
+    host.get_by_role("button", name="Columns", exact=True).click()
+    host.get_by_role("button", name="Density: comfortable", exact=True).click()
+    assert host.evaluate("table => table.state.density") == "compact"
     # Content may change after enhancement. Vitrine's size rejection restores
     # the original scrollable table, including controls and hidden rows.
-    host.locator("[data-column='3']").first.evaluate("cell => cell.textContent = 'A'.repeat(2097153)")
+    host.locator(".application-cell[data-column='3']").first.evaluate("cell => cell.textContent = 'A'.repeat(2097153)")
     page.wait_for_function("document.querySelector('application-table') === null")
     assert page.locator(".table-scroll table tbody tr:visible").count() == 30
     assert page.locator('input[name=selected][value="1"]').is_checked()
@@ -159,7 +226,7 @@ def test_application_pages_and_alias_submission(app, client, browser_page, width
         # Every ordinary table, including empty/property/admin tables, upgrades.
         page.wait_for_function("""() => {
             const tables = [...document.querySelectorAll('main table')].filter(table => !table.closest('.gcve-tuple-lookup'));
-            return tables.every(table => table.closest('application-table')?.shadowRoot.querySelector('[role=tab]'));
+            return tables.length === 0 && [...document.querySelectorAll("application-table")].every(host => host.shadowRoot.querySelector("[role=tab]"));
         }""")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), path
         assert page.locator(".collapse-toggle").filter(has=page.locator("table")).count() == 0
@@ -174,7 +241,7 @@ def test_application_pages_and_alias_submission(app, client, browser_page, width
     dynamic = page.locator("#gcve-cpe-search-results application-table")
     dynamic.get_by_role("tab", name="Raw", exact=True).wait_for()
     assert dynamic.get_by_role("link").get_attribute("href").endswith("CVE-2026-1234")
-    assert dynamic.locator("tbody").text_content().endswith("ending-marker")
+    assert dynamic.locator('[part="row"], [part="card"]').text_content().endswith("ending-marker")
     assert dynamic.locator("img").count() == 0
     assert page.evaluate("window.tableXss === undefined")
     assert dynamic.locator("time").first.text_content() == "10 Jul 2026 14:40 UTC"
@@ -183,10 +250,13 @@ def test_application_pages_and_alias_submission(app, client, browser_page, width
     host.get_by_role("tab", name="Raw", exact=True).wait_for()
     checkbox = host.locator(f'input[name=product_ids][value="{product.id}"]')
     checkbox.check()
-    host.get_by_role("button", name="Product", exact=True).click()
+    if width == 390:
+        host.get_by_role("combobox", name="Sort by", exact=True).select_option("product")
+    else:
+        host.locator('th[data-key="product"]').click()
     host.get_by_role("button", name="Search", exact=True).click()
     host.get_by_role("searchbox", name="Search", exact=True).fill("no-such-product")
-    page.wait_for_function("document.querySelector('application-table').querySelector('[data-table-empty]') !== null")
+    page.wait_for_function("document.querySelector('application-table').getRows().length === 0")
     page.locator("#proposed_alias_name").fill("Browser submitted alias")
     page.get_by_role("button", name="Submit alias proposal", exact=True).click()
     page.wait_for_load_state()

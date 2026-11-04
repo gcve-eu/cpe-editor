@@ -1,53 +1,57 @@
 # Vitrine assets
 
-Locally hosted OpenAPI component from https://github.com/ecrou-exact/vitrine,
-commit `7c379edba7ffb89abcae01b0806f20ed43dbc627` (MIT).
+Locally hosted components from https://github.com/ecrou-exact/vitrine (MIT):
 
-Built with Node 24 using the upstream lockfile: `npm ci && npm run build`.
-Included: `dist/esm/vt-openapi.js`, its static import dependencies, and
-`dist/vendor/yaml.js`. Preserve the dist directory layout for lazy YAML loading.
-Source maps were omitted. See LICENSE and THIRD_PARTY_NOTICES.md for attribution.
-No Node build is needed to run CPE Editor; these assets are served by Flask.
+- OpenAPI: commit `7c379edba7ffb89abcae01b0806f20ed43dbc627`.
+  Included: `esm/vt-openapi.js`, its static import dependencies, and
+  `vendor/yaml.js`. Preserve the directory layout for lazy YAML loading.
+- Tables: commit `e7db1ebd587b27f41988a0da9785310eaa6f2f08` (2026-11-04),
+  including both new `<vt-table>` commits. `esm/vt-table.js` is a standalone
+  bundle. It replaces the previous `vt-csv.js` integration.
 
-`esm/vt-csv.js` is an additional standalone bundle from the same pinned commit.
-It provides typed sorting, search, row paging, CSV copy/download, raw view and
-fullscreen. `app/static/js/table-tools.js` imports the application adapter only
-on pages with tables and discovers tables created after page load. Swagger and
-OpenAPI tables keep their own component behavior; tuple lookup tables keep the
-specialized GCVE adapter below.
+Built with Node 24 using the upstream lockfile. Source maps were omitted.
+LICENSE and THIRD_PARTY_NOTICES.md cover both bundles; the dependency notices
+are unchanged at the table revision. No Node build is needed to run CPE Editor.
 
-`app/static/js/application-table.js` extends `VtCsv` for the application's native
-tables. It slots the original table into Vitrine's scroll region and reorders
-or hides original rows rather than cloning them into a shadow tree. This keeps
-form ownership, checkbox state, action handlers, links and complete summaries.
-Key/value record tables receive Field/Value headers. Table content and checkbox
-changes refresh the CSV snapshot. Search, sorting and local row paging operate
-on loaded rows; guarded CSV exports always contain the full snapshot, excluding
-hidden form fields. Human-readable UTC dates keep ISO timestamps in CSV.
-Module failures leave native tables available; `vt-error`, including size-limit
-rejection, restores them with all rows in a keyboard-accessible scroll region.
-Vitrine's size limit is preserved. The shared CSS styles the slotted tables;
-the component's chrome stays inside its shadow root.
+The November table component supplies multi-column sorting, typed column
+filters, AND/OR condition chips, grouping, row details, selection with CSV/JSON
+exports, column visibility/order/width/pinning, footer aggregates, density,
+numbered pagination with page-size controls, mobile cards, keyboard navigation,
+fullscreen and saved layouts. Editing stays off: record changes use proposals.
 
-`app/static/js/gcve-results-table.js` extends its exported `VtCsv` class. The
-adapter decorates cells by their original `data-row`/`data-column` indexes,
-keeping links, formatted UTC dates and full summaries attached to the correct
-record after sorting/filtering. It replaces the standard 1,000-character cell
-preview with complete record text, while Raw/copy/download use the guarded CSV.
-The URL stays in CSV/Raw and is a clickable identifier in Table view. Mobile
-rows use cards with an accessible sort selector. The browser regressions must
-be rerun when updating the pinned Vitrine implementation and these hooks.
+`app/static/js/editor-table.js` extends `VtTable` with application policy:
+Raw CSV, full-loaded-page copy/download, and spreadsheet formula protection
+(including whitespace/control prefixes) for both CSV and clipboard TSV. Selection
+exports contain the selected rows. Hidden form fields never enter the dataset.
+JSON content also passes through Vitrine's existing size guard, including when
+using the `data` property. Raw CSV includes all fields, including hidden columns.
 
-To rebuild it with Node 24, check out the pinned Vitrine commit, run `npm ci`
-there (using its upstream lockfile), then from the CPE Editor root run:
+`app/static/js/application-table.js` slots original cell contents into Vitrine's
+grid/cards. Inputs stay in light DOM under their original form, preserving form
+ownership, checkbox state and button handlers. Cell render callbacks insert
+slots; details show complete values without duplicating controls. Input and text
+changes refresh the dataset. Exact ISO timestamps remain in exports while UTC
+dates/times are displayed on separate lines. `table-tools.js` discovers static
+and dynamic tables; Swagger/OpenAPI and specialized tuple results are excluded.
+If loading fails the native table stays available. A `vt-error` (including content
+size rejection) restores original cells and all rows in an accessible scroll box.
+
+`app/static/js/gcve-results-table.js` uses the same base class for tuple lookups,
+with safe record renderers for linked IDs, source badges and full summaries.
+GCVE URLs remain in Raw CSV and exports, and the column chooser can reveal them.
+Changing tuples still clears earlier results. Application and GCVE tables save
+layout preferences per page in localStorage, using Vitrine's normal persistence.
+
+To rebuild the table bundle, check out its pinned upstream revision and run
+`npm ci` there (using its upstream lockfile), then from the CPE Editor root:
 
 ```sh
-node tools/build_vitrine_csv.mjs /path/to/vitrine
+node tools/build_vitrine_table.mjs /path/to/vitrine
 ```
 
-The standalone build avoids replacing the existing OpenAPI component's shared
-chunks. Its dependencies are already covered by THIRD_PARTY_NOTICES.md.
+The standalone build leaves the OpenAPI shared chunks intact. Rerun application
+and GCVE browser regressions when updating Vitrine: the adapters also hook table
+render/search refreshes to preserve slotted content and highlighting.
 
 The editor stylesheet adopts Vitrine's light/dark palette, flat surfaces, thin
-borders, and compact controls, with the native UI and monospace fonts shared
-with GCVE Patch2Vuln.
+borders, and the native UI and monospace fonts shared with GCVE Patch2Vuln.

@@ -25,6 +25,12 @@
       host.setAttribute("theme", document.documentElement.dataset.theme || "auto");
       host.setAttribute("download", `${label(table).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 80) || "table"}.csv`);
       host.setAttribute("page-size", "25");
+      host.setAttribute("selectable", "multiple");
+      host.setAttribute("density", "comfortable");
+      host.setAttribute("wrap", "true");
+      host.setAttribute("filters", "false");
+      host.setAttribute("footer", "true");
+      host.setAttribute("persist", `cpe-editor:${location.pathname}:${label(table)}`);
       host.setAttribute("max-height", "42rem");
       const wrapper = table.parentElement.classList.contains("table-scroll") ? table.parentElement : table;
       // Attach the error listener before content is connected: size rejection
@@ -43,8 +49,7 @@
       }), {once: true});
       host.initialize(table);
       wrapper.before(host);
-      host.append(table);
-      if (wrapper !== table) wrapper.remove();
+      wrapper.remove();
     } catch (_) {
       // Network/CSP failures leave the server-rendered table usable.
     }

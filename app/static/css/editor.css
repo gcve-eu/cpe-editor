@@ -184,21 +184,11 @@ tbody tr:hover { background: var(--table-row-hover); }
 .table-scroll { overflow-x: auto; max-width: 100%; }
 .table-scroll table { min-width: 600px; }
 application-table { display: block; min-width: 0; margin: .75rem 0; --vt-font-size-ui: var(--text-sm); --vt-font-size: var(--text-sm); --vt-font-size-small: var(--text-xs); }
-.application-data-table { min-width: 48rem; background: var(--card-bg); }
-.application-data-table[data-table-columns="2"] { min-width: 32rem; }
-.application-data-table th, .application-data-table td { padding: .85rem 1rem; }
-.application-data-table thead th { position: sticky; top: 0; z-index: 2; white-space: nowrap; background: var(--table-header-bg); font-size: var(--text-sm); }
-.application-data-table [hidden] { display: none !important; }
-.application-data-table [data-table-row-number], .application-data-table thead th:first-child { width: 3rem; padding-right: .5rem; padding-left: .5rem; white-space: nowrap; color: var(--muted); font-weight: 400; font-size: var(--text-xs); }
-.application-data-table .table-sort { min-height: 36px; padding: 0; border: 0; border-radius: 2px; color: var(--text); background: transparent; font: inherit; font-weight: 650; white-space: nowrap; }
-.application-data-table .table-sort:hover { color: var(--primary); filter: none; }
-.application-data-table th[aria-sort="ascending"] .table-sort, .application-data-table th[aria-sort="descending"] .table-sort { color: var(--primary); }
-.application-data-table time { display: inline-flex; flex-direction: column; gap: .2rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.application-data-table time small { color: var(--muted); }
-.application-data-table .table-long-text { min-width: 22rem; max-width: 80ch; line-height: 1.75; }
-.application-data-table mark { background: var(--primary-soft); color: var(--text); outline: 1px solid var(--primary); }
-.application-data-table mark.current { outline-width: 2px; background: var(--primary); color: var(--card-bg); }
-@media (max-width: 700px) { .application-data-table .table-sort { min-height: 44px; } }
+/* Original interactive content is slotted into vt-table grid cells/cards. */
+.application-cell { display: inline; line-height: 1.7; overflow-wrap: anywhere; }
+.application-cell time { display: inline-flex; flex-direction: column; gap: .2rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.application-cell time small { color: var(--muted); }
+.application-cell mark { background: var(--primary-soft); color: var(--text); outline: 1px solid var(--primary); }
 .muted { color: var(--muted); }
 .pill { display: inline-flex; align-items: center; gap: .3rem; padding: .15rem .45rem; border: 1px solid var(--border); border-radius: 6px; background: var(--primary-soft); color: var(--primary); font-size: var(--text-xs); }
 .flash, .info-box { padding: .8rem 1rem; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 8px; background: var(--primary-soft); }
