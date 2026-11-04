@@ -62,6 +62,16 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   CPE entries can be searched too. Results link to GCVE and offer previous/next
   pages; changing the tuple clears the previous results. GCVE lookups do not
   modify local records or create vulnerability references.
+  The lookup table keeps identifiers and headers intact, shows dates and UTC
+  times on separate lines (with the original timestamp on hover), and scrolls
+  within a bounded region with sticky headers. On phones, rows stack into cards
+  so the identifier, date and summary can be read without sideways scrolling.
+  **Search, sort or export this page** opens Vitrine's optional data tools for
+  the currently fetched page:
+  typed sorting, search, raw CSV, copy/download and fullscreen. Use the GCVE
+  Previous/Next controls to fetch more results. Copy/download keep all rows on
+  the current page, including rows hidden by a local search. Full summaries and
+  clickable vulnerability links remain available in the main table.
 
 ### Moderation and operations
 
