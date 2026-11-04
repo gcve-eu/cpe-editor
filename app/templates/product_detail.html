@@ -365,41 +365,47 @@
 document.addEventListener("DOMContentLoaded", function () {
   const resultContainer = document.getElementById("gcve-cpe-search-results");
   const lookupButtons = document.querySelectorAll(".js-gcve-cpe-search");
+  const node = (tag, text) => {
+    const element = document.createElement(tag);
+    if (text !== undefined) element.textContent = text;
+    return element;
+  };
 
   const renderItems = (items) => {
-    if (!items.length) return "<p>No vulnerabilities returned for this CPE value.</p>";
-    const rows = items.slice(0, 25).map((item) => {
+    if (!items.length) return node("p", "No vulnerabilities returned for this CPE value.");
+    const table = node("table");
+    table.setAttribute("aria-label", "CPE vulnerability matches");
+    const header = table.createTHead().insertRow();
+    ["Vulnerability", "Severity", "Updated", "Summary"].forEach(name => header.append(node("th", name)));
+    const body = table.createTBody();
+    items.slice(0, 25).forEach((item) => {
       const vulnId = item.id || "";
       const gcveVulnUrl = `https://db.gcve.eu/vuln/${encodeURIComponent(vulnId)}`;
-      return `
-      <tr>
-        <td>
-          <a href="${gcveVulnUrl}" target="_blank" rel="noopener noreferrer">
-            <code>${item.source}:${vulnId}</code>
-          </a>
-        </td>
-        <td>${item.severity || "—"}</td>
-        <td>${item.updated_at || "—"}</td>
-        <td>${item.summary || "—"}</td>
-      </tr>
-    `;
-    }).join("");
-    return `<table><thead><tr><th>Vulnerability</th><th>Severity</th><th>Updated</th><th>Summary</th></tr></thead><tbody>${rows}</tbody></table>`;
+      const row = body.insertRow();
+      const anchor = node("a");
+      anchor.href = gcveVulnUrl;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.append(node("code", `${item.source}:${vulnId}`));
+      row.insertCell().append(anchor);
+      [item.severity, item.updated_at, item.summary].forEach(value => row.insertCell().textContent = value || "—");
+    });
+    return table;
   };
 
   lookupButtons.forEach((button) => {
     button.addEventListener("click", async () => {
       const cpeValue = button.dataset.cpe;
       if (!cpeValue || !resultContainer) return;
-      resultContainer.innerHTML = `<p>Looking up <code>${cpeValue}</code> on db.gcve.eu…</p>`;
+      resultContainer.replaceChildren(node("p", `Looking up ${cpeValue} on db.gcve.eu…`));
       button.disabled = true;
       try {
         const response = await fetch(`/api/gcve/cpesearch?cpe=${encodeURIComponent(cpeValue)}`);
         const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.error || `Lookup failed (${response.status})`);
-        resultContainer.innerHTML = `<p><strong>${payload.count}</strong> vulnerability matches for <code>${cpeValue}</code>.</p>${renderItems(payload.items || [])}`;
+        resultContainer.replaceChildren(node("p", `${payload.count} vulnerability matches for ${cpeValue}.`), renderItems(payload.items || []));
       } catch (error) {
-        resultContainer.innerHTML = `<p>Unable to complete lookup: ${error.message}</p>`;
+        resultContainer.replaceChildren(node("p", `Unable to complete lookup: ${error.message}`));
       } finally {
         button.disabled = false;
       }

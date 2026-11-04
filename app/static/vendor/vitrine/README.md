@@ -10,8 +10,24 @@ Source maps were omitted. See LICENSE and THIRD_PARTY_NOTICES.md for attribution
 No Node build is needed to run CPE Editor; these assets are served by Flask.
 
 `esm/vt-csv.js` is an additional standalone bundle from the same pinned commit.
-It loads after a GCVE lookup and provides typed sorting, page-local search,
-CSV copy/download, raw view and fullscreen in the same results table.
+It provides typed sorting, search, row paging, CSV copy/download, raw view and
+fullscreen. `app/static/js/table-tools.js` imports the application adapter only
+on pages with tables and discovers tables created after page load. Swagger and
+OpenAPI tables keep their own component behavior; tuple lookup tables keep the
+specialized GCVE adapter below.
+
+`app/static/js/application-table.js` extends `VtCsv` for the application's native
+tables. It slots the original table into Vitrine's scroll region and reorders
+or hides original rows rather than cloning them into a shadow tree. This keeps
+form ownership, checkbox state, action handlers, links and complete summaries.
+Key/value record tables receive Field/Value headers. Table content and checkbox
+changes refresh the CSV snapshot. Search, sorting and local row paging operate
+on loaded rows; guarded CSV exports always contain the full snapshot, excluding
+hidden form fields. Human-readable UTC dates keep ISO timestamps in CSV.
+Module failures leave native tables available; `vt-error`, including size-limit
+rejection, restores them with all rows in a keyboard-accessible scroll region.
+Vitrine's size limit is preserved. The shared CSS styles the slotted tables;
+the component's chrome stays inside its shadow root.
 
 `app/static/js/gcve-results-table.js` extends its exported `VtCsv` class. The
 adapter decorates cells by their original `data-row`/`data-column` indexes,

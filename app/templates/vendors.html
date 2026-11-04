@@ -55,15 +55,19 @@
       </div>
     </div>
   {% endif %}
-  <ul class="vendor-list">
+  <table aria-label="Vendor directory">
+    <thead><tr><th>Vendor</th><th>Token</th>{% if vendor_product_counts is not none %}<th>Products</th>{% endif %}<th>Export</th></tr></thead>
+    <tbody>
     {% for vendor in vendors %}
-      <li class="vendor-list-item">
-        <div class="vendor-list-info">
+      <tr>
+        <td>
           <a class="vendor-list-link" href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a>
+        </td>
+        <td><code>{{ vendor.name }}</code></td>
           {% if sort_by == 'products' and vendor_product_counts is not none %}
-            <span class="vendor-product-count pill">{{ vendor_product_counts.get(vendor.id, 0) }} product{% if vendor_product_counts.get(vendor.id, 0) != 1 %}s{% endif %}</span>
+            <td>{{ vendor_product_counts.get(vendor.id, 0) }}</td>
           {% endif %}
-        </div>
+        <td>
         <button
           type="button"
           class="button secondary icon-button js-export-json"
@@ -74,11 +78,13 @@
         >
           <i class="fa-solid fa-file-export" aria-hidden="true"></i>
         </button>
-      </li>
+        </td>
+      </tr>
     {% else %}
-      <li class="vendor-empty-state">No vendors found{% if vendor_q %} for <strong>{{ vendor_q }}</strong>{% endif %}.</li>
+      <tr><td colspan="{{ 4 if vendor_product_counts is not none else 3 }}">No vendors found{% if vendor_q %} for <strong>{{ vendor_q }}</strong>{% endif %}.</td></tr>
     {% endfor %}
-  </ul>
+    </tbody>
+  </table>
   {% if vendors and (vendor_has_prev or vendor_has_next) %}
     <div class="muted vendor-results-meta">
       <p>

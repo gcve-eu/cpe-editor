@@ -63,7 +63,7 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
         errors = []
         assets = []
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.on("request", lambda request: assets.append(request.url) if "/vt-csv.js" in request.url else None)
+        page.on("request", lambda request: assets.append(request.url) if "/gcve-results-table.js" in request.url else None)
 
         def serve(route):
             parsed = urlsplit(route.request.url)
@@ -228,7 +228,7 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             assert panel.get_by_text("Table controls could not load", exact=False).count() == 0
 
             # An unavailable module must leave exactly one readable fallback.
-            page.route("**/vt-csv.js", lambda route: route.abort())
+            page.route("**/gcve-results-table.js", lambda route: route.abort())
             page.reload()
             panel.get_by_role("button", name="Find vulnerabilities on GCVE").click()
             panel.get_by_role("link", name="CVE-2026-0001", exact=True).wait_for()

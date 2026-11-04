@@ -16,6 +16,8 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
 - **Moderation dashboard** for reviewing and approving submitted changes.
 - **Approved change feed** with dedicated pages plus RSS/Atom endpoints.
 - **Read-only OpenAPI interface** with interactive Swagger docs.
+- **Vitrine table controls throughout the application**: typed sorting, search
+  with highlighting, row paging, Raw CSV, copy/download and fullscreen.
 - **NVD feed ingestion** for both CPE and CPE Match archives.
 - **PURL → CPE mapping import (`import-purl2cpe`)** with optional replace mode and auto-creation of missing vendor/product/CPE records.
 - **GCVE enriched CVE dump import (`import-gcve-enriched-cves`)** for CVE→CPE references plus missing vendor/product/CPE records.
@@ -29,6 +31,19 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
 ### Public experience
 
 - Browse vendors, products, and CPE records.
+- Every application table, including directories, CPE search, record fields,
+  aliases, statistics, moderation and API clients, uses Vitrine's full table
+  controls. They also apply to dynamically loaded CPE vulnerability results.
+  Links, action buttons and form selections remain active after sorting or
+  filtering; selected rows stay included when submitting a form while hidden.
+  Search/sort operate on loaded rows, with 25 rows per local table page.
+  Copy/download include all loaded rows, even rows hidden by a search or local
+  paging. Existing server page links fetch more records; **Export all matching
+  … (JSON)** downloads every match across server pages. CSV exports omit hidden
+  form fields and guard spreadsheet formula markers. Dates use readable UTC
+  date/time lines, with exact timestamps on hover and in CSV. Wide tables scroll
+  within their own region, including on phones. Tables remain usable if the
+  component cannot load or rejects oversized content.
 - Drill into vendor/product detail pages and linked relationships.
 - Combined views follow approved `synonym-of`, `canonical-of`, `equivalent-to`,
   `renamed-to`, and `vendor-merge-into` relationships in either direction, including
