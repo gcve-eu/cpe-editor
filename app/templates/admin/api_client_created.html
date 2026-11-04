@@ -11,7 +11,7 @@
   </div>
 
   <label for="api-key">API key</label>
-  <input id="api-key" type="text" readonly value="{{ token }}" style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;" onclick="this.select()">
+  <input id="api-key" type="text" readonly value="{{ token }}" style="font-family: var(--font-mono);" onclick="this.select()">
 
   <div class="action-row end">
     <a class="button" href="{{ url_for('main.admin_dashboard') }}">

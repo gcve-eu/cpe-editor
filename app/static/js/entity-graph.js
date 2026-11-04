@@ -237,7 +237,7 @@
             defaultEdgeStyle: { strokeColor: "var(--muted)", markerEnd: "arrow" },
             // Native SVG text avoids zero-sized HTML label containers during layout.
             defaultLabelStyle: {
-              fontSize: 12, fontFamily: "var(--font-sans)",
+              fontSize: 14, fontFamily: "var(--font-sans)",
               color: "var(--text)", backgroundColor: "var(--card-bg)",
             },
           },
