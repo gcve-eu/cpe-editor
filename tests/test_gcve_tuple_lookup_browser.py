@@ -25,6 +25,11 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
     requests = []
     fail = [False]
     long_summary = ('<img src=x onerror="window.lookupXss=true"> ' + "A long vulnerability description, with quoted \"text\". " * 30).strip()
+    formula_values = [
+        "=1+1", "+SUM(1,1)", "-1+1", "@SUM(1,1)",
+        " \t=1+1", "\r\n+SUM(1,1)", "\x1f@SUM(1,1)", "\ufeff-1+1",
+    ]
+    expected_rows = 4 + len(formula_values)
 
     def upstream(request, timeout):
         requests.append(request.full_url)
@@ -36,9 +41,14 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
                 [f"cve-2026-{page_number:04d}", {"summary": long_summary, "modified": "2026-07-10T14:40:55.735Z"}],
                 ["CVE-2026-8888", {"summary": "An older advisory.\nWith a second paragraph.", "modified": "2025-08-01T10:30:00"}],
                 ["CVE-2026-9999", {"summary": "An advisory without a valid date.", "modified": "unknown"}],
+                ["CVE-2026-9998", {"summary": "'=1+1"}],
             ]},
             "total_count": 26,
         }
+        for index, formula in enumerate(formula_values):
+            # Both the source group and summary are controlled by upstream data.
+            vuln_id = "=1+1" if index == 0 else f"CVE-2026-{7000 + index}"
+            data["results"][formula] = [[vuln_id, {"summary": formula}]]
         return io.StringIO(json.dumps(data))
 
     monkeypatch.setattr(gcve, "urlopen", upstream)
@@ -75,6 +85,7 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             table = panel.locator(".gcve-results-table")
             assert "<img src=x" in table.text_content()
             assert long_summary in table.text_content()
+            assert table.locator(".gcve-result-summary").nth(4).text_content() == "=1+1"
             assert table.locator("img").count() == 0
             assert page.evaluate("window.lookupXss === undefined")
             assert assets == []  # Vitrine loads only when its optional tools are opened.
@@ -109,15 +120,37 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             page.wait_for_function("document.querySelector('vt-csv').shadowRoot.querySelectorAll('tbody tr').length === 1")
             assert "CVE-2026-8888" in explorer.locator("tbody").text_content()
             explorer.get_by_role("searchbox", name="Search", exact=True).fill("")
-            page.wait_for_function("document.querySelector('vt-csv').shadowRoot.querySelectorAll('tbody tr').length === 3")
+            page.wait_for_function("count => document.querySelector('vt-csv').shadowRoot.querySelectorAll('tbody tr').length === count", arg=expected_rows)
             with page.expect_download() as download_info:
                 explorer.get_by_role("button", name="Download", exact=True).click()
             download = download_info.value
             assert download.suggested_filename == "gcve-page-1.csv"
-            exported = list(csv.reader(io.StringIO(Path(download.path()).read_text())))
+            exported = list(csv.reader(io.StringIO(Path(download.path()).read_bytes().decode("utf-8"))))
             assert exported[1][3] == long_summary
             assert exported[2][2] == "2025-08-01T10:30:00.000Z"
             assert exported[2][3] == "An older advisory.\nWith a second paragraph."
+            assert exported[3][2] == ""  # Empty dates stay empty.
+            assert exported[4][3] == "'=1+1"  # Already literal; do not add another guard.
+            for row, formula in zip(exported[5:], formula_values, strict=True):
+                # Vitrine normalizes line endings while preserving the guard.
+                assert row[1] == "'" + formula.replace("\r\n", "\n").replace("\r", "\n")
+                assert row[3] == "'" + formula.strip()
+            assert exported[5][0] == "'=1+1"
+            assert exported[5][4] == "https://db.gcve.eu/vuln/%3D1%2B1"
+            # Capture the text handed to the browser's clipboard fallback.
+            page.evaluate("""() => {
+                document.execCommand = command => {
+                    if (command !== 'copy') return false;
+                    const root = document.querySelector('vt-csv').shadowRoot;
+                    window.copiedCSV = root.querySelector('textarea[readonly]').value;
+                    return true;
+                };
+            }""")
+            explorer.get_by_role("button", name="Copy", exact=True).click()
+            page.wait_for_function("typeof window.copiedCSV === 'string'")
+            copied = list(csv.reader(io.StringIO(page.evaluate("window.copiedCSV"))))
+            # Textareas normalize CRLF for the clipboard's HTTP fallback.
+            assert copied == [[value.replace("\r\n", "\n").replace("\r", "\n") for value in row] for row in exported]
             explorer.get_by_role("button", name="Full screen", exact=True).click()
             page.wait_for_function("document.querySelector('vt-csv').shadowRoot.querySelector('.vt').dataset.fullscreen")
             explorer.get_by_role("button", name="Exit full screen", exact=True).click()

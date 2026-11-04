@@ -72,6 +72,9 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   Previous/Next controls to fetch more results. Copy/download keep all rows on
   the current page, including rows hidden by a local search. Full summaries and
   clickable vulnerability links remain available in the main table.
+  CSV values that start with a spreadsheet formula marker (`=`, `+`, `-`, or
+  `@`), including after whitespace/control characters, are prefixed with an
+  apostrophe before CSV quoting so copy/download treat them as text.
 
 ### Moderation and operations
 
