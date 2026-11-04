@@ -13,6 +13,7 @@ tags:
   - name: Products
   - name: Product Aliases
   - name: CPE Entries
+  - name: GCVE
   - name: Vulnerability References
   - name: Statistics
   - name: Changes
@@ -102,6 +103,60 @@ paths:
           $ref: '#/components/responses/BulkExportResponse'
         '400':
           description: Invalid UUID, CPE part or combined value, or combined=true without vendor_uuid.
+  /api/gcve/search:
+    get:
+      tags: [GCVE]
+      summary: Look up GCVE vulnerabilities for a vendor/product tuple
+      description: |
+        Queries db.gcve.eu on demand using its vendor/product search endpoint.
+        Uses exact vendor and product tokens, normalized to lowercase, across versions.
+        No local CPE or vulnerability reference is required. No local data is modified.
+        Results are deduplicated by vulnerability identifier within the current page.
+        total is GCVE's upstream source-record count, which can include duplicate
+        identifiers across sources; it is null for legacy responses without a total.
+        has_next follows upstream pagination. Upstream failures return 502, never
+        an empty successful result. Vendor and product views use this endpoint.
+      parameters:
+        - in: query
+          name: vendor
+          required: true
+          description: Vendor token, for example apache.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+        - in: query
+          name: product
+          required: true
+          description: Product token, for example http_server.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Current page of matching GCVE vulnerabilities.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GCVETupleMatches'
+        '400':
+          description: Missing or invalid tuple or pagination parameters.
+        '502':
+          description: GCVE is unavailable or returned an unexpected response.
   /api/statistics:
     get:
       tags: [Statistics]
@@ -742,6 +797,50 @@ components:
           schema:
             $ref: '#/components/schemas/BulkExport'
   schemas:
+    GCVETupleMatches:
+      type: object
+      required: [ok, vendor, product, page, per_page, count, total, has_next, search_url, items]
+      properties:
+        ok:
+          type: boolean
+        vendor:
+          type: string
+        product:
+          type: string
+        page:
+          type: integer
+        per_page:
+          type: integer
+        count:
+          type: integer
+          description: Unique vulnerability identifiers on this page.
+        total:
+          type: integer
+          nullable: true
+          description: Upstream source-record count, which may include duplicate identifiers across sources.
+        has_next:
+          type: boolean
+        search_url:
+          type: string
+          format: uri
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              source:
+                type: string
+              summary:
+                type: string
+                nullable: true
+              updated_at:
+                type: string
+                nullable: true
+              url:
+                type: string
+                format: uri
     BulkExport:
       type: object
       required: [entity, filters, generated_at, total, items]

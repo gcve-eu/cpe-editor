@@ -56,6 +56,12 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   - propose a CPE vulnerability reference (CVE/GCVE/GHSA + cpeApplicability)
   - attach note proposals to entities
 - Explore the approved change history and detail pages.
+- Run **GCVE vulnerability lookup** from vendor and product detail pages. Select
+  a vendor/product tuple from the record or its combined view to fetch matching
+  vulnerabilities on demand from db.gcve.eu, across versions. Products without
+  CPE entries can be searched too. Results link to GCVE and offer previous/next
+  pages; changing the tuple clears the previous results. GCVE lookups do not
+  modify local records or create vulnerability references.
 
 ### Moderation and operations
 
@@ -169,6 +175,7 @@ Documented endpoints include:
 - `GET /api/cpes/export`
 - `GET /api/cpes/{cpe_id}`
 - `GET /api/cpes/{cpe_id}/vulnerability-references`
+- `GET /api/gcve/search?vendor=VENDOR&product=PRODUCT&page=1&per_page=25`
 - `GET /api/vulnerability-references`
 
 ### Quick API examples
