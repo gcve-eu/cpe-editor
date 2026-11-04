@@ -1,4 +1,4 @@
-<section class="card gcve-tuple-lookup" data-lookup-url="{{ url_for('main.api_gcve_tuple_search') }}" data-csv-module-url="{{ url_for('static', filename='vendor/vitrine/esm/vt-csv.js') }}">
+<section class="card gcve-tuple-lookup" data-lookup-url="{{ url_for('main.api_gcve_tuple_search') }}" data-table-module-url="{{ url_for('static', filename='js/gcve-results-table.js') }}">
   <h2>GCVE vulnerability lookup</h2>
   <p class="muted">Find vulnerabilities on db.gcve.eu for a specific vendor/product tuple, across versions. Choose a tuple from this record or its combined view.</p>
   {% if combined_view_products %}

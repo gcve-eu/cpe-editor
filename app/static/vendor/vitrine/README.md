@@ -10,10 +10,17 @@ Source maps were omitted. See LICENSE and THIRD_PARTY_NOTICES.md for attribution
 No Node build is needed to run CPE Editor; these assets are served by Flask.
 
 `esm/vt-csv.js` is an additional standalone bundle from the same pinned commit.
-It loads only when the GCVE lookup's data tools are opened. It provides typed
-sorting, page-local search, CSV copy/download, raw view and fullscreen. The
-linked results table keeps full summaries; Vitrine previews cells up to 1,000
-characters, while its raw view and exports keep their complete contents.
+It loads after a GCVE lookup and provides typed sorting, page-local search,
+CSV copy/download, raw view and fullscreen in the same results table.
+
+`app/static/js/gcve-results-table.js` extends its exported `VtCsv` class. The
+adapter decorates cells by their original `data-row`/`data-column` indexes,
+keeping links, formatted UTC dates and full summaries attached to the correct
+record after sorting/filtering. It replaces the standard 1,000-character cell
+preview with complete record text, while Raw/copy/download use the guarded CSV.
+The URL stays in CSV/Raw and is a clickable identifier in Table view. Mobile
+rows use cards with an accessible sort selector. The browser regressions must
+be rerun when updating the pinned Vitrine implementation and these hooks.
 
 To rebuild it with Node 24, check out the pinned Vitrine commit, run `npm ci`
 there (using its upstream lockfile), then from the CPE Editor root run:

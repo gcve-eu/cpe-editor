@@ -66,12 +66,14 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   times on separate lines (with the original timestamp on hover), and scrolls
   within a bounded region with sticky headers. On phones, rows stack into cards
   so the identifier, date and summary can be read without sideways scrolling.
-  **Search, sort or export this page** opens Vitrine's optional data tools for
-  the currently fetched page:
-  typed sorting, search, raw CSV, copy/download and fullscreen. Use the GCVE
+  The same table includes Vitrine's typed sorting, search with highlighting,
+  raw CSV, copy/download and fullscreen. Full summaries and clickable
+  vulnerability identifiers stay available after sorting and filtering.
+  Search also recognizes formatted dates and readable source labels.
+  On phones, a **Sort this page** selector controls the card order. Use the GCVE
   Previous/Next controls to fetch more results. Copy/download keep all rows on
-  the current page, including rows hidden by a local search. Full summaries and
-  clickable vulnerability links remain available in the main table.
+  the current page, including rows hidden by a local search. The table component
+  loads after a lookup; a readable linked table remains if it cannot load.
   CSV values that start with a spreadsheet formula marker (`=`, `+`, `-`, or
   `@`), including after whitespace/control characters, are prefixed with an
   apostrophe before CSV quoting so copy/download treat them as text.

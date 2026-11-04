@@ -113,12 +113,7 @@ summary { cursor: pointer; }
   .gcve-mobile-label { display: inline; color: var(--muted); }
   .gcve-result-summary { grid-area: summary; }
 }
-.gcve-data-tools { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border); border-radius: 8px; }
-.gcve-data-tools > summary { font-weight: 600; color: var(--link-color); }
-.gcve-data-tools > p { max-width: 85ch; font-size: var(--text-xs); color: var(--muted); }
-.gcve-data-tools vt-csv { display: block; min-width: 0; --vt-font-size-ui: var(--text-sm); --vt-font-size: var(--text-sm); --vt-font-size-small: var(--text-xs); }
-.gcve-data-tools vt-csv::part(header-cell) { padding: .85rem 1rem; font-size: var(--text-sm); white-space: nowrap; }
-.gcve-data-tools vt-csv::part(cell) { padding: .85rem 1rem; min-width: 12ch; max-width: 65ch; line-height: 1.7; }
+gcve-results-table { display: block; min-width: 0; --vt-font-size-ui: var(--text-sm); --vt-font-size: var(--text-sm); --vt-font-size-small: var(--text-xs); }
 .graph-toolbar { margin: .75rem 0; }
 .graph-simplify { position: relative; }
 .graph-simplify > summary { padding: .5rem .8rem; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--card-bg); color: var(--text-secondary); font-size: var(--text-sm); font-weight: 600; }
