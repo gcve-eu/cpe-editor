@@ -31,7 +31,7 @@
       host.setAttribute("filters", "false");
       host.setAttribute("footer", "true");
       host.setAttribute("persist", `cpe-editor:${location.pathname}:${label(table)}`);
-      host.setAttribute("max-height", "42rem");
+      host.setAttribute("sticky-header", "false");
       const wrapper = table.parentElement.classList.contains("table-scroll") ? table.parentElement : table;
       // Attach the error listener before content is connected: size rejection
       // is an event, not a thrown exception. Keep the original table available.

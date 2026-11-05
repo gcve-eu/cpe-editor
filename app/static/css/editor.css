@@ -84,7 +84,7 @@ summary { cursor: pointer; }
 .gcve-tuple-results { min-width: 0; }
 .gcve-tuple-results > a { display: inline-block; margin: .35rem 0; }
 .gcve-table-hint { font-size: var(--text-xs); margin: .35rem 0 .75rem; }
-.gcve-results-scroll { max-height: min(42rem, 70vh); overflow: auto; border: 1px solid var(--border); border-radius: 8px; scrollbar-gutter: stable; }
+.gcve-results-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
 .gcve-results-table { min-width: 62rem; table-layout: fixed; }
 .gcve-results-table .gcve-col-id { width: 14.5rem; }
 .gcve-results-table .gcve-col-source { width: 8rem; }

@@ -105,13 +105,11 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             assert table.locator("time").nth(1).text_content() == "01 Aug 202510:30 UTC"
             assert "Not available" in table.locator(".gcve-result-updated").nth(2).text_content()
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+            region = explorer.locator(".tb-body")
+            assert region.evaluate("element => element.scrollHeight <= element.clientHeight + 1")
             if width == 390:
-                region = explorer.locator(".tb-body")
                 assert region.evaluate("element => element.scrollWidth <= element.clientWidth + 1")
                 assert explorer.locator('[part="card"]').count() == expected_rows
-                region.focus()
-                page.keyboard.press("ArrowDown")
-                page.wait_for_function("document.querySelector('gcve-results-table').shadowRoot.querySelector('.tb-body').scrollTop > 0")
             assert explorer.evaluate("element => element.data[0].summary") == long_summary
             assert explorer.locator("img").count() == 0
             if width == 390:
@@ -221,6 +219,7 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             assert panel.locator("gcve-results-table").count() == 0
             assert panel.locator("table").count() == 1
             assert panel.locator("tbody tr").count() == expected_rows
+            assert panel.locator(".gcve-results-scroll").evaluate("element => element.scrollHeight <= element.clientHeight + 1")
             summary = panel.locator(".gcve-result-summary").first
             assert summary.evaluate("cell => cell.textContent.length") == len(oversized_summary)
             assert summary.evaluate("cell => cell.textContent.endsWith('oversized-summary-ending')")

@@ -21,7 +21,7 @@ export class EditorTable extends VtTable {
     .editor-tabs { display: flex; gap: .25rem; }
     .editor-tabs button { border: 0; background: transparent; padding: .5rem; color: var(--_fg-muted); font: inherit; cursor: pointer; }
     .editor-tabs [aria-selected=true] { color: var(--_accent-fg); box-shadow: inset 0 -2px var(--_accent); }
-    .editor-raw { padding: 1rem; overflow: auto; max-height: min(42rem, 70vh); background: var(--_surface); }
+    .editor-raw { padding: 1rem; overflow: auto; background: var(--_surface); }
     .editor-raw pre { margin: 0; white-space: pre; font: var(--_font-size-small)/1.65 var(--_font-mono); }
     .tb-head-label { white-space: nowrap; }
     .tb-cell { vertical-align: top; }
