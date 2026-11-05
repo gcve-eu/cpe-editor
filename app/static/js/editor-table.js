@@ -1,11 +1,6 @@
 import {VtTable} from "../vendor/vitrine/esm/vt-table.js";
 
-const text = value => typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "");
-const guard = value => {
-  const valueText = text(value);
-  return /^[\s\u0000-\u001f\u007f]*[=+\-@]/u.test(valueText) ? `'${valueText}` : valueText;
-};
-const csvCell = value => `"${guard(value).replaceAll('"', '""')}"`;
+import {csvCell, spreadsheetText as guard} from "./export-text.js";
 
 // Application policy around upstream vt-table: keep full-page safe exports and
 // a Raw CSV view. Sorting, filters, selection, grouping and layout are upstream.

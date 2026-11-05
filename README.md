@@ -56,6 +56,19 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   Fullscreen tables scroll inside the available screen. Tables remain usable if
   the component cannot load or rejects oversized content.
 - Drill into vendor/product detail pages and linked relationships.
+- Expand **Inspect record JSON** on vendor, product, CPE, alias and approved
+  change pages to browse the API response as a tree or raw JSON, search keys and
+  values, copy paths/values and download the record. Statistics have the same
+  inspector. Records are fetched only when the panel is opened.
+- CPE identifiers have code-view copy, search, download and fullscreen controls.
+  Approved notes and descriptions use Markdown with a source view; note and
+  description forms offer live previews while submitting the original text.
+  Raw HTML stays literal and images are blocked. The admin JSON ingestion form
+  has a read-only tree/raw preview with validation feedback.
+- Statistics distributions offer interactive bar charts, keyboard value
+  navigation, an accessible data table, CSV copy/download and fullscreen.
+  Chart exports guard spreadsheet formula markers in labels. Components load
+  when opened or brought into view, with the original content as a fallback.
 - Combined views follow approved `synonym-of`, `canonical-of`, `equivalent-to`,
   `renamed-to`, and `vendor-merge-into` relationships in either direction, including
   chains. Vendor views combine products; product views combine CPE entries from
@@ -107,6 +120,10 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
 ### Moderation and operations
 
 - Admin login and protected review workflows.
+- Pending CPE/note updates and new record proposals have unified/side-by-side
+  diffs with change navigation, search and patch downloads. These compare the
+  current record or empty starting point with submitted values without changing
+  records; completed proposals do not claim to show a historical comparison.
 - Accept/reject proposal queue with server-side application of accepted updates.
 - Optional request rate limiting for anonymous submissions.
 - Built-in CSRF token handling for form submissions.

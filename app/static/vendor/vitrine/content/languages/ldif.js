@@ -1,0 +1,2 @@
+/*! highlight.js | BSD-3-Clause | See ../../THIRD_PARTY_NOTICES.md */
+var n=(t,a)=>()=>{try{return a||t((a={exports:{}}).exports,a),a.exports}catch(c){throw a=0,c}};var l=n((r,e)=>{function s(t){return{name:"LDIF",contains:[{className:"attribute",match:"^dn(?=:)",relevance:10},{className:"attribute",match:"^\\w+(?=:)"},{className:"literal",match:"^-"},t.HASH_COMMENT_MODE]}}e.exports=s});export default l();

@@ -42,6 +42,10 @@
     function constrain() {
       tooltip.shadowLinkContainer.style.display = canvas.clientWidth ? "" : "none";
       if (!canvas.clientWidth || !canvas.clientHeight) return;
+      // D3's zoom transition can outlive a collapsed/detached panel. Give it
+      // numeric extents instead of resolving percentage SVG lengths while hidden.
+      canvas.querySelector(".pvt-canvas-element")?.setAttribute(
+        "viewBox", `0 0 ${canvas.clientWidth} ${canvas.clientHeight}`);
       for (const pin of tooltip.tooltipDataMap.keys()) {
         if (pin.parentElement !== canvas) continue;
         const left = Math.max(0, Math.min(parseFloat(pin.style.left) || 0, canvas.clientWidth - pin.offsetWidth));

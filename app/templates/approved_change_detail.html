@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import inspect_json, content_view %}
 {% block title %}Approved Change #{{ proposal.id }}{% endblock %}
 {% block feed_links %}
   <link rel="alternate" type="application/rss+xml" title="CPE Editor Approved Changes RSS" href="{{ url_for('main.approved_changes_rss') }}">
@@ -45,4 +46,5 @@
     <p>{{ proposal.review_comment }}</p>
   {% endif %}
 </div>
+{{ inspect_json(url_for('main.api_change_detail', proposal_id=proposal.id), 'change-' ~ proposal.id ~ '.json') }}
 {% endblock %}

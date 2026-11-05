@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import field_preview %}
 {% block title %}Edit metadata{% endblock %}
 {% block content %}
 <div class="card">
@@ -33,6 +34,7 @@
 
     <label for="metadata_value">Metadata value <span class="required-marker">*</span></label>
     <textarea id="metadata_value" name="metadata_value" required>{{ metadata.metadata_value }}</textarea>
+    {{ field_preview("metadata_value", "markdown", "Preview description", "metadata_key") }}
 
     <div class="action-row end">
       <button type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Save metadata</button>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import inspect_json, content_view %}
 {% block title %}Product {{ product.title or product.name }}{% endblock %}
 {% block feed_links %}
   <link rel="alternate" type="application/rss+xml" title="Approved changes for {{ product.title or product.name }} RSS" href="{{ url_for('main.product_changes_rss', product_uuid=product.uuid) }}">
@@ -53,7 +54,7 @@
   <p class="muted">Product token: <code>{{ product.name }}</code></p>
   <p class="muted">Product UUID: <code>{{ product.uuid }}</code></p>
   </div>
-  <p>{{ product.notes or "No product notes yet." }}</p>
+  {% if product.notes %}{{ content_view("markdown", product.notes, "Product notes", "notes.md") }}{% else %}<p>No product notes yet.</p>{% endif %}
 </div>
 
 {% if is_admin and similar_products %}
@@ -117,7 +118,7 @@
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for metadata in product_metadata %}
       <li>
-        <p>
+        <div>
           <strong>{{ metadata.metadata_key }}</strong>:
           {% if metadata.metadata_key == "gcve:url" %}
             {% set metadata_url = metadata.metadata_value.strip() %}
@@ -125,10 +126,12 @@
               {% set metadata_url = 'https://' ~ metadata_url %}
             {% endif %}
             <a href="{{ metadata_url }}" target="_blank" rel="noopener noreferrer">{{ metadata.metadata_value }}</a>
+          {% elif metadata.metadata_key == "gcve:description" %}
+            {{ content_view("markdown", metadata.metadata_value, "Description", "description.md") }}
           {% else %}
             {{ metadata.metadata_value }}
           {% endif %}
-        </p>
+        </div>
         {% if session.get("is_admin") %}
           <a class="button secondary" href="{{ url_for('main.admin_edit_metadata', metadata_id=metadata.id) }}" style="margin-top:.35rem;">
             <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Edit metadata
@@ -150,7 +153,7 @@
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for note in product_notes %}
       <li>
-        <p>{{ note.note_text }}</p>
+        {{ content_view("markdown", note.note_text, "Approved note", "note.md") }}
         <p class="muted">
           Submitted by {{ note.submitter_name or "Unknown submitter" }}
           {% if note.submitter_email %}(<a href="mailto:{{ note.submitter_email }}">{{ note.submitter_email }}</a>){% endif %}
@@ -361,6 +364,7 @@
     </tbody>
   </table>
 </div>
+{{ inspect_json(url_for('main.api_product_detail', product_uuid=product.uuid), 'product-' ~ product.uuid ~ '.json') }}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   const resultContainer = document.getElementById("gcve-cpe-search-results");

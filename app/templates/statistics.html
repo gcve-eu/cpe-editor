@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import inspect_json %}
 {% block title %}Statistics{% endblock %}
 {% macro number(value) -%}{{ '{:,}'.format(value) }}{%- endmacro %}
 {% macro percentage(count, total) -%}
   {% if total and 0 < 100 * count / total < 0.1 %}&lt;0.1%{% else %}{{ '%.1f'|format(100 * count / total) if total else '0.0' }}%{% endif %}
 {%- endmacro %}
 {% macro bar_row(label, count, total, code=none) %}
-  <li class="stat-bar-row">
+  <li class="stat-bar-row" data-chart-label="{{ label }}" data-chart-value="{{ count }}">
     <div class="stat-bar-label">
       <span>{{ label }}{% if code %} <code>{{ code }}</code>{% endif %}</span>
       <span class="stat-bar-value"><strong>{{ number(count) }}</strong> <span class="muted">{{ percentage(count, total) }}</span></span>
@@ -53,20 +54,23 @@
     <section class="card" aria-labelledby="coverage-heading">
       <h2 id="coverage-heading">Record coverage</h2>
       <p class="muted statistics-description">Each record is counted once, even when it has multiple mappings or references.</p>
-      <ul class="stat-bars">
+      <div class="vitrine-content" data-vitrine-kind="chart" data-vitrine-unit="%">
+        <div data-vitrine-fallback><ul class="stat-bars">
         {% for label, value, total, percent in [
           ('CPEs with PURL mappings', cpes_with_purl_mappings, total_cpes, coverage.get('cpes_with_purl_mappings_percent', 0)),
           ('CPEs with vulnerability references', counts.get('cpes_with_vulnerability_references', 0), total_cpes, coverage.get('cpes_with_vulnerability_references_percent', 0)),
           ('Products with CPE records', counts.get('products_with_cpes', 0), total_products, coverage.get('products_with_cpes_percent', 0)),
           ('Active CPE records', counts.get('active_cpes', 0), total_cpes, coverage.get('active_cpes_percent', 0))
         ] %}
-          <li class="stat-bar-row">
+          <li class="stat-bar-row" data-chart-label="{{ label }}" data-chart-value="{{ percent }}" data-chart-detail="{{ number(value) }} of {{ number(total) }}">
             <div class="stat-bar-label"><span>{{ label }}</span><strong>{{ percentage(value, total) if total else '—' }}</strong></div>
             <div class="stat-bar-track" aria-hidden="true"><span style="width: {{ percent }}%"></span></div>
             <p class="muted stat-bar-note">{{ number(value) }} of {{ number(total) }}{% if not total %} · No records yet{% endif %}</p>
           </li>
         {% endfor %}
-      </ul>
+      </ul></div>
+        <p class="muted vitrine-status" role="status"></p>
+      </div>
       <p class="muted statistics-footnote">Reference coverage reflects linked records; it does not measure how many CPEs are vulnerable.</p>
     </section>
 
@@ -75,11 +79,14 @@
       <p class="muted statistics-description">Share of all {{ number(total_cpes) }} CPE records by platform type.</p>
       {% if cpe_part_counts %}
         {% set part_labels = {'a': 'Applications', 'o': 'Operating systems', 'h': 'Hardware'} %}
-        <ul class="stat-bars">
+        <div class="vitrine-content" data-vitrine-kind="chart">
+        <div data-vitrine-fallback><ul class="stat-bars">
           {% for item in cpe_part_counts %}
             {{ bar_row(part_labels.get(item.part, 'Other'), item.count, total_cpes, item.part) }}
           {% endfor %}
-        </ul>
+        </ul></div>
+        <p class="muted vitrine-status" role="status"></p>
+      </div>
       {% else %}
         <p class="statistics-empty">No CPE records available yet.</p>
       {% endif %}
@@ -94,11 +101,14 @@
       <div class="statistics-section-heading"><h2 id="contributions-heading">Contributed inputs</h2><strong class="pill">{{ number(contributed_inputs) }} total</strong></div>
       <p class="muted statistics-description">Stored contributions by type, including approved proposals and imported enrichment.</p>
       {% if contributed_inputs %}
-        <ul class="stat-bars">
+        <div class="vitrine-content" data-vitrine-kind="chart">
+        <div data-vitrine-fallback><ul class="stat-bars">
           {% for label, value in [('Contributed CPE records', contributed_cpes), ('Metadata entries', metadata_entries), ('Relationships', relationships), ('Product aliases', product_aliases), ('Approved notes', notes), ('Approved vulnerability references', vulnerability_references)] %}
             {{ bar_row(label, value, contributed_inputs) }}
           {% endfor %}
-        </ul>
+        </ul></div>
+        <p class="muted vitrine-status" role="status"></p>
+      </div>
       {% else %}
         <p class="statistics-empty">No contributed inputs available yet.</p>
       {% endif %}
@@ -110,11 +120,14 @@
       {% set total_proposals = proposal_status_counts.values()|sum %}
       <p class="muted statistics-description">{{ number(total_proposals) }} submitted proposals. Accepted proposals and stored contributions are counted separately.</p>
       {% if total_proposals %}
-        <ul class="stat-bars">
+        <div class="vitrine-content" data-vitrine-kind="chart">
+        <div data-vitrine-fallback><ul class="stat-bars">
           {% for status, count in proposal_status_counts|dictsort %}
             {{ bar_row(status|replace('_', ' ')|capitalize, count, total_proposals) }}
           {% endfor %}
-        </ul>
+        </ul></div>
+        <p class="muted vitrine-status" role="status"></p>
+      </div>
       {% else %}
         <p class="statistics-empty">No proposals submitted yet.</p>
       {% endif %}
@@ -131,9 +144,12 @@
       <h2 id="metadata-heading">Metadata by key</h2>
       <p class="muted statistics-description">Share of {{ number(metadata_entries) }} metadata entries.</p>
       {% if metadata_key_counts %}
-        <ul class="stat-bars js-collapsible-list" data-collapse-limit="10">
+        <div class="vitrine-content" data-vitrine-kind="chart">
+        <div data-vitrine-fallback><ul class="stat-bars js-collapsible-list" data-collapse-limit="10">
           {% for item in metadata_key_counts %}{{ bar_row(item.metadata_key, item.count, metadata_entries) }}{% endfor %}
-        </ul>
+        </ul></div>
+        <p class="muted vitrine-status" role="status"></p>
+      </div>
       {% else %}<p class="statistics-empty">No metadata entries available yet.</p>{% endif %}
     </section>
 
@@ -141,9 +157,12 @@
       <h2 id="relationships-heading">Relationships by type</h2>
       <p class="muted statistics-description">Share of {{ number(relationships) }} relationships.</p>
       {% if relationship_type_counts %}
-        <ul class="stat-bars js-collapsible-list" data-collapse-limit="10">
+        <div class="vitrine-content" data-vitrine-kind="chart">
+        <div data-vitrine-fallback><ul class="stat-bars js-collapsible-list" data-collapse-limit="10">
           {% for item in relationship_type_counts %}{{ bar_row(item.relationship_type, item.count, relationships) }}{% endfor %}
-        </ul>
+        </ul></div>
+        <p class="muted vitrine-status" role="status"></p>
+      </div>
       {% else %}<p class="statistics-empty">No relationships available yet.</p>{% endif %}
     </section>
   </div>
@@ -177,4 +196,5 @@
       </div>
     {% else %}<p class="statistics-empty">No vendors available yet.</p>{% endif %}
   </section>
+{{ inspect_json(url_for('main.api_statistics'), 'statistics.json') }}
 {% endblock %}

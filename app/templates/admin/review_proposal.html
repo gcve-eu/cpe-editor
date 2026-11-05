@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import content_view %}
 {% block title %}Review proposal #{{ proposal.id }}{% endblock %}
 {% block content %}
 {% macro render_reference(ref_id, ref_name=None, ref_title=None, fallback='—') -%}
@@ -171,6 +172,13 @@
     <tr><th>Notes</th><td>{{ proposal.proposed_notes or '—' }}</td></tr>
   </table>
 </div>
+
+{% if comparison %}
+<div class="card">
+  <h2>Pending changes</h2>
+  {{ content_view("diff", comparison, "Current and proposed values", "proposal-" ~ proposal.id ~ ".patch") }}
+</div>
+{% endif %}
 
 <div class="card">
   <form method="post" id="review-form">

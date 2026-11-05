@@ -58,5 +58,33 @@ The standalone build leaves the OpenAPI shared chunks intact. Rerun application
 and GCVE browser regressions when updating Vitrine: the adapters also hook table
 render/search refreshes to preserve slotted content and highlighting.
 
+## Content components
+
+`content/` is built from the same `e7db1ebd587b27f41988a0da9785310eaa6f2f08`
+revision. It contains `<vt-code>`, `<vt-json>`, `<vt-markdown>`, `<vt-diff>` and
+`<vt-chart>` with a shared ESM chunk. ECharts and highlight.js language modules
+are separate lazy assets. Their existing licenses are covered by
+THIRD_PARTY_NOTICES.md. Rebuild with:
+
+```sh
+node tools/build_vitrine_content.mjs /path/to/vitrine
+```
+
+The build follows upstream's ECharts Trusted Types transformation and preserves
+the relative `esm/`, `vendor/` and `languages/` layout. `content-views.js` imports
+components only when visible or expanded. JSON inspectors fetch existing
+same-origin API responses on demand; exact response text goes into `<vt-json>`.
+Native form controls remain authoritative. Markdown previews are read-only,
+disable raw HTML and block images. Failed modules restore the native text or
+statistics, and JSON validation errors remain visible while typing.
+
+`StatisticsChart` uses the shared CSV guard from `export-text.js` for both copy
+and download, including whitespace/control-prefixed formula markers. Chart data
+comes from the same values as the server-rendered bars. ECharts loads only for
+visible charts, and an engine import failure leaves the native values available.
+Proposal diffs are built without writes and shown only for pending proposals;
+they are not a stored historical before/after snapshot. The new content views
+follow the page theme and expand with their content.
+
 The editor stylesheet adopts Vitrine's light/dark palette, flat surfaces, thin
 borders, and the native UI and monospace fonts shared with GCVE Patch2Vuln.

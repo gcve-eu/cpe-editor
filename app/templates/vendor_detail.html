@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import inspect_json, content_view %}
 {% block title %}Vendor {{ vendor.title or vendor.name }}{% endblock %}
 {% block feed_links %}
   <link rel="alternate" type="application/rss+xml" title="Approved changes for {{ vendor.title or vendor.name }} RSS" href="{{ url_for('main.vendor_changes_rss', vendor_uuid=vendor.uuid) }}">
@@ -52,7 +53,7 @@
   <p class="muted">Vendor token: <code>{{ vendor.name }}</code></p>
   <p class="muted">Vendor UUID: <code>{{ vendor.uuid }}</code></p>
   </div>
-  <p>{{ vendor.notes or "No vendor notes yet." }}</p>
+  {% if vendor.notes %}{{ content_view("markdown", vendor.notes, "Vendor notes", "notes.md") }}{% else %}<p>No vendor notes yet.</p>{% endif %}
 </div>
 
 {% if is_admin and similar_vendors %}
@@ -105,7 +106,7 @@
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for metadata in vendor_metadata %}
       <li>
-        <p>
+        <div>
           <strong>{{ metadata.metadata_key }}</strong>:
           {% if metadata.metadata_key == "gcve:url" %}
             {% set metadata_url = metadata.metadata_value.strip() %}
@@ -113,10 +114,12 @@
               {% set metadata_url = 'https://' ~ metadata_url %}
             {% endif %}
             <a href="{{ metadata_url }}" target="_blank" rel="noopener noreferrer">{{ metadata.metadata_value }}</a>
+          {% elif metadata.metadata_key == "gcve:description" %}
+            {{ content_view("markdown", metadata.metadata_value, "Description", "description.md") }}
           {% else %}
             {{ metadata.metadata_value }}
           {% endif %}
-        </p>
+        </div>
         {% if session.get("is_admin") %}
           <a class="button secondary" href="{{ url_for('main.admin_edit_metadata', metadata_id=metadata.id) }}" style="margin-top:.35rem;">
             <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Edit metadata
@@ -138,7 +141,7 @@
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for note in vendor_notes %}
       <li>
-        <p>{{ note.note_text }}</p>
+        {{ content_view("markdown", note.note_text, "Approved note", "note.md") }}
         <p class="muted">
           Submitted by {{ note.submitter_name or "Unknown submitter" }}
           {% if note.submitter_email %}(<a href="mailto:{{ note.submitter_email }}">{{ note.submitter_email }}</a>){% endif %}
@@ -273,4 +276,5 @@
     </p>
   {% endif %}
 </div>
+{{ inspect_json(url_for('main.api_vendor_detail', vendor_uuid=vendor.uuid), 'vendor-' ~ vendor.uuid ~ '.json') }}
 {% endblock %}

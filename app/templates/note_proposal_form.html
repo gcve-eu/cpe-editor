@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import field_preview %}
 {% block title %}Submit note proposal{% endblock %}
 {% block content %}
 <div class="card">
@@ -37,6 +38,7 @@
 
       <label for="proposed_notes">Proposed note <span class="required-marker">*</span></label>
       <textarea id="proposed_notes" name="proposed_notes" required></textarea>
+    {{ field_preview("proposed_notes", "markdown", "Preview note", "") }}
     </div>
 
     <div class="form-section">

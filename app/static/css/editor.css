@@ -183,6 +183,15 @@ thead th { background: var(--table-header-bg); font-size: var(--text-xs); font-w
 tbody tr:hover { background: var(--table-row-hover); }
 .table-scroll { overflow-x: auto; max-width: 100%; }
 .table-scroll table { min-width: 600px; }
+.vitrine-content, .vitrine-disclosure { min-width: 0; margin: .75rem 0; }
+.vitrine-content [hidden], .vitrine-disclosure [hidden] { display: none !important; }
+.vitrine-disclosure > summary { color: var(--primary); font-weight: 600; }
+.vitrine-status:empty { display: none; }
+.vitrine-source { white-space: pre-wrap; }
+[data-vitrine-fallback] pre { white-space: pre-wrap; }
+[data-vitrine-viewer] { min-width: 0; --vt-font-size-ui: var(--text-sm); --vt-font-size-small: var(--text-xs); }
+[data-vitrine-viewer]::part(header) { flex-wrap: wrap; min-height: 44px; padding-block: .4rem; }
+[data-vitrine-viewer]::part(title) { min-width: 10rem; }
 application-table { display: block; min-width: 0; margin: .75rem 0; --vt-font-size-ui: var(--text-sm); --vt-font-size: var(--text-sm); --vt-font-size-small: var(--text-xs); }
 /* Original interactive content is slotted into vt-table grid cells/cards. */
 .application-cell { display: inline; line-height: 1.7; overflow-wrap: anywhere; }
