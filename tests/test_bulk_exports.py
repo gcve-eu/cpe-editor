@@ -1,5 +1,6 @@
 from html import unescape
 from types import SimpleNamespace
+from urllib.parse import urlencode
 
 import pytest
 from sqlalchemy import event
@@ -337,6 +338,37 @@ def test_ui_download_links_preserve_filters_and_scope(client):
         assert "/api/cpes/export" not in html
         assert "Export all matching CPEs" not in html
         assert "Exports include every matching record" not in html
+
+
+@pytest.mark.parametrize("entity", ["vendors", "products"])
+@pytest.mark.parametrize("query", [None, "", " \t ", "%", "%%%", "_", "%__%"])
+def test_directory_bulk_export_requires_a_search_filter(client, entity, query):
+    params = {} if query is None else {
+        "q": query, "page": 2, "sort": "products" if entity == "vendors" else "cpes",
+    }
+    response = client.get(f"/{entity}", query_string=params)
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert f"/api/{entity}/export" not in html
+    assert f"Export all matching {entity}" not in html
+    assert "Exports include every matching record" not in html
+    assert 'class="button secondary icon-button js-export-json"' in html
+
+
+@pytest.mark.parametrize("entity,query,expected_name", [
+    ("vendors", "  MICRO  ", "microsoft"),
+    ("products", "  WINDOWS 11  ", "windows_11"),
+])
+def test_filtered_directory_bulk_export_downloads_only_matches(client, entity, query, expected_name):
+    html = unescape(client.get(f"/{entity}", query_string={"q": query}).get_data(as_text=True))
+    link = f"/api/{entity}/export?{urlencode({'q': query.strip()})}"
+    assert f'href="{link}"' in html
+    assert f"Export all matching {entity} (JSON)" in html
+    assert "Exports include every matching record" in html
+    payload = client.get(link).get_json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["name"] == expected_name
+    assert payload["filters"] == {"q": query.strip().lower()}
 
 
 @pytest.mark.parametrize("entity", ["vendors", "products", "cpes"])

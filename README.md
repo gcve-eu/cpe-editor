@@ -270,6 +270,11 @@ and `items`. Items use the same fields as the existing detail API. Exports
 include all matches, including deprecated CPEs, and ignore pagination and sorting
 parameters. With no filters, they export the entire entity collection.
 
+The vendor and product directories show **Export all matching … (JSON)** only
+after a search filter is applied. Empty and wildcard-only searches, sorting and
+pagination do not enable this download. The link includes the active search;
+individual record downloads and vendor/product-scoped exports remain available.
+
 Vendor and product exports support the existing `q` substring search on name
 and title. Product exports also accept an exact `vendor_uuid`. CPE exports
 support `q`, `vendor_q`, `product_q`, `purl_q`, and `part` with the existing search

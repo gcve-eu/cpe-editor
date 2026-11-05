@@ -2336,6 +2336,7 @@ def vendors():
         vendor_has_next=vendor_page < vendor_total_pages,
         vendor_q=vendor_q,
         vendor_total=vendor_total,
+        has_export_filters=bool(vendor_q.strip("%_")),
         sort_by=sort_by,
         vendor_product_counts=vendor_product_counts,
     )
@@ -2392,6 +2393,7 @@ def products():
         product_has_next=page < total_pages,
         product_q=q,
         product_total=total,
+        has_export_filters=bool(q.strip("%_")),
         sort_by=sort_by,
         product_cpe_counts=product_cpe_counts,
     )
