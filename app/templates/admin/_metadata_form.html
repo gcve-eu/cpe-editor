@@ -1,0 +1,22 @@
+{% from "_ui.html" import card, field %}
+{% set back %}<a class="button secondary" href="{{ redirect_target }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back</a>{% endset %}
+{% call card(page_title, eyebrow="Metadata", subtitle=page_subtitle, actions=back, level=1) %}{% endcall %}
+<form method="post" data-disable-until-filled>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% call card("Metadata", eyebrow="Required", class="card-highlight") %}
+    <div class="grid form-stack">
+      {% call field("metadata_key", "Metadata key", required=true, help="gcve:description is a Markdown description; gcve:url is a link to the record's website.") %}
+        <select id="metadata_key" name="metadata_key" required>
+          {% for key in allowed_metadata_keys %}
+            <option value="{{ key }}"{% if current_key == key %} selected{% endif %}>{{ key }}</option>
+          {% endfor %}
+        </select>
+      {% endcall %}
+      {% call field("metadata_value", "Metadata value", required=true, help="The content stored for this key.") %}
+        <textarea id="metadata_value" name="metadata_value" required data-markdown-editor="description.md" data-markdown-when-id="metadata_key" data-markdown-when-value="gcve:description" placeholder="Write why: context, sources… (Markdown)">{{ current_value }}</textarea>
+      {% endcall %}
+    </div>
+    <div class="action-row end"><button type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>{{ submit_label }}</button></div>
+  {% endcall %}
+</form>
+<script type="module" src="{{ url_for('static', filename='js/markdown-editor.js') }}"></script>

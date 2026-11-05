@@ -20,9 +20,8 @@
 <header>
   <nav aria-label="Primary navigation">
     <a class="brand" href="{{ url_for('main.index') }}">
-      <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
-      <strong>CPE Editor</strong>
-      <img class="brand-logo" src="{{ url_for('static', filename='gcve.png') }}" alt="GCVE logo">
+      <img class="brand-logo" src="{{ url_for('static', filename='gcve.png') }}" alt="GCVE">
+      <span class="brand-name">CPE Editor</span>
     </a>
     <button type="button" class="nav-button mobile-nav-toggle" aria-expanded="false" aria-controls="primary-links">Menu <span aria-hidden="true">▾</span></button>
     <div class="nav-links" id="primary-links">
@@ -32,26 +31,32 @@
       <a href="{{ url_for('main.aliases') }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i>Product aliases</a>
       <a href="{{ url_for('main.statistics') }}"><i class="fa-solid fa-chart-column" aria-hidden="true"></i>Statistics</a>
       <a href="{{ url_for('main.details') }}"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>Details</a>
-      <a href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</a>
       <a href="{{ url_for('main.api_docs') }}"><i class="fa-solid fa-code" aria-hidden="true"></i>API docs</a>
     </div>
     <div class="nav-account">
+      <a class="nav-submit" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit a proposal</a>
       <button type="button" id="theme-toggle" class="nav-button" aria-label="Toggle dark mode" title="Toggle dark mode">
         <i class="fa-solid fa-moon" aria-hidden="true"></i>
       </button>
       {% if session.get('is_admin') %}
-        <a href="{{ url_for('main.admin_dashboard') }}"><i class="fa-solid fa-user-gear" aria-hidden="true"></i>Admin</a>
-        <form method="post" action="{{ url_for('main.admin_logout') }}" class="inline-form">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="nav-button"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Logout</button>
-        </form>
+        <details class="nav-menu">
+          <summary class="nav-button"><i class="fa-solid fa-user-gear" aria-hidden="true"></i>Admin<i class="fa-solid fa-chevron-down nav-menu-chevron" aria-hidden="true"></i></summary>
+          <div class="nav-menu-list">
+            <a href="{{ url_for('main.admin_dashboard') }}"><i class="fa-solid fa-gauge" aria-hidden="true"></i>Dashboard</a>
+            <form method="post" action="{{ url_for('main.admin_logout') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="nav-button"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>Logout</button>
+            </form>
+          </div>
+        </details>
       {% else %}
-        <a href="{{ url_for('main.admin_login') }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>Admin login</a>
+        <a href="{{ url_for('main.admin_login') }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>Login</a>
       {% endif %}
     </div>
   </nav>
 </header>
 <main id="main-content">
+  {% block breadcrumb %}{% endblock %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for category, message in messages %}
@@ -61,9 +66,47 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
-<footer>
-  <p class="muted footer-meta"><img class="footer-logo" src="{{ url_for('static', filename='gcve.png') }}" alt="GCVE logo">An interface for moderated CPE editing by the <a href="https://gcve.eu" target="_blank" rel="noopener noreferrer">GCVE initiative</a> and open source at <a href="https://github.com/gcve-eu/cpe-editor/" target="_blank" rel="noopener noreferrer">GitHub: gcve-eu/cpe-editor</a>.</p>
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-about">
+      <a class="footer-brand" href="{{ url_for('main.index') }}">
+        <img src="{{ url_for('static', filename='gcve.png') }}" alt="" width="84" height="24">
+        <strong>CPE Editor</strong>
+      </a>
+      <p>A collaborative catalog of vendors, products and platform identifiers, moderated by the <a href="https://gcve.eu" target="_blank" rel="noopener noreferrer">GCVE initiative</a>.</p>
+    </div>
+    <nav class="footer-column" aria-labelledby="footer-explore">
+      <h2 id="footer-explore">Explore</h2>
+      <a href="{{ url_for('main.vendors') }}">Vendors</a>
+      <a href="{{ url_for('main.products') }}">Products</a>
+      <a href="{{ url_for('main.aliases') }}">Product aliases</a>
+      <a href="{{ url_for('main.statistics') }}">Statistics</a>
+    </nav>
+    <nav class="footer-column" aria-labelledby="footer-contribute">
+      <h2 id="footer-contribute">Contribute</h2>
+      <a href="{{ url_for('main.proposal_new') }}">Submit a proposal</a>
+      <a href="{{ url_for('main.approved_changes') }}">Approved changes</a>
+      <a href="{{ url_for('main.api_docs') }}">API documentation</a>
+    </nav>
+    <nav class="footer-column" aria-labelledby="footer-project">
+      <h2 id="footer-project">Project</h2>
+      <a href="{{ url_for('main.details') }}">About this project</a>
+      <a href="https://github.com/gcve-eu/cpe-editor/" target="_blank" rel="noopener noreferrer">Source code on GitHub<i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
+      <a href="https://gcve.eu" target="_blank" rel="noopener noreferrer">GCVE.eu<i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
+    </nav>
+  </div>
+  <p class="footer-bottom">Open source software, part of the GCVE initiative.</p>
 </footer>
+<button type="button" class="back-to-top" aria-label="Go to the top" title="Go to the top" hidden><i class="fa-solid fa-arrow-up" aria-hidden="true"></i></button>
+<script>
+  (() => {
+    const button = document.querySelector(".back-to-top");
+    const update = () => { button.hidden = window.scrollY < 300; };
+    button.addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
+    window.addEventListener("scroll", update, {passive: true});
+    update();
+  })();
+</script>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     const menuToggle = document.querySelector(".mobile-nav-toggle");
@@ -130,7 +173,7 @@
     });
 
     // Mark the current navigation destination without relying on color alone.
-    document.querySelectorAll("nav a").forEach((link) => {
+    document.querySelectorAll("nav:not(.pagination, .breadcrumb) a").forEach((link) => {
       if (link.pathname === location.pathname) link.setAttribute("aria-current", "page");
     });
 
@@ -225,5 +268,21 @@
 </script>
 <script defer src="{{ url_for('static', filename='js/table-tools.js') }}"></script>
 <script defer src="{{ url_for('static', filename='js/content-views.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/site-select.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/accordion.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/form-fields.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/search-form.js') }}"></script>
+<script>
+  (() => {
+    const menus = [...document.querySelectorAll(".nav-menu, .action-menu")];
+    document.addEventListener("click", event => {
+      menus.forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      menus.filter(menu => menu.open).forEach(menu => { menu.open = false; menu.querySelector("summary").focus(); });
+    });
+  })();
+</script>
 </body>
 </html>

@@ -125,9 +125,8 @@ def test_table_controls_preserve_rows_and_forms(app, client, browser_page, width
     host.get_by_role("searchbox", name="Search", exact=True).press("Enter")
     assert host.locator("mark").count() > 0
     assert page.evaluate("new FormData(document.querySelector('#records-form')).getAll('selected')") == ["1"]
-    with page.expect_download() as info:
-        host.get_by_role("button", name="Download", exact=True).click()
-    downloaded = Path(info.value.path()).read_text()
+    assert host.get_by_role("button", name="Download", exact=True).count() == 0
+    downloaded = host.evaluate("element => element.exportData('csv')")
     exported = list(csv.reader(io.StringIO(downloaded)))
     assert len(exported) == 31  # all loaded rows, including filtered/other pages
     assert "SECRET-TOKEN" not in downloaded

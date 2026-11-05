@@ -1,26 +1,37 @@
 {% extends "base.html" %}
+{% from "_ui.html" import active_filters, card, empty_state, input_field, list_bar %}
 {% block title %}Product aliases{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Aliases",)]) }}{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>Product aliases</h1>
-    <div class="action-row">
-      {% if session.get('is_admin') %}
-      <a class="button" href="{{ url_for('main.admin_create_alias') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Add alias</a>
+{% set header_actions %}
+  {% if session.get('is_admin') %}<a class="button" href="{{ url_for('main.admin_create_alias') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Add alias</a>{% endif %}
+  <a class="button" href="{{ url_for('main.alias_proposal_new') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Propose alias</a>
+{% endset %}
+{% call card("Product aliases", eyebrow="Alias directory", subtitle="Aliases are independently reviewed groups of one or more CPE vendor/product tuples.", id="alias-search-card", actions=header_actions|trim, level=1) %}
+  <form method="get" action="{{ url_for('main.aliases') }}#results" class="grid search-form search-form-single" role="search" aria-label="Search aliases"{% if q %} data-allow-empty="true"{% endif %}>
+    {% if per_page != 25 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    {% if sort %}<input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="dir" value="{{ direction }}">{% endif %}
+    {{ input_field("q", "Alias name", value=q, type="search", placeholder="Alias name", help="Matches any part of the alias name.") }}
+    <div class="search-actions">
+      <button class="search-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Search aliases</span></button>
+      {% if q %}
+        <a class="button secondary" href="{{ url_for('main.aliases', per_page=per_page if per_page != 25 else none, _anchor='alias-search-card') }}"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i><span>Reset filters</span></a>
       {% endif %}
-      <a class="button" href="{{ url_for('main.alias_proposal_new') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Propose alias</a>
+      <span class="search-empty-message" role="alert" hidden></span>
     </div>
-  </div>
-  <p class="muted">Aliases are independently reviewed groups of one or more CPE vendor/product tuples.</p>
-  <form method="get" class="search-form">
-    <label for="q">Search aliases</label>
-    <input id="q" name="q" value="{{ q }}" placeholder="Alias name">
-    <button type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search</button>
   </form>
-</div>
+{% endcall %}
 
-<div class="card">
-  <table>
+{% call card("Results", eyebrow="Directory", id="results") %}
+  {% set keep = {"per_page": per_page if per_page != 25 else none} %}
+  {% set list_params = {"q": q or none, "sort": sort, "dir": direction if sort else none} %}
+  {% if alias_total %}
+    {% call list_bar("main.aliases", list_params, page, total_pages, per_page, anchor="results", position="top") %}<strong>{{ "{:,}".format(alias_total) }}</strong> alias{% if alias_total != 1 %}es{% endif %} found · Page {{ "{:,}".format(page) }} of {{ "{:,}".format(total_pages) }}{% endcall %}
+  {% else %}
+    <p class="muted results-summary"><strong>0</strong> aliases found</p>
+  {% endif %}
+  {% if aliases %}
+    <table aria-label="Product aliases" data-server-columns='{{ [["Alias", "name", "asc"], ["Members", "members", "desc"], ["Description", "description", "asc"]]|tojson }}' data-server-current='{{ [{"members": "Members", "description": "Description"}.get(sort, "Alias"), direction or "asc"]|tojson }}' data-selectable="none" data-server-page-size="{{ per_page }}" data-server-total="{{ alias_total }}" data-server-total-label="{{ "{:,}".format(alias_total) }}" data-server-filters='{{ [["q", "Alias"]]|tojson }}' data-reset-anchor="alias-search-card">
     <thead><tr><th>Alias</th><th>Members</th><th>Description</th><th></th></tr></thead>
     <tbody>
       {% for alias in aliases %}
@@ -39,10 +50,15 @@
             <a class="button secondary" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Propose update</a>
           </td>
         </tr>
-      {% else %}
-        <tr><td colspan="4">No approved aliases yet.</td></tr>
       {% endfor %}
     </tbody>
-  </table>
-</div>
+    </table>
+    {% call list_bar("main.aliases", list_params, page, total_pages, per_page, anchor="results") %}{{ "{:,}".format((page - 1) * per_page + 1) }}–{{ "{:,}".format([page * per_page, alias_total]|min) }} of {{ "{:,}".format(alias_total) }}{% endcall %}
+  {% elif q %}
+    {{ active_filters("main.aliases", [("q", "Alias", q)], keep, "alias-search-card") }}
+    {{ empty_state("No matching aliases", "Try fewer characters or another spelling. If this alias is missing from the catalog, you can propose it.") }}
+  {% else %}
+    {{ empty_state("No approved aliases yet", "Aliases appear here once a moderator approves a proposal.") }}
+  {% endif %}
+{% endcall %}
 {% endblock %}

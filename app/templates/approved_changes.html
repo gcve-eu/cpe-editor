@@ -1,38 +1,20 @@
 {% extends "base.html" %}
+{% from "_ui.html" import card, empty_state, list_bar %}
 {% block title %}Approved Changes{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Approved changes",)]) }}{% endblock %}
 {% block feed_links %}
   <link rel="alternate" type="application/rss+xml" title="CPE Editor Approved Changes RSS" href="{{ url_for('main.approved_changes_rss') }}">
   <link rel="alternate" type="application/atom+xml" title="CPE Editor Approved Changes Atom" href="{{ url_for('main.approved_changes_atom') }}">
 {% endblock %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>Publicly approved changes</h1>
-    {% if changes %}
-      <div class="action-row">
-        {% if has_prev %}
-          <a class="button" href="{{ url_for('main.approved_changes', page=page - 1) }}">
-            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous page
-          </a>
-        {% endif %}
-        {% if has_next %}
-          <a class="button" href="{{ url_for('main.approved_changes', page=page + 1) }}">
-            Next page<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-          </a>
-        {% endif %}
-      </div>
-    {% endif %}
-  </div>
-  <p class="muted">Most recent approvals first.</p>
-  <p class="muted">
-    Feeds:
-    <a href="{{ url_for('main.approved_changes_rss') }}">RSS</a>
-    ·
-    <a href="{{ url_for('main.approved_changes_atom') }}">Atom</a>
-  </p>
+{% set feeds %}
+  <a class="button secondary" href="{{ url_for('main.approved_changes_rss') }}"><i class="fa-solid fa-rss" aria-hidden="true"></i>RSS</a>
+  <a class="button secondary" href="{{ url_for('main.approved_changes_atom') }}"><i class="fa-solid fa-rss" aria-hidden="true"></i>Atom</a>
+{% endset %}
+{% call card("Publicly approved changes", eyebrow="Change history", subtitle="Most recent approvals first.", id="results", actions=feeds|trim, level=1) %}
   {% if changes %}
-    <p class="muted">Showing page {{ page }} of {{ total_pages }} ({{ total_changes }} approved changes).</p>
-    <table>
+    {% call list_bar("main.approved_changes", {"sort": sort, "dir": direction if sort else none}, page, total_pages, per_page, anchor="results", position="top") %}<strong>{{ "{:,}".format(total_changes) }}</strong> approved change{% if total_changes != 1 %}s{% endif %} · Page {{ "{:,}".format(page) }} of {{ "{:,}".format(total_pages) }}{% endcall %}
+    <table aria-label="Approved changes" data-server-columns='{{ [["ID", "id", "desc"], ["Approved", "approved", "desc"], ["Type", "type", "asc"]]|tojson }}' data-server-current='{{ [{"id": "ID", "type": "Type"}.get(sort, "Approved"), direction or "desc"]|tojson }}' data-selectable="none" data-server-page-size="{{ per_page }}" data-server-total="{{ total_changes }}" data-server-total-label="{{ "{:,}".format(total_changes) }}">
       <thead>
         <tr>
           <th>ID</th>
@@ -69,8 +51,9 @@
         {% endfor %}
       </tbody>
     </table>
+    {% call list_bar("main.approved_changes", {"sort": sort, "dir": direction if sort else none}, page, total_pages, per_page, anchor="results") %}{{ "{:,}".format((page - 1) * per_page + 1) }}–{{ "{:,}".format([page * per_page, total_changes]|min) }} of {{ "{:,}".format(total_changes) }}{% endcall %}
   {% else %}
-    <p>No approved changes are public yet.</p>
+    {{ empty_state("No approved changes yet", "Changes appear here once a moderator approves a proposal.") }}
   {% endif %}
-</div>
+{% endcall %}
 {% endblock %}

@@ -1,40 +1,28 @@
 {% extends "base.html" %}
-{% from "_vitrine.html" import field_preview %}
+{% from "_ui.html" import card, field, input_field, note %}
 {% block title %}Submit proposal{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Submit proposal",)]) }}{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>Submit a proposal</h1>
-    <div class="action-row">
-      <button type="submit" form="proposal-form"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</button>
-    </div>
-  </div>
-  <p class="muted">Anonymous contributions are allowed. An admin must accept them before publication.</p>
-  <style>
-    .form-section { border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin: 1rem 0; background: var(--card-bg); }
-    .form-section h2 { margin-top: 0; font-size: 1.125rem; }
-    .form-section.required { border-color: var(--primary); background: var(--primary-soft); }
-    .required-marker { color: #b3261e; font-weight: 700; }
-  </style>
-  <form method="post" id="proposal-form">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="form-section required">
-      <h2>Required for "Add a product to an existing vendor"</h2>
-      <div class="grid grid-2">
-        <div>
-          <label for="proposal_type">Proposal type <span class="required-marker">*</span></label>
-          <select id="proposal_type" name="proposal_type">
-            <option value="edit_cpe" {% if preselected_proposal_type == "edit_cpe" %}selected{% endif %}>Edit an existing CPE</option>
-            <option value="new_cpe" {% if preselected_proposal_type == "new_cpe" %}selected{% endif %}>Add a CPE to an existing vendor/product</option>
-            <option value="new_product" {% if preselected_proposal_type == "new_product" %}selected{% endif %}>Add a product to an existing vendor</option>
-            <option value="new_vendor_product" {% if preselected_proposal_type == "new_vendor_product" %}selected{% endif %}>Add a new vendor and product</option>
-            <option value="new_record_relationship" {% if preselected_proposal_type == "new_record_relationship" %}selected{% endif %}>Propose a vendor/product relationship</option>
-            <option value="new_cpe_vulnerability_reference" {% if preselected_proposal_type == "new_cpe_vulnerability_reference" %}selected{% endif %}>Propose a CPE → vulnerability reference</option>
-          </select>
-        </div>
-        <div>
-          <div id="existing_vendor_group">
-            <label for="vendor_id">Existing vendor <span class="required-marker">*</span></label>
+{% set submit_top %}<button type="submit" form="proposal-form"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</button>{% endset %}
+{% call card("Submit a proposal", eyebrow="Contribute", subtitle="Anonymous contributions are allowed. An admin must accept them before publication.", actions=submit_top, level=1) %}{% endcall %}
+<form method="post" id="proposal-form" data-accordion>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  {% call card("Proposal", eyebrow="Required", class="card-highlight") %}
+    <div class="grid grid-2">
+      {% call field("proposal_type", "Proposal type", help="What you want to change in the catalog. The fields below adapt to this choice.", required=true) %}
+        <select id="proposal_type" name="proposal_type">
+          <option value="edit_cpe" {% if preselected_proposal_type == "edit_cpe" %}selected{% endif %}>Edit an existing CPE</option>
+          <option value="new_cpe" {% if preselected_proposal_type == "new_cpe" %}selected{% endif %}>Add a CPE to an existing vendor/product</option>
+          <option value="new_product" {% if preselected_proposal_type == "new_product" %}selected{% endif %}>Add a product to an existing vendor</option>
+          <option value="new_vendor_product" {% if preselected_proposal_type == "new_vendor_product" %}selected{% endif %}>Add a new vendor and product</option>
+          <option value="new_record_relationship" {% if preselected_proposal_type == "new_record_relationship" %}selected{% endif %}>Propose a vendor/product relationship</option>
+          <option value="new_cpe_vulnerability_reference" {% if preselected_proposal_type == "new_cpe_vulnerability_reference" %}selected{% endif %}>Propose a CPE → vulnerability reference</option>
+        </select>
+      {% endcall %}
+      <div>
+        <div id="existing_vendor_group">
+          {% call field("vendor_id", "Existing vendor", help="The vendor already in the catalog that this proposal applies to.", required=true, hint="Type a vendor name or prefix, then choose a matching vendor. Prefilled when opened from a vendor page.") %}
             <input id="vendor_search" type="search" placeholder="Type vendor name (prefix search)">
             <select id="vendor_id" name="vendor_id">
               <option value="">None selected</option>
@@ -47,76 +35,49 @@
                 >{{ preselected_vendor.title or preselected_vendor.name }}</option>
               {% endif %}
             </select>
-            <small class="muted">Type a vendor name or prefix, then choose a matching vendor. Prefilled when opened from a vendor page.</small>
-          </div>
-          <div id="new_vendor_group" style="display:none;">
-            <label for="proposed_vendor_name">New vendor token <span class="required-marker">*</span></label>
-            <input
-              id="proposed_vendor_name"
-              name="proposed_vendor_name"
-              placeholder="e.g. microsoft"
-              value="{{ prefill.proposed_vendor_name }}"
-            >
-            <small class="muted">Required only for "Add a new vendor and product".</small>
-          </div>
+          {% endcall %}
+        </div>
+        <div id="new_vendor_group" style="display:none;">
+          {% call field("proposed_vendor_name", "New vendor token", help="The lowercase identifier used in CPE records, with underscores instead of spaces.", required=true, hint='Required only for "Add a new vendor and product".') %}
+            <input id="proposed_vendor_name" name="proposed_vendor_name" placeholder="e.g. microsoft" value="{{ prefill.proposed_vendor_name }}">
+          {% endcall %}
         </div>
       </div>
-      <div class="grid grid-2">
-        <div id="product_token_group">
-          <label for="proposed_product_name">Proposed product token <span id="product_token_required_marker" class="required-marker">*</span></label>
-          <input
-            id="proposed_product_name"
-            name="proposed_product_name"
-            placeholder="e.g. exchange_server"
-            value="{% if preselected_product %}{{ preselected_product.name }}{% else %}{{ prefill.proposed_product_name }}{% endif %}"
-          >
-          <small id="product_token_help" class="muted">For product and CPE proposals, this is the required product token.</small>
-        </div>
-        <div>
-          <label for="proposed_product_title">Product display title (optional)</label>
-          <input
-            id="proposed_product_title"
-            name="proposed_product_title"
-            placeholder="e.g. Exchange Server"
-            value="{% if preselected_product %}{{ preselected_product.title or preselected_product.name }}{% else %}{{ prefill.proposed_product_title }}{% endif %}"
-          >
-        </div>
+      <div id="product_token_group">
+        {% call field("proposed_product_name", "Proposed product token", help="The lowercase identifier used in CPE records, for example exchange_server.", required=true, hint="For product and CPE proposals, this is the required product token.") %}
+          <input id="proposed_product_name" name="proposed_product_name" placeholder="e.g. exchange_server" value="{% if preselected_product %}{{ preselected_product.name }}{% else %}{{ prefill.proposed_product_name }}{% endif %}">
+        {% endcall %}
       </div>
+      {{ input_field("proposed_product_title", "Product display title (optional)", help="The readable name shown in the interface.", placeholder="e.g. Exchange Server", value=(preselected_product.title or preselected_product.name) if preselected_product else prefill.proposed_product_title) }}
     </div>
+  {% endcall %}
 
-    <div id="relationship_section" class="form-section" style="display:none;">
-      <h2>Relationship proposal</h2>
-      <p class="muted">Choose source and target records. Keep source/target direction meaningful (for example: <code>renamed-to</code> old → new).</p>
-      <div class="grid grid-2">
-        <div>
-          <label for="proposed_relationship_type">Relationship type</label>
-          <select id="proposed_relationship_type" name="proposed_relationship_type">
-            <option value="">Select type</option>
-            {% for relationship_type, description in relationship_type_descriptions.items() %}
-              <option value="{{ relationship_type }}">{{ relationship_type }} — {{ description }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-      <div class="grid grid-2">
-        <div>
-          <label for="source_entity_kind">Source record type</label>
-          <select id="source_entity_kind" name="source_entity_kind">
-            <option value="vendor" {% if relationship_default_source_kind == "vendor" %}selected{% endif %}>Vendor</option>
-            <option value="product" {% if relationship_default_source_kind == "product" %}selected{% endif %}>Product</option>
-          </select>
-        </div>
-        <div>
-          <label for="target_entity_kind">Target record type</label>
-          <select id="target_entity_kind" name="target_entity_kind">
-            <option value="vendor" {% if relationship_default_target_kind == "vendor" %}selected{% endif %}>Vendor</option>
-            <option value="product" {% if relationship_default_target_kind == "product" %}selected{% endif %}>Product</option>
-          </select>
-        </div>
-      </div>
-      <div class="grid grid-2">
-        <div id="source_vendor_group">
-          <label for="source_vendor_id">Source vendor</label>
+  {% call card("Relationship proposal", eyebrow="Required", subtitle="Choose source and target records.", id="relationship_section") %}
+    {% call note("Tip") %}Keep source/target direction meaningful, for example <code>renamed-to</code>: old → new.{% endcall %}
+    <div class="grid grid-2">
+      {% call field("proposed_relationship_type", "Relationship type", help="How the source record relates to the target record.") %}
+        <select id="proposed_relationship_type" name="proposed_relationship_type">
+          <option value="">Select type</option>
+          {% for relationship_type, description in relationship_type_descriptions.items() %}
+            <option value="{{ relationship_type }}">{{ relationship_type }} — {{ description }}</option>
+          {% endfor %}
+        </select>
+      {% endcall %}
+      <div></div>
+      {% call field("source_entity_kind", "Source record type", help="Whether the source record is a vendor or a product.") %}
+        <select id="source_entity_kind" name="source_entity_kind">
+          <option value="vendor" {% if relationship_default_source_kind == "vendor" %}selected{% endif %}>Vendor</option>
+          <option value="product" {% if relationship_default_source_kind == "product" %}selected{% endif %}>Product</option>
+        </select>
+      {% endcall %}
+      {% call field("target_entity_kind", "Target record type", help="Whether the target record is a vendor or a product.") %}
+        <select id="target_entity_kind" name="target_entity_kind">
+          <option value="vendor" {% if relationship_default_target_kind == "vendor" %}selected{% endif %}>Vendor</option>
+          <option value="product" {% if relationship_default_target_kind == "product" %}selected{% endif %}>Product</option>
+        </select>
+      {% endcall %}
+      <div id="source_vendor_group">
+        {% call field("source_vendor_id", "Source vendor", help="The vendor the relationship starts from.") %}
           <input id="source_vendor_search" type="search" placeholder="Type vendor name (prefix search)">
           <select id="source_vendor_id" name="source_vendor_id">
             <option value="">None selected</option>
@@ -124,9 +85,10 @@
               <option value="{{ preselected_vendor.id }}" selected>{{ preselected_vendor.title or preselected_vendor.name }} ({{ preselected_vendor.name }})</option>
             {% endif %}
           </select>
-        </div>
-        <div id="source_product_group" style="display:none;">
-          <label for="source_product_id">Source product</label>
+        {% endcall %}
+      </div>
+      <div id="source_product_group" style="display:none;">
+        {% call field("source_product_id", "Source product", help="The product the relationship starts from.") %}
           <input id="source_product_search" type="search" placeholder="Type product name (prefix search)">
           <select id="source_product_id" name="source_product_id">
             <option value="">None selected</option>
@@ -134,139 +96,77 @@
               <option value="{{ preselected_product.id }}" selected>{{ preselected_product.title or preselected_product.name }} ({{ preselected_product.vendor.name }}/{{ preselected_product.name }})</option>
             {% endif %}
           </select>
-        </div>
-        <div id="target_vendor_group">
-          <label for="target_vendor_id">Target vendor</label>
+        {% endcall %}
+      </div>
+      <div id="target_vendor_group">
+        {% call field("target_vendor_id", "Target vendor", help="The vendor the relationship points to.") %}
           <input id="target_vendor_search" type="search" placeholder="Type vendor name (prefix search)">
-          <select id="target_vendor_id" name="target_vendor_id">
-            <option value="">None selected</option>
-          </select>
-        </div>
-        <div id="target_product_group" style="display:none;">
-          <label for="target_product_id">Target product</label>
+          <select id="target_vendor_id" name="target_vendor_id"><option value="">None selected</option></select>
+        {% endcall %}
+      </div>
+      <div id="target_product_group" style="display:none;">
+        {% call field("target_product_id", "Target product", help="The product the relationship points to.") %}
           <input id="target_product_search" type="search" placeholder="Type product name (prefix search)">
-          <select id="target_product_id" name="target_product_id">
-            <option value="">None selected</option>
-          </select>
-        </div>
+          <select id="target_product_id" name="target_product_id"><option value="">None selected</option></select>
+        {% endcall %}
       </div>
     </div>
+  {% endcall %}
 
-    <div id="vuln_reference_section" class="form-section" style="display:none;">
-      <h2>CPE vulnerability reference proposal</h2>
-      <p class="muted">Create or reuse a CPE tuple and associate it with a CVE/GCVE/GHSA identifier plus a cpeApplicability status.</p>
-      <div class="grid grid-2">
-        <div>
-          <label for="cpe_triplet">Quick CPE tuple</label>
-          <input id="cpe_triplet" placeholder="vendor:product:version (example: microsoft:exchange_server:2019)">
-          <small class="muted">This helper fills vendor token, product token, and version fields.</small>
-        </div>
-      </div>
-      <div class="grid grid-2">
-        <div>
-          <label for="proposed_vulnerability_source">Vulnerability source</label>
-          <select id="proposed_vulnerability_source" name="proposed_vulnerability_source">
-            <option value="">Select source</option>
-            {% for source in vulnerability_sources %}
-              <option value="{{ source }}">{{ source }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label for="proposed_vulnerability_id">Vulnerability ID</label>
-          <input id="proposed_vulnerability_id" name="proposed_vulnerability_id" placeholder="CVE-2025-12345 / GCVE-2025-0001 / GHSA-xxxx-yyyy-zzzz">
-        </div>
-      </div>
-      <div class="grid grid-2">
-        <div>
-          <label for="proposed_cpe_applicability">cpeApplicability</label>
-          <select id="proposed_cpe_applicability" name="proposed_cpe_applicability">
-            <option value="">Select applicability</option>
-            {% for status in allowed_cpe_applicability_statuses %}
-              <option value="{{ status }}">{{ status }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
+  {% call card("CPE vulnerability reference proposal", eyebrow="Required", subtitle="Create or reuse a CPE tuple and associate it with a CVE/GCVE/GHSA identifier plus a cpeApplicability status.", id="vuln_reference_section") %}
+    {% call note("Tip") %}The Quick CPE tuple fills vendor token, product token and version for you.{% endcall %}
+    <div class="grid grid-2">
+      {{ input_field("cpe_triplet_field", "Quick CPE tuple", help="Write vendor:product:version to fill those fields at once.", id="cpe_triplet", placeholder="vendor:product:version (example: microsoft:exchange_server:2019)", hint="This helper fills vendor token, product token, and version fields.") }}
+      <div></div>
+      {% call field("proposed_vulnerability_source", "Vulnerability source", help="The identifier system: CVE, GCVE or GHSA.") %}
+        <select id="proposed_vulnerability_source" name="proposed_vulnerability_source">
+          <option value="">Select source</option>
+          {% for source in vulnerability_sources %}<option value="{{ source }}">{{ source }}</option>{% endfor %}
+        </select>
+      {% endcall %}
+      {{ input_field("proposed_vulnerability_id", "Vulnerability ID", help="The identifier of the vulnerability in that system.", placeholder="CVE-2025-12345 / GCVE-2025-0001 / GHSA-xxxx-yyyy-zzzz") }}
+      {% call field("proposed_cpe_applicability", "cpeApplicability", help="How the vulnerability applies to this CPE.") %}
+        <select id="proposed_cpe_applicability" name="proposed_cpe_applicability">
+          <option value="">Select applicability</option>
+          {% for status in allowed_cpe_applicability_statuses %}<option value="{{ status }}">{{ status }}</option>{% endfor %}
+        </select>
+      {% endcall %}
     </div>
-    <div class="form-section">
-      <h2>Optional details (help reviewers)</h2>
-      <p class="muted">Everything below is optional. Add only what you know.</p>
-      <div class="grid grid-2">
-        <div>
-          <label for="proposed_part">Part</label>
-          <select id="proposed_part" name="proposed_part">
-            <option value="a" {% if prefill.proposed_part == "a" %}selected{% endif %}>Application (a)</option>
-            <option value="o" {% if prefill.proposed_part == "o" %}selected{% endif %}>Operating system (o)</option>
-            <option value="h" {% if prefill.proposed_part == "h" %}selected{% endif %}>Hardware (h)</option>
-          </select>
-        </div>
-        <div>
-          <label for="product_id">Existing product ID (optional)</label>
-          <input
-            id="product_id"
-            name="product_id"
-            placeholder="Optional skeleton shortcut; replace with searchable picker later"
-            value="{% if preselected_product_id %}{{ preselected_product_id }}{% endif %}"
-          >
-        </div>
-      </div>
+  {% endcall %}
 
-      <div class="grid grid-2">
-        <div>
-          <label for="submitter_name">Your name (optional)</label>
-          <input id="submitter_name" name="submitter_name" placeholder="Optional">
-        </div>
-        <div>
-          <label for="submitter_email">Your email (optional)</label>
-          <input id="submitter_email" name="submitter_email" type="email" placeholder="Optional">
-        </div>
-      </div>
-
-      <div class="grid grid-2">
-        <div>
-          <label for="cpe_entry_id">Existing CPE entry ID (optional)</label>
-          <input id="cpe_entry_id" name="cpe_entry_id" placeholder="Needed only for edit proposals" value="{% if preselected_cpe_entry_id %}{{ preselected_cpe_entry_id }}{% endif %}">
-        </div>
-      </div>
-
-      <div class="grid grid-2">
-        <div>
-          <label for="proposed_vendor_title">Vendor display title (optional)</label>
-          <input
-            id="proposed_vendor_title"
-            name="proposed_vendor_title"
-            placeholder="e.g. Microsoft"
-            value="{% if preselected_vendor %}{{ preselected_vendor.title or preselected_vendor.name }}{% else %}{{ prefill.proposed_vendor_title }}{% endif %}"
-          >
-        </div>
-        <div>
-          <label for="proposed_title">CPE display title (optional)</label>
-          <input id="proposed_title" name="proposed_title" placeholder="e.g. Microsoft Exchange Server 2019" value="{{ prefill.proposed_title }}">
-        </div>
-      </div>
-
-      <div class="grid grid-2">
-        <div><label for="proposed_version">Version</label><input id="proposed_version" name="proposed_version" value="{{ prefill.proposed_version or '*' }}"></div>
-        <div><label for="proposed_update">Update</label><input id="proposed_update" name="proposed_update" value="{{ prefill.proposed_update or '*' }}"></div>
-        <div><label for="proposed_edition">Edition</label><input id="proposed_edition" name="proposed_edition" value="{{ prefill.proposed_edition or '*' }}"></div>
-        <div><label for="proposed_language">Language</label><input id="proposed_language" name="proposed_language" value="{{ prefill.proposed_language or '*' }}"></div>
-        <div><label for="proposed_sw_edition">Software edition</label><input id="proposed_sw_edition" name="proposed_sw_edition" value="{{ prefill.proposed_sw_edition or '*' }}"></div>
-        <div><label for="proposed_target_sw">Target software</label><input id="proposed_target_sw" name="proposed_target_sw" value="{{ prefill.proposed_target_sw or '*' }}"></div>
-        <div><label for="proposed_target_hw">Target hardware</label><input id="proposed_target_hw" name="proposed_target_hw" value="{{ prefill.proposed_target_hw or '*' }}"></div>
-        <div><label for="proposed_other">Other</label><input id="proposed_other" name="proposed_other" value="{{ prefill.proposed_other or '*' }}"></div>
-      </div>
-
-      <label for="proposed_notes">Notes (optional)</label>
-      <textarea id="proposed_notes" name="proposed_notes">{{ prefill.proposed_notes }}</textarea>
-    {{ field_preview("proposed_notes", "markdown", "Preview notes", "") }}
-
-      <label for="rationale">Why should this be changed? (optional)</label>
-      <textarea id="rationale" name="rationale" placeholder="Optional: source, justification, references, etc.">{{ prefill.rationale }}</textarea>
+  {% call card("Optional details", eyebrow="Help reviewers", subtitle="Everything below is optional. Add only what you know.") %}
+    {% call note("Tip") %}A CPE field left as <code>*</code> matches any value.{% endcall %}
+    <div class="grid grid-2">
+      {% call field("proposed_part", "Part", help="The CPE part: a for an application, o for an operating system, h for hardware.") %}
+        <select id="proposed_part" name="proposed_part">
+          <option value="a" {% if prefill.proposed_part == "a" %}selected{% endif %}>Application (a)</option>
+          <option value="o" {% if prefill.proposed_part == "o" %}selected{% endif %}>Operating system (o)</option>
+          <option value="h" {% if prefill.proposed_part == "h" %}selected{% endif %}>Hardware (h)</option>
+        </select>
+      {% endcall %}
+      {{ input_field("product_id", "Existing product ID (optional)", help="The numeric ID of an existing product, if you know it.", placeholder="Optional skeleton shortcut; replace with searchable picker later", value=preselected_product_id or "") }}
+      {{ input_field("submitter_name", "Your name (optional)", help="Shown to moderators with your proposal.", placeholder="Optional") }}
+      {{ input_field("submitter_email", "Your email (optional)", help="Lets moderators contact you about this proposal.", type="email", placeholder="Optional") }}
+      {{ input_field("cpe_entry_id", "Existing CPE entry ID (optional)", help="The numeric ID of the CPE to edit. Needed only for edit proposals.", placeholder="Needed only for edit proposals", value=preselected_cpe_entry_id or "") }}
+      {{ input_field("proposed_vendor_title", "Vendor display title (optional)", help="The readable vendor name shown in the interface.", placeholder="e.g. Microsoft", value=(preselected_vendor.title or preselected_vendor.name) if preselected_vendor else prefill.proposed_vendor_title) }}
+      {{ input_field("proposed_title", "CPE display title (optional)", help="The readable name of this CPE.", placeholder="e.g. Microsoft Exchange Server 2019", value=prefill.proposed_title) }}
+      {{ input_field("proposed_version", "Version", help="The CPE version attribute. Use * for any value.", value=prefill.proposed_version or "*") }}
+      {{ input_field("proposed_update", "Update", help="The CPE update attribute, such as a service pack. Use * for any value.", value=prefill.proposed_update or "*") }}
+      {{ input_field("proposed_edition", "Edition", help="The legacy CPE edition attribute. Use * for any value.", value=prefill.proposed_edition or "*") }}
+      {{ input_field("proposed_language", "Language", help="The CPE language attribute. Use * for any value.", value=prefill.proposed_language or "*") }}
+      {{ input_field("proposed_sw_edition", "Software edition", help="The CPE software edition attribute. Use * for any value.", value=prefill.proposed_sw_edition or "*") }}
+      {{ input_field("proposed_target_sw", "Target software", help="The software environment the product runs on. Use * for any value.", value=prefill.proposed_target_sw or "*") }}
+      {{ input_field("proposed_target_hw", "Target hardware", help="The hardware architecture the product runs on. Use * for any value.", value=prefill.proposed_target_hw or "*") }}
+      {{ input_field("proposed_other", "Other", help="Any other CPE qualifier. Use * for any value.", value=prefill.proposed_other or "*") }}
     </div>
-
-  </form>
-</div>
+    <div class="grid form-stack">
+      {% call field("proposed_notes", "Notes (optional)", help="Notes stored with the record. Markdown is supported.") %}<textarea id="proposed_notes" name="proposed_notes" data-markdown-editor="notes.md" placeholder="Write why: context, sources, details… (Markdown)">{{ prefill.proposed_notes }}</textarea>{% endcall %}
+      {% call field("rationale", "Why should this be changed? (optional)", help="Sources or reasons that help a moderator review this proposal.") %}<textarea id="rationale" name="rationale" placeholder="Optional: source, justification, references, etc.">{{ prefill.rationale }}</textarea>{% endcall %}
+    </div>
+    <div class="action-row end"><button type="submit"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit proposal</button></div>
+  {% endcall %}
+</form>
+<script type="module" src="{{ url_for('static', filename='js/markdown-editor.js') }}"></script>
 <script>
   (function () {
     const proposalType = document.getElementById("proposal_type");
@@ -279,8 +179,8 @@
     const productIdInput = document.getElementById("product_id");
     const productNameInput = document.getElementById("proposed_product_name");
     const productTokenGroup = document.getElementById("product_token_group");
-    const productTokenRequiredMarker = document.getElementById("product_token_required_marker");
-    const productTokenHelp = document.getElementById("product_token_help");
+    const productTokenRequiredMarker = productTokenGroup.querySelector(".field-required");
+    const productTokenHelp = document.getElementById("proposed_product_name-hint");
     const notesInput = document.getElementById("proposed_notes");
     const relationshipSection = document.getElementById("relationship_section");
     const relationshipTypeInput = document.getElementById("proposed_relationship_type");

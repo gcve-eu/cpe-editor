@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}New API client{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Admin", url_for("main.admin_dashboard")), ("New API client",)]) }}{% endblock %}
 {% block content %}
 <div class="card">
   <div class="page-header">

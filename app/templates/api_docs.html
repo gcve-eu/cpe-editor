@@ -1,14 +1,10 @@
 {% extends "base.html" %}
+{% from "_ui.html" import card %}
 {% block title %}API Docs - CPE Editor{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("API docs",)]) }}{% endblock %}
 {% block content %}
-<div class="page-header">
-  <div>
-    <p class="eyebrow">Developer reference</p>
-    <h1>OpenAPI documentation</h1>
-    <p class="muted">Explore endpoints, parameters, and response schemas.</p>
-  </div>
-  <a class="button secondary" href="{{ url_for('main.api_openapi_spec') }}">Download specification</a>
-</div>
+{% set spec_action %}<a class="button" href="{{ url_for('main.api_openapi_spec') }}"><i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i>Download specification</a>{% endset %}
+{% call card("OpenAPI documentation", eyebrow="Developer reference", subtitle="Explore endpoints, parameters, and response schemas.", actions=spec_action, level=1) %}{% endcall %}
 <vt-openapi variant="full" src="{{ url_for('main.api_openapi_spec') }}" label="CPE Editor API" aria-label="CPE Editor API reference"></vt-openapi>
 <details class="card request-console">
   <summary>Try API requests</summary>

@@ -1,26 +1,53 @@
 {% extends "base.html" %}
+{% from "_ui.html" import card %}
 {% block title %}About the collaborative initiative{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Details",)]) }}{% endblock %}
+{% macro link_list(links) %}
+  <ul class="link-list">
+    {% for label, url, text in links %}
+      <li>
+        <a href="{{ url }}"{% if url.startswith('http') %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ label }}{% if url.startswith('http') %}<i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>{% endif %}</a>
+        <span>{{ text }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+{% endmacro %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>About this collaborative CPE platform</h1>
-  </div>
+{% set contribute %}<a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit a proposal</a>{% endset %}
+{% call card("About this collaborative CPE platform", eyebrow="GCVE initiative", subtitle="Collaborative maintenance of CPE and Package URL records.", actions=contribute, level=1) %}
   <p>
     The <a href="https://gcve.eu/" target="_blank" rel="noopener noreferrer">GCVE initiative</a> launched this project to take
     Common Platform Enumeration (CPE) and Package URL (PURL) maintenance to the next level through a collaborative interface.
     Contributors can propose updates, moderators can review changes, and everyone can track how records evolve.
   </p>
-  <p>
-    In addition to the web interface, a public API is available for integrations and automation, and a full database dump is
-    provided so organizations can mirror the data in their own environments.
-  </p>
-  <p>
-    The backend software is open source, so anyone can install their own instance and use the GCVE data dump to maintain a
-    local database of updated vendors, products, and CPE records.
-  </p>
-  <p>
-    The system builds on the existing CPE dataset maintained by the CVE Program and NIST. These datasets are available in the
-    public domain and serve as the baseline for collaborative improvement.
-  </p>
+{% endcall %}
+
+<div class="details-grid">
+  {% call card("Open by design", eyebrow="How it works") %}
+    <p>A public API is available for integrations and automation, and a full database dump is provided so organizations can mirror the data in their own environments.</p>
+    <p>The backend software is open source, so anyone can install their own instance and use the GCVE data dump to maintain a local database of updated vendors, products, and CPE records.</p>
+  {% endcall %}
+  {% call card("Data sources", eyebrow="How it works") %}
+    <p>The system builds on the existing CPE dataset maintained by the CVE Program and NIST. These datasets are available in the public domain and serve as the baseline for collaborative improvement.</p>
+  {% endcall %}
+  {% call card("In this platform", eyebrow="Useful links") %}
+    {{ link_list([
+      ("Browse vendors", url_for('main.vendors'), "The vendor directory."),
+      ("Browse products", url_for('main.products'), "The product directory."),
+      ("Approved changes", url_for('main.approved_changes'), "The public history of reviewed updates."),
+      ("Statistics", url_for('main.statistics'), "Catalog totals and coverage."),
+      ("API docs", url_for('main.api_docs'), "Reference for integrations and automation."),
+    ]) }}
+  {% endcall %}
+  {% call card("Related projects", eyebrow="Useful links") %}
+    {{ link_list([
+      ("GCVE.eu", "https://gcve.eu/", "The GCVE initiative."),
+      ("db.gcve.eu", "https://db.gcve.eu/search", "Search vulnerability records."),
+      ("cpe-editor on GitHub", "https://github.com/gcve-eu/cpe-editor/", "The source code of this platform."),
+      ("purl2cpe", "https://github.com/scanoss/purl2cpe", "Package URL to CPE mappings."),
+      ("Pivotick", "https://github.com/Pivotick/Pivotick", "The graph library behind the record graphs."),
+      ("Vitrine", "https://github.com/ecrou-exact/vitrine", "The web components behind the tables and views."),
+    ]) }}
+  {% endcall %}
 </div>
 {% endblock %}

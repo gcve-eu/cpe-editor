@@ -1,111 +1,70 @@
 {% extends "base.html" %}
+{% from "_ui.html" import active_filters, card, empty_state, help_tip, input_field, list_bar %}
 {% block title %}Browse Vendors{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Vendors",)]) }}{% endblock %}
 {% block content %}
-<div class="card vendors-card">
-  <div class="page-header vendors-page-header">
-    <div>
-      <p class="eyebrow">Vendor directory</p>
-      <h1>Browse vendors</h1>
-    </div>
-    <a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i>Propose vendor/product</a>
-  </div>
-
-  <form method="get" class="vendor-search-form" role="search" aria-label="Search vendors">
-    <label for="vendor-search">Search vendors</label>
-    <div class="vendor-search-controls">
-      <input id="vendor-search" name="q" type="search" value="{{ vendor_q }}" placeholder="Search by vendor name">
-      <button class="search-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Search</span></button>
+{% set sort_param = sort_by if request.args.get('sort') else none %}
+{% set propose %}<a class="button" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-circle-plus" aria-hidden="true"></i>Propose vendor/product</a>{% endset %}
+{% call card("Browse vendors", eyebrow="Vendor directory", subtitle="Find a vendor by its name or title.", id="vendor-search-card", actions=propose, level=1) %}
+  <form method="get" action="{{ url_for('main.vendors') }}#results" class="grid search-form search-form-single" role="search" aria-label="Search vendors"{% if vendor_q %} data-allow-empty="true"{% endif %}>
+    {% if per_page != 25 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    {% if sort_param %}<input type="hidden" name="sort" value="{{ sort_param }}"><input type="hidden" name="dir" value="{{ direction }}">{% endif %}
+    {{ input_field("q", "Vendor name", value=vendor_q, id="vendor-search", type="search", placeholder="microsoft", help="Matches any part of the vendor name or title.") }}
+    <div class="search-actions">
+      <button class="search-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Search vendors</span></button>
       {% if vendor_q %}
-        <a class="button secondary" href="{{ url_for('main.vendors', sort=sort_by) }}">Clear</a>
+        <a class="button secondary" href="{{ url_for('main.vendors', sort=sort_param, per_page=per_page if per_page != 25 else none, _anchor='vendor-search-card') }}"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i><span>Reset filters</span></a>
       {% endif %}
+      <span class="search-empty-message" role="alert" hidden></span>
     </div>
   </form>
+{% endcall %}
 
-  <div class="vendor-sort-controls">
-    <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='vendors', q=vendor_q or none) }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all matching vendors (JSON)</a>
-    <span class="muted">Sort by:</span>
-    <a href="{{ url_for('main.vendors', q=vendor_q or none, sort='name') }}" class="button secondary{% if sort_by == 'name' %} active{% endif %}">
-      <i class="fa-solid fa-arrow-down-a-z" aria-hidden="true"></i>Name
-    </a>
-    <a href="{{ url_for('main.vendors', q=vendor_q or none, sort='products') }}" class="button secondary{% if sort_by == 'products' %} active{% endif %}">
-      <i class="fa-solid fa-cube" aria-hidden="true"></i>Products
-    </a>
-  </div>
-  <p class="muted">Exports include every matching record across all pages. Repeated exports may be up to one hour old.</p>
-
+{% set results_actions %}
+  {% if vendor_total %}
+  <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='vendors', q=vendor_q or none) }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all matching vendors (JSON)</a>
+  {{ help_tip("export-help", "Export", "Exports include every matching record across all pages. Repeated exports may be up to one hour old.") }}
+  {% endif %}
+{% endset %}
+{% call card("Results", eyebrow="Directory", actions=results_actions|trim, id="results") %}
+  {% set keep = {"per_page": per_page if per_page != 25 else none} %}
+  {% set list_params = {"q": vendor_q or none, "sort": sort_param, "dir": request.args.get('dir') if sort_param else none} %}
+  {% if vendor_total %}
+    {% call list_bar("main.vendors", list_params, vendor_page, vendor_total_pages, per_page, anchor="results", position="top") %}<strong>{{ "{:,}".format(vendor_total) }}</strong> vendor{% if vendor_total != 1 %}s{% endif %} found · Page {{ "{:,}".format(vendor_page) }} of {{ "{:,}".format(vendor_total_pages) }}{% endcall %}
+  {% else %}
+    <p class="muted results-summary"><strong>0</strong> vendors found</p>
+  {% endif %}
   {% if vendors %}
-    <div class="muted vendor-results-meta">
-      <p>
-        Page {{ vendor_page }} of {{ vendor_total_pages }}
-        {% if vendor_q %}
-          for <strong>{{ vendor_q }}</strong> ({{ vendor_total }} result{% if vendor_total != 1 %}s{% endif %})
-        {% endif %}
-      </p>
-      <div class="action-row">
-        {% if vendor_has_prev %}
-          <a class="button" href="{{ url_for('main.vendors', page=vendor_page - 1, q=vendor_q or none, sort=sort_by) }}">
-            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
-          </a>
-        {% endif %}
-        {% if vendor_has_next %}
-          <a class="button" href="{{ url_for('main.vendors', page=vendor_page + 1, q=vendor_q or none, sort=sort_by) }}">
-            Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-          </a>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
-  <table aria-label="Vendor directory">
-    <thead><tr><th>Vendor</th><th>Token</th>{% if vendor_product_counts is not none %}<th>Products</th>{% endif %}<th>Export</th></tr></thead>
-    <tbody>
-    {% for vendor in vendors %}
-      <tr>
-        <td>
-          <a class="vendor-list-link" href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a>
-        </td>
-        <td><code>{{ vendor.name }}</code></td>
-          {% if sort_by == 'products' and vendor_product_counts is not none %}
-            <td>{{ vendor_product_counts.get(vendor.id, 0) }}</td>
-          {% endif %}
-        <td>
-        <button
-          type="button"
-          class="button secondary icon-button js-export-json"
-          data-export-url="{{ url_for('main.api_vendor_detail', vendor_uuid=vendor.uuid) }}"
-          data-export-filename="vendor-{{ vendor.uuid }}.json"
-          aria-label="Export vendor {{ vendor.uuid }} JSON"
-          title="Export this vendor JSON"
-        >
-          <i class="fa-solid fa-file-export" aria-hidden="true"></i>
-        </button>
-        </td>
-      </tr>
+    <table aria-label="Vendor directory" data-server-columns='{{ [["Vendor", "title", "asc"], ["Token", "name", "asc"], ["Products", "products", "desc"]]|tojson }}' data-server-current='{{ [{"title": "Vendor", "products": "Products"}.get(sort_by, "Token"), direction]|tojson }}' data-server-sort='{{ [["products", "Products"], ["name", "Name"]]|tojson }}' data-server-page-size="{{ per_page }}" data-server-total="{{ vendor_total }}" data-server-total-label="{{ "{:,}".format(vendor_total) }}" data-export-url="{{ url_for('main.api_bulk_export', entity='vendors', q=vendor_q or none) }}" data-server-filters='{{ [["q", "Vendor"], ["sort", "Sort"]]|tojson }}' data-reset-anchor="vendor-search-card">
+      <thead><tr><th>Vendor</th><th>Token</th>{% if vendor_product_counts is not none %}<th>Products</th>{% endif %}<th>Export</th></tr></thead>
+      <tbody>
+      {% for vendor in vendors %}
+        <tr>
+          <td><a class="vendor-list-link" href="{{ url_for('main.vendor_detail', vendor_uuid=vendor.uuid) }}">{{ vendor.title or vendor.name }}</a></td>
+          <td><code>{{ vendor.name }}</code></td>
+          {% if vendor_product_counts is not none %}<td>{{ vendor_product_counts.get(vendor.id, 0) }}</td>{% endif %}
+          <td>
+            <button
+              type="button"
+              class="button secondary icon-button js-export-json"
+              data-export-url="{{ url_for('main.api_vendor_detail', vendor_uuid=vendor.uuid) }}"
+              data-export-filename="vendor-{{ vendor.uuid }}.json"
+              aria-label="Export vendor {{ vendor.uuid }} JSON"
+              title="Export this vendor JSON"
+            ><i class="fa-solid fa-file-export" aria-hidden="true"></i></button>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% call list_bar("main.vendors", list_params, vendor_page, vendor_total_pages, per_page, anchor="results") %}{{ "{:,}".format((vendor_page - 1) * per_page + 1) }}–{{ "{:,}".format([vendor_page * per_page, vendor_total]|min) }} of {{ "{:,}".format(vendor_total) }}{% endcall %}
+  {% else %}
+    {% if vendor_q %}
+      {{ active_filters("main.vendors", [("q", "Vendor", vendor_q), ("sort", "Sort", sort_param)], keep, "vendor-search-card") }}
+      {{ empty_state("No matching vendors", "Try fewer characters or another spelling. If this vendor is missing from the catalog, you can propose it.") }}
     {% else %}
-      <tr><td colspan="{{ 4 if vendor_product_counts is not none else 3 }}">No vendors found{% if vendor_q %} for <strong>{{ vendor_q }}</strong>{% endif %}.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% if vendors and (vendor_has_prev or vendor_has_next) %}
-    <div class="muted vendor-results-meta">
-      <p>
-        Page {{ vendor_page }} of {{ vendor_total_pages }}
-        {% if vendor_q %}
-          for <strong>{{ vendor_q }}</strong> ({{ vendor_total }} result{% if vendor_total != 1 %}s{% endif %})
-        {% endif %}
-      </p>
-      <div class="action-row">
-        {% if vendor_has_prev %}
-          <a class="button" href="{{ url_for('main.vendors', page=vendor_page - 1, q=vendor_q or none, sort=sort_by) }}">
-            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
-          </a>
-        {% endif %}
-        {% if vendor_has_next %}
-          <a class="button" href="{{ url_for('main.vendors', page=vendor_page + 1, q=vendor_q or none, sort=sort_by) }}">
-            Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-          </a>
-        {% endif %}
-      </div>
-    </div>
+      {{ empty_state("No vendors yet", "Vendors appear here once they are added to the catalog.") }}
+    {% endif %}
   {% endif %}
-</div>
+{% endcall %}
 {% endblock %}

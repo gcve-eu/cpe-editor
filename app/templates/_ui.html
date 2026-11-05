@@ -1,0 +1,253 @@
+{#
+  Shared page building blocks. New pages should use these rather than writing
+  their own heading markup, so that every page keeps the same structure:
+
+    {% from "_ui.html" import card %}
+    {% call card("Search CPEs", eyebrow="Catalog", subtitle="One short sentence.", id="cpe-search") %}
+      ...card content...
+    {% endcall %}
+
+  title: section name, 1 to 3 words, rendered as <h2>.
+  eyebrow: optional small label above the title, naming the area of the page.
+  subtitle: optional sentence explaining what the section is for.
+  id: optional anchor on the card.
+  class: extra class, such as card-highlight for the section to complete first.
+  level: heading level; use level=1 on the card that also titles the page.
+  actions: optional buttons shown on the right of the header:
+
+    {% set buttons %}<a class="button secondary" href="...">Export</a>{% endset %}
+    {% call card("Results", actions=buttons) %}...{% endcall %}
+#}
+{% macro card(title, eyebrow='', subtitle='', id='', actions='', level=2, class='') -%}
+<section class="card{% if class %} {{ class }}{% endif %}"{% if id %} id="{{ id }}"{% endif %}>
+  <header class="card-header">
+    <div class="card-heading">
+      {% if eyebrow %}<p class="card-eyebrow">{{ eyebrow }}</p>{% endif %}
+      <h{{ level }}>{{ title }}</h{{ level }}>
+      {% if subtitle %}<p class="card-subtitle">{{ subtitle }}</p>{% endif %}
+    </div>
+    {% if actions %}<div class="card-actions">{{ actions }}</div>{% endif %}
+  </header>
+  {{ caller() }}
+</section>
+{%- endmacro %}
+
+{#
+  Small "?" that reveals an explanation on hover, focus or tap. Use it beside a
+  button or any control; form fields get it through their `help` parameter.
+
+    {{ help_tip("export-help", "Export", "What the export contains.") }}
+#}
+{% macro help_tip(id, label, text) -%}
+<span class="field-help"><button type="button" tabindex="-1" aria-label="Help: {{ label }}" aria-describedby="{{ id }}">?</button><span class="field-help-text" id="{{ id }}" role="tooltip">{{ text }}</span></span>
+{%- endmacro %}
+
+{#
+  Form fields, in the same spirit as the card header.
+
+    {% from "_ui.html" import field, input_field %}
+    {{ input_field("vendor_q", "Vendor starts with", value=vendor_q, placeholder="microsoft") }}
+
+  For a select or textarea, wrap the control and give it the same id:
+
+    {% call field("part", "Part", hint="Optional help.") %}
+      <select id="part" name="part">...</select>
+    {% endcall %}
+
+  hint: optional help, shown under the control while the field has focus.
+  help: optional longer explanation, behind a small "?" beside the label (hover, focus or tap).
+  error: optional server-side message under the control; marks the field invalid.
+  required: shows a marker beside the label. input_field also sets the attribute;
+    in a {% call field %}, put `required` on the control as well.
+
+  Browser validation errors (required, type, pattern) appear in the same place
+  through form-fields.js, and clear as soon as the value changes. A form with a
+  field-level server error should re-render with the submitted values kept.
+#}
+{% macro field(id, label, hint='', error='', required=false, class='', help='') -%}
+<div class="field{% if error %} field-invalid{% endif %}{% if class %} {{ class }}{% endif %}">
+  <div class="field-label">
+    <label for="{{ id }}">{{ label }}{% if required %} <span class="field-required" title="Required" aria-hidden="true">*</span>{% endif %}</label>
+    {% if help %}{{ help_tip(id ~ "-help", label, help) }}{% endif %}
+  </div>
+  <div class="field-control">{{ caller() }}</div>
+  {% if hint %}<small class="field-hint" id="{{ id }}-hint">{{ hint }}</small>{% endif %}
+  {% if error %}<small class="field-error" id="{{ id }}-error" role="alert">{{ error }}</small>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro input_field(name, label, value='', placeholder='', type='text', id='', hint='', error='', required=false, class='', help='') -%}
+{% set field_id = id or name %}
+{% call field(field_id, label, hint=hint, error=error, required=required, class=class, help=help) %}
+<input id="{{ field_id }}" name="{{ name }}" type="{{ type }}" value="{{ value if value is not none else '' }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if required %} required{% endif %}{% if error %} aria-invalid="true" aria-describedby="{{ field_id }}-error"{% elif hint %} aria-describedby="{{ field_id }}-hint"{% endif %}>
+{% endcall %}
+{%- endmacro %}
+
+{#
+  Short help inside a card: visible, but lighter than the content around it.
+  For help on a single form field, use the field's hint instead.
+
+    {% call note("Tip") %}Fields use <code>prefix</code> matching.{% endcall %}
+
+  label: one word naming the kind of help ("Tip", "Export", "Note").
+#}
+{% macro note(label='', class='') -%}
+<p class="note{% if class %} {{ class }}{% endif %}">{% if label %}<span class="note-label">{{ label }}</span>{% endif %}{{ caller() }}</p>
+{%- endmacro %}
+
+{#
+  Page navigation: first page, pages around the current one, last page.
+
+    {{ pagination("main.index", {"q": q, "per_page": per_page}, page, total_pages,
+                  has_next=has_next, total=total_results, per_page=per_page, anchor="results") }}
+
+  params: query parameters to keep on every link.
+  has_next: optional, for lists whose real end may lie past total_pages.
+  total, per_page: optional, add the "26–50 of 3,291" range.
+  anchor: optional fragment to land on after loading the page.
+  position: "top" for the compact copy above a list, "bottom" otherwise.
+#}
+{% macro pagination(endpoint, params, page, total_pages, has_next=none, total=none, per_page=none, anchor=none, position='bottom') -%}
+{% set next_exists = has_next if has_next is not none else page < total_pages %}
+{% if total_pages > 1 or page > 1 or next_exists %}
+<nav class="pagination pagination-{{ position }}" aria-label="Pagination, {{ position }}">
+  {% if total is not none and per_page %}
+    <p class="pagination-range">{{ "{:,}".format((page - 1) * per_page + 1) }}–{{ "{:,}".format([page * per_page, total]|min) }} of {{ "{:,}".format(total) }}</p>
+  {% endif %}
+  <div class="pagination-pages">
+    {% if page > 1 %}<a class="pagination-step" rel="prev" aria-label="Previous page" href="{{ url_for(endpoint, _anchor=anchor, page=page - 1, **params) }}"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i><span>Previous</span></a>{% endif %}
+    {% set state = namespace(last=0) %}
+    {% for n in [1, page - 2, page - 1, page, page + 1, page + 2, total_pages] | unique | sort if n >= 1 and n <= total_pages %}
+      {% if n - state.last == 2 %}
+        <a href="{{ url_for(endpoint, _anchor=anchor, page=n - 1, **params) }}" aria-label="Page {{ n - 1 }}">{{ "{:,}".format(n - 1) }}</a>
+      {% elif n - state.last > 2 %}
+        <span class="pagination-gap" aria-hidden="true">…</span>
+      {% endif %}
+      {% if n == page %}
+        <a class="is-current" aria-current="page" aria-label="Page {{ n }}" href="{{ url_for(endpoint, _anchor=anchor, page=n, **params) }}">{{ "{:,}".format(n) }}</a>
+      {% else %}
+        <a{% if n != 1 and n != total_pages and (n - page)|abs == 2 %} class="pagination-far"{% endif %} aria-label="Page {{ n }}" href="{{ url_for(endpoint, _anchor=anchor, page=n, **params) }}">{{ "{:,}".format(n) }}</a>
+      {% endif %}
+      {% set state.last = n %}
+    {% endfor %}
+    {% if next_exists %}<a class="pagination-step" rel="next" aria-label="Next page" href="{{ url_for(endpoint, _anchor=anchor, page=page + 1, **params) }}"><span>Next</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
+  </div>
+</nav>
+{% endif %}
+{%- endmacro %}
+
+{#
+  Message shown when a list or section has nothing to display.
+
+    {{ empty_state("No matching CPEs", "Try a shorter prefix or remove a filter.") }}
+
+  With actions:
+
+    {% call empty_state("No proposals yet") %}<a class="button" href="...">Submit one</a>{% endcall %}
+
+  title: what is empty, in a few words.
+  text: optional sentence saying what to do next.
+#}
+{% macro empty_state(title, text='') -%}
+<div class="empty-state">
+  <p class="empty-state-title">{{ title }}</p>
+  {% if text %}<p class="empty-state-text">{{ text }}</p>{% endif %}
+  {% if caller %}<div class="action-row empty-state-actions">{{ caller() }}</div>{% endif %}
+</div>
+{%- endmacro %}
+
+{#
+  Badges for the active search, shown where no table can display them (no results).
+
+    {{ active_filters("main.vendors", [("q", "Vendor", q)], {"sort": sort}, "search-card") }}
+
+  filters: (query parameter, label, value); empty values are skipped.
+  keep: other query parameters to keep on the links.
+  reset_anchor: where to land once no filter is left.
+  anchor: where to land while filters remain.
+#}
+{% macro active_filters(endpoint, filters, keep, reset_anchor, anchor='results') -%}
+{% set active = filters | selectattr(2) | list %}
+<div class="active-filters" aria-label="Current search filters">
+  {% for name, label, value in active %}
+    {% set args = dict(keep) %}
+    {% for other in active if other[0] != name %}{% set _ = args.update({other[0]: other[2]}) %}{% endfor %}
+    <span class="active-filter">{{ label }}: {{ value }}<a aria-label="Remove {{ label }} filter" title="Remove {{ label }} filter" href="{{ url_for(endpoint, _anchor=anchor if active|length > 1 else reset_anchor, **args) }}">×</a></span>
+  {% endfor %}
+  <a class="active-filters-clear" href="{{ url_for(endpoint, _anchor=reset_anchor, **keep) }}">Clear</a>
+</div>
+{%- endmacro %}
+
+{#
+  Bar above and below a list: summary on the left, pages in the centre, page size
+  on the right.
+
+    {% call list_bar("main.vendors", {"q": q}, page, total_pages, per_page, anchor="results", position="top") %}
+      12 vendors found
+    {% endcall %}
+
+  params: query parameters to keep, without page and per_page.
+  The caller's content is the summary. Use a different position for each copy.
+#}
+{% macro list_bar(endpoint, params, page, total_pages, per_page, has_next=none, anchor=none, position='bottom', sizes=(10, 25, 50, 100, 250, 500)) -%}
+<div class="list-bar list-bar-{{ position }}">
+  <p class="list-bar-summary muted">{{ caller() }}</p>
+  <div class="list-bar-pages">{{ pagination(endpoint, dict(params, per_page=per_page if per_page != 25 else none), page, total_pages, has_next=has_next, anchor=anchor, position=position) }}</div>
+  <form method="get" action="{{ url_for(endpoint) }}{% if anchor %}#{{ anchor }}{% endif %}" class="list-bar-size js-page-size">
+    {% for name, value in params.items() if value %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+    <label for="per-page-{{ position }}">Per page</label>
+    <div class="field-control">
+      <select id="per-page-{{ position }}" name="per_page">
+        {% for size in sizes %}<option value="{{ size }}"{% if size == per_page %} selected{% endif %}>{{ size }}</option>{% endfor %}
+      </select>
+    </div>
+    <noscript><button type="submit" class="secondary">Apply</button></noscript>
+  </form>
+</div>
+{%- endmacro %}
+
+{#
+  Where the page sits in the site. Every page declares it after its title block:
+
+    {% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Vendors", url_for("main.vendors")), (vendor.name,)]) }}{% endblock %}
+
+  items: (label, url) for each parent and (label,) for the current page, last.
+  Home is always added first.
+#}
+{% macro breadcrumb(items) -%}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <ol>
+    <li>{% if items %}<a href="{{ url_for('main.index') }}">Home</a>{% else %}<span aria-current="page">Home</span>{% endif %}</li>
+    {% for item in items %}
+      <li>{% if item|length > 1 %}<a href="{{ item[1] }}">{{ item[0] }}</a>{% else %}<span aria-current="page">{{ item[0] }}</span>{% endif %}</li>
+    {% endfor %}
+  </ol>
+</nav>
+{%- endmacro %}
+
+{#
+  Header of a card written by hand, for sections that do not use card().
+
+    {{ section_header("Approved notes", eyebrow="Community") }}
+#}
+{% macro section_header(title, eyebrow='', subtitle='') -%}
+<header class="card-header">
+  <div class="card-heading">
+    {% if eyebrow %}<p class="card-eyebrow">{{ eyebrow }}</p>{% endif %}
+    <h2>{{ title }}</h2>
+    {% if subtitle %}<p class="card-subtitle">{{ subtitle }}</p>{% endif %}
+  </div>
+</header>
+{%- endmacro %}
+
+{#
+  Button opening a short list of actions, to group several header buttons.
+
+    {% call action_menu("Propose", icon="paper-plane", primary=true) %}<a href="...">A product</a>{% endcall %}
+#}
+{% macro action_menu(label, icon='', primary=false) -%}
+<details class="action-menu">
+  <summary class="button{% if not primary %} secondary{% endif %}">{% if icon %}<i class="fa-solid fa-{{ icon }}" aria-hidden="true"></i>{% endif %}{{ label }}<i class="fa-solid fa-chevron-down action-menu-chevron" aria-hidden="true"></i></summary>
+  <div class="action-menu-list">{{ caller() }}</div>
+</details>
+{%- endmacro %}

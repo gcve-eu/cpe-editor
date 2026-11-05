@@ -24,8 +24,30 @@
       host.setAttribute("label", label(table));
       host.setAttribute("theme", document.documentElement.dataset.theme || "auto");
       host.setAttribute("download", `${label(table).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 80) || "table"}.csv`);
-      host.setAttribute("page-size", "25");
-      host.setAttribute("selectable", "multiple");
+      host.setAttribute("page-size", table.dataset.serverPageSize || "25");
+      if (table.dataset.serverPageSize) {
+        host.dataset.serverPaging = "";
+        host.setAttribute("search", "false");
+        host.setAttribute("page-sizes", "false"); // The page's own list bar has it.
+        host.dataset.serverTotal = table.dataset.serverTotal;
+        host.dataset.serverTotalLabel = table.dataset.serverTotalLabel;
+        host.dataset.exportUrl = table.dataset.exportUrl || "";
+        host.dataset.serverFilters = table.dataset.serverFilters || "[]";
+        host.dataset.resetAnchor = table.dataset.resetAnchor || "";
+        host.dataset.serverSort = table.dataset.serverSort || "[]";
+        if (table.dataset.serverColumns) {
+          host.dataset.serverColumns = table.dataset.serverColumns;
+          host.dataset.serverCurrent = table.dataset.serverCurrent;
+          host.dataset.sortAnchor = table.dataset.sortAnchor || "results";
+        }
+      }
+      host.setAttribute("selectable", table.dataset.selectable || "multiple");
+      // Rows have nothing more to reveal: no expand arrow on application tables.
+      host.setAttribute("expandable", "false");
+      if (table.dataset.sortable === "false") host.setAttribute("sortable", "false");
+      if (table.dataset.bulkBar === "false") host.setAttribute("bulk-bar", "false");
+      if (table.dataset.hiddenColumns) host.dataset.hiddenColumns = table.dataset.hiddenColumns;
+      if (table.dataset.queryBar === "false") host.setAttribute("query-bar", "false");
       host.setAttribute("density", "comfortable");
       host.setAttribute("wrap", "true");
       host.setAttribute("filters", "false");

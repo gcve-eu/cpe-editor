@@ -1,68 +1,75 @@
 {% extends "base.html" %}
-{% from "_vitrine.html" import field_preview %}
+{% from "_ui.html" import card, empty_state, field, input_field, pagination %}
 {% block title %}{{ 'Edit alias' if alias else 'Create alias' }}{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Aliases", url_for("main.aliases")), ("Edit " ~ alias.name if alias else "Create alias",)]) }}{% endblock %}
 {% block content %}
-<section class="card">
-  <div class="page-header">
-    <div>
-      <h1>{{ 'Edit alias' if alias else 'Create alias' }}</h1>
-      <p class="muted">Admins can publish alias changes directly without proposal review.</p>
-    </div>
-    <button type="submit" form="admin-alias-form"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Save alias</button>
-  </div>
-</section>
+{% set save %}<button type="submit" form="admin-alias-form"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Save alias</button>{% endset %}
+{% call card('Edit alias' if alias else 'Create alias', eyebrow="Alias directory", subtitle="Admins can publish alias changes directly without proposal review.", actions=save, level=1) %}{% endcall %}
 
-<form method="post" id="admin-alias-form" class="card">
+<form method="post" id="admin-alias-form" data-accordion data-member-picker>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% for product_id in selected_product_ids if product_id not in product_page_ids %}
     <input type="hidden" name="product_ids" value="{{ product_id }}">
   {% endfor %}
-  <div class="form-grid">
-    <label for="alias_name">Alias name</label>
-    <input id="alias_name" name="alias_name" required value="{{ alias.name if alias else '' }}" placeholder="Example: Microsoft Windows">
-    <label for="alias_description">Description</label>
-    <textarea id="alias_description" name="alias_description" placeholder="Optional context for users">{{ alias.description if alias else '' }}</textarea>
-    {{ field_preview("alias_description", "markdown", "Preview description") }}
-  </div>
 
-  <h2>Selected members</h2>
-  {% if selected_products %}
-    <ul>
+  {% call card("Alias", eyebrow="Required", class="card-highlight") %}
+    <div class="grid form-stack">
+      {{ input_field("alias_name", "Alias name", value=request.values.get("alias_name", alias.name if alias else ""), placeholder="Example: Microsoft Windows", required=true, help="The name shown in the alias directory. It must be unique.") }}
+      {% call field("alias_description", "Description", help="Context shown on the alias page. Markdown is supported.") %}
+        <textarea id="alias_description" name="alias_description" data-markdown-editor="description.md" placeholder="Write why: optional context for users… (Markdown)">{{ request.values.get("alias_description", (alias.description or "") if alias else "") }}</textarea>
+      {% endcall %}
+    </div>
+  {% endcall %}
+
+  {% call card("Selected members", eyebrow="Required", subtitle="At least one product must belong to the alias.") %}
+    <p class="muted member-count" id="selected-members-count" aria-live="polite" data-limit="{{ member_limit }}"></p>
+    <ul class="member-list" id="selected-members"{% if not selected_products %} hidden{% endif %}>
       {% for product in selected_products %}
-        <li>{{ product.vendor.title or product.vendor.name }} / {{ product.title or product.name }}</li>
+        <li class="active-filter" data-product-id="{{ product.id }}"><span>{{ product.vendor.title or product.vendor.name }} / {{ product.title or product.name }}</span><button type="button" aria-label="Remove member">×</button></li>
       {% endfor %}
     </ul>
-  {% else %}
-    <p class="muted">No members selected yet. Select one or more products below.</p>
-  {% endif %}
+    <div class="action-row member-actions" id="selected-members-actions" hidden>
+      <button type="button" class="secondary" id="selected-members-more"></button>
+      <button type="button" class="secondary" id="selected-members-collapse">Collapse</button>
+    </div>
+    <div id="selected-members-empty"{% if selected_products %} hidden{% endif %}>{{ empty_state("No members selected yet", "Select one or more products below.") }}</div>
+  {% endcall %}
 
-  <h2>Find products</h2>
-  <p class="muted">Search vendors or products, then check products that should belong to this alias.</p>
-  <div class="form-grid">
-    <label for="q">Search</label>
-    <input id="q" name="q" value="{{ q }}" placeholder="vendor or product name">
-  </div>
-  <button class="secondary" type="submit" formmethod="get"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search products</button>
-
-  <p class="muted">Showing page {{ page }} of {{ total_pages }} ({{ total_products }} matching products).</p>
-  <table>
-    <thead><tr><th>Select</th><th>Vendor</th><th>Product</th></tr></thead>
-    <tbody>
-      {% for product in products %}
-        <tr>
-          <td><input type="checkbox" name="product_ids" value="{{ product.id }}" {% if product.id in selected_product_ids %}checked{% endif %}></td>
-          <td>{{ product.vendor.title or product.vendor.name }}</td>
-          <td>{{ product.title or product.name }}</td>
-        </tr>
-      {% else %}
-        <tr><td colspan="3">No products match this search.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <div class="pagination">
-    {% if has_prev %}<a class="button secondary" href="{{ page_url(page - 1) }}">Previous</a>{% endif %}
-    {% if has_next %}<a class="button secondary" href="{{ page_url(page + 1) }}">Next</a>{% endif %}
-  </div>
+  {% call card("Find products", eyebrow="Members", subtitle="Search vendors or products, then check products that should belong to this alias.", id="find-products") %}
+    <div class="grid form-stack">
+      {{ input_field("q", "Search", value=q, placeholder="vendor or product name", help="Matches any part of the vendor or product name or title.") }}
+    </div>
+    <div class="search-actions alias-search-actions">
+      <button class="secondary" type="button" id="alias-product-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search products</button>
+      <button class="secondary" type="button" id="alias-product-reset" data-applied="{{ q }}"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i>Reset filters</button>
+    </div>
+    {% if products %}
+      <div class="list-bar list-bar-top">
+        <p class="list-bar-summary muted"><strong>{{ "{:,}".format(total_products) }}</strong> matching product{% if total_products != 1 %}s{% endif %} · Page {{ "{:,}".format(page) }} of {{ "{:,}".format(total_pages) }}</p>
+        <div class="list-bar-pages">{{ pagination(request.endpoint, dict(request.view_args, q=q or none), page, total_pages, anchor="find-products", position="top") }}</div>
+      </div>
+      <table aria-label="Matching products" data-sortable="false" data-query-bar="false" data-bulk-bar="false" data-hidden-columns='{{ ["Select"]|tojson }}' data-server-page-size="{{ products|length }}" data-server-total="{{ total_products }}" data-server-total-label="{{ "{:,}".format(total_products) }}">
+        <thead><tr><th>Select</th><th>Vendor</th><th>Product</th></tr></thead>
+        <tbody>
+          {% for product in products %}
+            <tr>
+              <td><input type="checkbox" name="product_ids" value="{{ product.id }}" data-member-label="{{ product.vendor.title or product.vendor.name }} / {{ product.title or product.name }}" aria-label="Select {{ product.vendor.title or product.vendor.name }} / {{ product.title or product.name }}" {% if product.id in selected_product_ids %}checked{% endif %}></td>
+              <td>{{ product.vendor.title or product.vendor.name }}</td>
+              <td>{{ product.title or product.name }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="list-bar list-bar-bottom">
+        <p class="list-bar-summary muted">{{ "{:,}".format((page - 1) * 100 + 1) }}–{{ "{:,}".format([page * 100, total_products]|min) }} of {{ "{:,}".format(total_products) }}</p>
+        <div class="list-bar-pages">{{ pagination(request.endpoint, dict(request.view_args, q=q or none), page, total_pages, anchor="find-products") }}</div>
+      </div>
+    {% else %}
+      {{ empty_state("No products match this search", "Try fewer characters or another spelling.") }}
+    {% endif %}
+  {% endcall %}
+  <div class="action-row end"><button type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Save alias</button></div>
 </form>
+<script type="module" src="{{ url_for('static', filename='js/markdown-editor.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/alias-members.js') }}"></script>
 {% endblock %}

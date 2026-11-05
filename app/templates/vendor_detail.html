@@ -1,65 +1,41 @@
 {% extends "base.html" %}
 {% from "_vitrine.html" import inspect_json, content_view %}
+{% from "_ui.html" import action_menu, card, section_header %}
 {% block title %}Vendor {{ vendor.title or vendor.name }}{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Vendors", url_for("main.vendors")), (vendor.title or vendor.name,)]) }}{% endblock %}
 {% block feed_links %}
   <link rel="alternate" type="application/rss+xml" title="Approved changes for {{ vendor.title or vendor.name }} RSS" href="{{ url_for('main.vendor_changes_rss', vendor_uuid=vendor.uuid) }}">
   <link rel="alternate" type="application/atom+xml" title="Approved changes for {{ vendor.title or vendor.name }} Atom" href="{{ url_for('main.vendor_changes_atom', vendor_uuid=vendor.uuid) }}">
 {% endblock %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>{{ vendor.title or vendor.name }}</h1>
-    <div class="action-row">
-      <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='products', vendor_uuid=vendor.uuid, combined='true') }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all products (JSON)</a>
-      <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='cpes', vendor_uuid=vendor.uuid, combined='true') }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all CPEs (JSON)</a>
-      <button
-        type="button"
-        class="button secondary icon-button js-export-json"
-        data-export-url="{{ url_for('main.api_vendor_detail', vendor_uuid=vendor.uuid) }}"
-        data-export-filename="vendor-{{ vendor.uuid }}.json"
-        aria-label="Export vendor JSON"
-        title="Export vendor JSON"
-      >
-        <i class="fa-solid fa-file-export" aria-hidden="true"></i>
-      </button>
-      <a
-        class="button"
-        href="{{ url_for('main.proposal_new', proposal_type='new_product', vendor_id=vendor.id) }}"
-      >
-        <i class="fa-solid fa-box-open" aria-hidden="true"></i>Propose a product
-      </a>
-      <a
-        class="button"
-        href="{{ url_for('main.note_proposal_new', vendor_id=vendor.id) }}"
-      >
-        <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>Propose a note
-      </a>
-      <a
-        class="button"
-        href="{{ url_for('main.metadata_proposal_new', vendor_id=vendor.id) }}"
-      >
-        <i class="fa-solid fa-tags" aria-hidden="true"></i>Propose metadata
-      </a>
-      <a
-        class="button"
-        href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=vendor.id) }}"
-      >
-        <i class="fa-solid fa-link" aria-hidden="true"></i>Propose a relationship
-      </a>
-    </div>
-  </div>
-  <div class="record-meta">
-  <p class="muted">Approved changes feed: <a href="{{ url_for('main.vendor_changes_rss', vendor_uuid=vendor.uuid) }}">RSS</a> · <a href="{{ url_for('main.vendor_changes_atom', vendor_uuid=vendor.uuid) }}">Atom</a></p>
-  <p class="muted">Vendor token: <code>{{ vendor.name }}</code></p>
-  <p class="muted">Vendor UUID: <code>{{ vendor.uuid }}</code></p>
-  </div>
-  {% if vendor.notes %}{{ content_view("markdown", vendor.notes, "Vendor notes", "notes.md") }}{% else %}<p>No vendor notes yet.</p>{% endif %}
-</div>
+{% set header_actions %}
+  {% if session.get("is_admin") %}
+    <a class="button" href="{{ url_for('main.admin_create_metadata', vendor_id=vendor.id) }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Add metadata</a>
+  {% endif %}
+  {% call action_menu("Export", icon="file-export") %}
+    <a href="{{ url_for('main.api_bulk_export', entity='products', vendor_uuid=vendor.uuid, combined='true') }}">All products (JSON)</a>
+    <a href="{{ url_for('main.api_bulk_export', entity='cpes', vendor_uuid=vendor.uuid, combined='true') }}">All CPEs (JSON)</a>
+    <button type="button" class="js-export-json" data-export-url="{{ url_for('main.api_vendor_detail', vendor_uuid=vendor.uuid) }}" data-export-filename="vendor-{{ vendor.uuid }}.json">This vendor (JSON)</button>
+  {% endcall %}
+  {% call action_menu("Propose", icon="paper-plane", primary=true) %}
+    <a href="{{ url_for('main.proposal_new', proposal_type='new_product', vendor_id=vendor.id) }}"><i class="fa-solid fa-box-open" aria-hidden="true"></i>A product</a>
+    <a href="{{ url_for('main.note_proposal_new', vendor_id=vendor.id) }}"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i>A note</a>
+    <a href="{{ url_for('main.metadata_proposal_new', vendor_id=vendor.id) }}"><i class="fa-solid fa-tags" aria-hidden="true"></i>Metadata</a>
+    <a href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=vendor.id) }}"><i class="fa-solid fa-link" aria-hidden="true"></i>A relationship</a>
+  {% endcall %}
+{% endset %}
+{% call card(vendor.title or vendor.name, eyebrow="Vendor", actions=header_actions|trim, level=1) %}
+  <dl class="record-facts">
+    <div><dt>Token</dt><dd><code>{{ vendor.name }}</code></dd></div>
+    <div><dt>UUID</dt><dd><code>{{ vendor.uuid }}</code></dd></div>
+    <div><dt>Approved changes</dt><dd><a href="{{ url_for('main.vendor_changes_rss', vendor_uuid=vendor.uuid) }}">RSS</a> · <a href="{{ url_for('main.vendor_changes_atom', vendor_uuid=vendor.uuid) }}">Atom</a></dd></div>
+  </dl>
+  {% if vendor.notes %}{{ content_view("markdown", vendor.notes, "Vendor notes", "notes.md") }}{% else %}<p class="muted record-empty">No vendor notes yet.</p>{% endif %}
+{% endcall %}
 
 {% if is_admin and similar_vendors %}
 <div class="card duplicate-alert">
-  <h2><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Similar Vendors ({{ similar_vendors|length }})</h2>
-  <p class="muted">These vendors have similar names and may be duplicates.</p>
+  {{ section_header("Similar vendors (" ~ similar_vendors|length ~ ")", eyebrow="Review", subtitle="These vendors have similar names and may be duplicates.") }}
   <table>
     <thead><tr><th>Vendor</th><th>Products</th><th>Match</th><th></th></tr></thead>
     <tbody>
@@ -97,12 +73,7 @@
 
 <div class="entity-summary-grid">
 <div class="card">
-  <h2>Approved metadata</h2>
-  {% if session.get("is_admin") %}
-    <a class="button" href="{{ url_for('main.admin_create_metadata', vendor_id=vendor.id) }}" style="margin-bottom:.75rem;">
-      <i class="fa-solid fa-plus" aria-hidden="true"></i>Add metadata
-    </a>
-  {% endif %}
+  {{ section_header("Approved metadata", eyebrow="Community") }}
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for metadata in vendor_metadata %}
       <li>
@@ -137,7 +108,7 @@
 </div>
 
 <div class="card">
-  <h2>Approved notes</h2>
+  {{ section_header("Approved notes", eyebrow="Community") }}
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for note in vendor_notes %}
       <li>
@@ -162,7 +133,7 @@
 </div>
 
 <div class="card">
-  <h2>Approved relationships</h2>
+  {{ section_header("Approved relationships", eyebrow="Community") }}
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for relationship in vendor_relationships %}
       <li>
@@ -221,7 +192,7 @@
 </div>
 
 <div class="card">
-  <h2>Products</h2>
+  {{ section_header("Products", eyebrow="Catalog") }}
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for product in vendor.products %}
       <li>
@@ -245,8 +216,7 @@
 </div>
 
 <div class="card">
-  <h2>Combined products view</h2>
-  <p class="muted">The all-products and all-CPE downloads include products from this combined view. Repeated exports may be up to one hour old.</p>
+  {{ section_header("Combined products view", eyebrow="Catalog", subtitle="The all-products and all-CPE downloads include products from this combined view. Repeated exports may be up to one hour old.") }}
   {% if combined_view_vendors|length > 1 %}
     <p class="muted">
       Showing products combined across vendor relationships connected through:

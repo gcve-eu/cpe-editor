@@ -2,9 +2,10 @@
 
 Locally hosted components from https://github.com/ecrou-exact/vitrine (MIT):
 
-- OpenAPI: commit `7c379edba7ffb89abcae01b0806f20ed43dbc627`.
-  Included: `esm/vt-openapi.js`, its static import dependencies, and
-  `vendor/yaml.js`. Preserve the directory layout for lazy YAML loading.
+- OpenAPI: commit `e7db1ebd587b27f41988a0da9785310eaa6f2f08`.
+  Included: `esm/vt-openapi.js` and `esm/chunks/` copied from upstream's
+  `dist/` (`node scripts/build.js`), and `vendor/yaml.js`. Preserve the
+  directory layout for lazy YAML loading.
 - Tables: commit `e7db1ebd587b27f41988a0da9785310eaa6f2f08` (2026-11-04),
   including both new `<vt-table>` commits. `esm/vt-table.js` is a standalone
   bundle. It replaces the previous `vt-csv.js` integration.
@@ -74,7 +75,10 @@ The build follows upstream's ECharts Trusted Types transformation and preserves
 the relative `esm/`, `vendor/` and `languages/` layout. `content-views.js` imports
 components only when visible or expanded. JSON inspectors fetch existing
 same-origin API responses on demand; exact response text goes into `<vt-json>`.
-Native form controls remain authoritative. Markdown previews are read-only,
+Native form controls remain authoritative. The admin "Ingest single JSON object"
+form edits in a `<vt-json mode="edit">` (`admin-json-editor.js`) that copies its
+text into the native textarea, which is what gets submitted and stays visible if
+the component cannot load. Markdown previews are read-only,
 disable raw HTML and block images. Failed modules restore the native text or
 statistics, and JSON validation errors remain visible while typing.
 

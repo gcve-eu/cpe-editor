@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_vitrine.html" import inspect_json, content_view %}
 {% block title %}{{ cpe.cpe_uri }}{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Vendors", url_for("main.vendors")), (cpe.vendor.title or cpe.vendor.name, url_for("main.vendor_detail", vendor_uuid=cpe.vendor.uuid)), (cpe.product.title or cpe.product.name, url_for("main.product_detail", product_uuid=cpe.product.uuid)), (cpe.cpe_uri,)]) }}{% endblock %}
 {% block feed_links %}
   <link rel="alternate" type="application/rss+xml" title="Approved changes for {{ cpe.title or cpe.cpe_uri }} RSS" href="{{ url_for('main.cpe_changes_rss', cpe_id=cpe.id) }}">
   <link rel="alternate" type="application/atom+xml" title="Approved changes for {{ cpe.title or cpe.cpe_uri }} Atom" href="{{ url_for('main.cpe_changes_atom', cpe_id=cpe.id) }}">

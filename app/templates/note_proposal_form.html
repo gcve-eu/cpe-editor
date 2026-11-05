@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_vitrine.html" import field_preview %}
 {% block title %}Submit note proposal{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Submit proposal", url_for("main.proposal_new")), ("Note proposal",)]) }}{% endblock %}
 {% block content %}
 <div class="card">
   <div class="page-header">

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% from "_vitrine.html" import inspect_json %}
+{% from "_ui.html" import card, list_bar, note %}
 {% block title %}Statistics{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Statistics",)]) }}{% endblock %}
 {% macro number(value) -%}{{ '{:,}'.format(value) }}{%- endmacro %}
 {% macro percentage(count, total) -%}
   {% if total and 0 < 100 * count / total < 0.1 %}&lt;0.1%{% else %}{{ '%.1f'|format(100 * count / total) if total else '0.0' }}%{% endif %}
@@ -17,17 +19,12 @@
 {% block content %}
   {% set counts = snapshot.counts %}
   {% set coverage = snapshot.coverage|default({}) %}
-  <div class="page-header statistics-header">
-    <div>
-      <p class="eyebrow">Dataset overview</p>
-      <h1><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Dataset statistics</h1>
-      <p class="muted">Explore the catalog, record coverage, and contributed data in this instance.</p>
-    </div>
-    <a class="button secondary" href="{{ url_for('main.api_statistics') }}"><i class="fa-solid fa-code" aria-hidden="true"></i>View JSON</a>
-  </div>
-  {% if snapshot.generated_at %}
-    <p class="muted statistics-snapshot">Snapshot generated <time datetime="{{ snapshot.generated_at }}">{{ snapshot.generated_at[:19]|replace('T', ' ') }} UTC</time>. Recent changes appear after the next refresh.</p>
-  {% endif %}
+  {% set header_actions %}<a class="button" href="{{ url_for('main.api_statistics') }}"><i class="fa-solid fa-code" aria-hidden="true"></i>View JSON</a>{% endset %}
+  {% call card("Dataset statistics", eyebrow="Dataset overview", subtitle="Explore the catalog, record coverage, and contributed data in this instance.", actions=header_actions, level=1) %}
+    {% if snapshot.generated_at %}
+      {% call note("Snapshot", class="statistics-snapshot") %}Generated <time datetime="{{ snapshot.generated_at }}">{{ snapshot.generated_at[:19]|replace('T', ' ') }} UTC</time>. Recent changes appear after the next refresh.{% endcall %}
+    {% endif %}
+  {% endcall %}
 
   <section class="statistics-kpis" aria-label="Catalog totals">
     {% for label, value, icon, detail in [
@@ -172,8 +169,10 @@
     <p class="muted statistics-description">Bars compare each vendor with the largest vendor. Catalog share uses all {{ number(total_products) }} products.</p>
     {% if vendor_product_counts %}
       {% set largest_count = top_vendor.product_count if top_vendor else 0 %}
+      {% set list_params = {"sort": vendor_sort, "dir": vendor_dir} %}
+      {% call list_bar("main.statistics", list_params, vendor_page, vendor_total_pages, vendors_per_page, anchor="vendor-ranking", position="top") %}<strong>{{ number(vendor_total) }}</strong> vendor{% if vendor_total != 1 %}s{% endif %} · Page {{ number(vendor_page) }} of {{ number(vendor_total_pages) }}{% endcall %}
       <div class="table-scroll" tabindex="0" role="region" aria-labelledby="vendors-heading">
-        <table>
+        <table aria-label="Vendors sorted by number of products" data-selectable="none" data-server-page-size="{{ vendors_per_page }}" data-server-total="{{ vendor_total }}" data-server-total-label="{{ number(vendor_total) }}" data-reset-anchor="vendor-ranking" data-sort-anchor="vendor-ranking" data-server-columns='{{ [["Rank", "products", "desc"], ["Vendor", "name", "asc"], ["Products", "products", "desc"], ["Catalog share", "products", "desc"]]|tojson }}' data-server-current='{{ ["Vendor" if vendor_sort == "name" else "Products", vendor_dir or "desc"]|tojson }}'>
           <thead><tr><th scope="col">Rank</th><th scope="col">Vendor</th><th scope="col">Products</th><th scope="col">Catalog share</th></tr></thead>
           <tbody>
             {% for item in vendor_product_counts %}
@@ -187,13 +186,7 @@
           </tbody>
         </table>
       </div>
-      <div class="statistics-pagination">
-        <p class="muted">Page {{ vendor_page }} of {{ number(vendor_total_pages) }}</p>
-        <div class="action-row">
-          {% if vendor_has_prev %}<a class="button secondary" rel="prev" href="{{ url_for('main.statistics', vendor_page=vendor_page - 1, _anchor='vendor-ranking') }}"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous</a>{% endif %}
-          {% if vendor_has_next %}<a class="button secondary" rel="next" href="{{ url_for('main.statistics', vendor_page=vendor_page + 1, _anchor='vendor-ranking') }}">Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
-        </div>
-      </div>
+      {% call list_bar("main.statistics", list_params, vendor_page, vendor_total_pages, vendors_per_page, anchor="vendor-ranking") %}{{ number((vendor_page - 1) * vendors_per_page + 1) }}–{{ number([vendor_page * vendors_per_page, vendor_total]|min) }} of {{ number(vendor_total) }}{% endcall %}
     {% else %}<p class="statistics-empty">No vendors available yet.</p>{% endif %}
   </section>
 {{ inspect_json(url_for('main.api_statistics'), 'statistics.json') }}

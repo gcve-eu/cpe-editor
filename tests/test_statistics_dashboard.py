@@ -69,7 +69,7 @@ def test_vendor_rankings_preserve_global_rank_and_previous_next_links(app, clien
     assert response.status_code == 200
     assert b"Page 2 of 2" in response.data
     assert b"<td>26</td>" in response.data
-    assert b'vendor_page=1#vendor-ranking' in response.data
+    assert b'page=1#vendor-ranking' in response.data
     assert b'rel="next"' not in response.data
     # Oversized requests clamp to the final page; invalid/negative requests to page 1.
     assert b"Page 2 of 2" in client.get("/statistics?vendor_page=999").data

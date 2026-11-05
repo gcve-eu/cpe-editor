@@ -152,15 +152,16 @@ def test_statistics_diff_and_json_input(app, client, content_page, width):
     assert proposal.status == "pending"
     page.goto("http://content.test/admin")
     field = page.locator('#json_payload')
-    field.fill('{"type":"vendor","vendor_name":"preview-only"}')
-    preview = page.locator('[data-vitrine-input="json_payload"]')
-    preview.locator('summary').click()
-    preview.locator('vt-json [role="tree"]').wait_for()
-    field.fill('{"broken":')
-    preview.locator('vt-json pre.code').wait_for()
+    editor = page.locator('#json_ingest_form vt-json textarea')
+    editor.wait_for()
+    assert field.is_hidden()
+    editor.fill('{"broken":')
+    page.locator('#json_ingest_form button[type="submit"]').click()
+    page.locator('#json_payload_error').get_by_text("Invalid JSON", exact=False).wait_for()
     assert field.input_value() == '{"broken":'
-    field.fill('{"repaired":true}')
-    page.wait_for_function("document.querySelector('vt-json')?.data?.repaired === true")
+    editor.fill('{"repaired":true}')
+    page.wait_for_function("document.querySelector('#json_ingest_form vt-json')?.data?.repaired === true")
+    assert field.input_value() == '{"repaired":true}'
     assert not any("/admin/ingest-json" in url for url in requests)
     assert not errors
     # ECharts is optional: if it fails, the original statistics stay readable.

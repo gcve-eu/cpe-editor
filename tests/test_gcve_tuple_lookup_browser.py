@@ -146,11 +146,8 @@ def test_tuple_lookup_in_browser(app, client, monkeypatch, view, width):
             assert explorer.locator("img").count() == 0
             explorer.get_by_role("tab", name="Table", exact=True).click()
             assert panel.locator("table").count() == (1 if width == 1440 else 0)
-            with page.expect_download() as download_info:
-                explorer.get_by_role("button", name="Download", exact=True).click()
-            download = download_info.value
-            assert download.suggested_filename == "gcve-page-1.csv"
-            exported = list(csv.reader(io.StringIO(Path(download.path()).read_bytes().decode("utf-8"))))
+            assert explorer.get_by_role("button", name="Download", exact=True).count() == 0
+            exported = list(csv.reader(io.StringIO(explorer.evaluate("element => element.exportData('csv')"))))
             assert exported[1][3] == long_summary
             assert exported[2][2] == "2025-08-01T10:30:00.000Z"
             assert exported[2][3] == "An older advisory.\nWith a second paragraph."

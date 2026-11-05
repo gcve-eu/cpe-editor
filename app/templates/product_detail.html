@@ -1,66 +1,42 @@
 {% extends "base.html" %}
 {% from "_vitrine.html" import inspect_json, content_view %}
+{% from "_ui.html" import action_menu, card, section_header %}
 {% block title %}Product {{ product.title or product.name }}{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Products", url_for("main.products")), (product.title or product.name,)]) }}{% endblock %}
 {% block feed_links %}
   <link rel="alternate" type="application/rss+xml" title="Approved changes for {{ product.title or product.name }} RSS" href="{{ url_for('main.product_changes_rss', product_uuid=product.uuid) }}">
   <link rel="alternate" type="application/atom+xml" title="Approved changes for {{ product.title or product.name }} Atom" href="{{ url_for('main.product_changes_atom', product_uuid=product.uuid) }}">
 {% endblock %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>{{ product.title or product.name }}</h1>
-    <div class="action-row">
-      <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='cpes', product_uuid=product.uuid) }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all CPEs (JSON)</a>
-      <button
-        type="button"
-        class="button secondary icon-button js-export-json"
-        data-export-url="{{ url_for('main.api_product_detail', product_uuid=product.uuid) }}"
-        data-export-filename="product-{{ product.uuid }}.json"
-        aria-label="Export product JSON"
-        title="Export product JSON"
-      >
-        <i class="fa-solid fa-file-export" aria-hidden="true"></i>
-      </button>
-      <a
-        class="button"
-        href="{{ url_for('main.note_proposal_new', product_id=product.id) }}"
-      >
-        <i class="fa-solid fa-note-sticky" aria-hidden="true"></i>Propose a note
-      </a>
-      <a
-        class="button"
-        href="{{ url_for('main.metadata_proposal_new', product_id=product.id) }}"
-      >
-        <i class="fa-solid fa-tags" aria-hidden="true"></i>Propose metadata
-      </a>
-      <a
-        class="button"
-        href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=product.vendor_id, product_id=product.id) }}"
-      >
-        <i class="fa-solid fa-link" aria-hidden="true"></i>Propose a relationship
-      </a>
-      <a
-        class="button"
-        href="{{ url_for('main.alias_proposal_new', product_ids=product.id) }}"
-      >
-        <i class="fa-solid fa-layer-group" aria-hidden="true"></i>Propose alias
-      </a>
-    </div>
-  </div>
-  <div class="record-meta">
-  <p class="muted">Approved changes feed: <a href="{{ url_for('main.product_changes_rss', product_uuid=product.uuid) }}">RSS</a> · <a href="{{ url_for('main.product_changes_atom', product_uuid=product.uuid) }}">Atom</a></p>
-  <p class="muted">Vendor: <a href="{{ url_for('main.vendor_detail', vendor_uuid=product.vendor.uuid) }}">{{ product.vendor.title or product.vendor.name }}</a></p>
-  <p class="muted">Vendor UUID: <code>{{ product.vendor.uuid }}</code></p>
-  <p class="muted">Product token: <code>{{ product.name }}</code></p>
-  <p class="muted">Product UUID: <code>{{ product.uuid }}</code></p>
-  </div>
-  {% if product.notes %}{{ content_view("markdown", product.notes, "Product notes", "notes.md") }}{% else %}<p>No product notes yet.</p>{% endif %}
-</div>
+{% set header_actions %}
+  {% if session.get("is_admin") %}
+    <a class="button" href="{{ url_for('main.admin_create_metadata', product_id=product.id) }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Add metadata</a>
+  {% endif %}
+  {% call action_menu("Export", icon="file-export") %}
+    <a href="{{ url_for('main.api_bulk_export', entity='cpes', product_uuid=product.uuid) }}">All CPEs (JSON)</a>
+    <button type="button" class="js-export-json" data-export-url="{{ url_for('main.api_product_detail', product_uuid=product.uuid) }}" data-export-filename="product-{{ product.uuid }}.json">This product (JSON)</button>
+  {% endcall %}
+  {% call action_menu("Propose", icon="paper-plane", primary=true) %}
+    <a href="{{ url_for('main.note_proposal_new', product_id=product.id) }}"><i class="fa-solid fa-note-sticky" aria-hidden="true"></i>A note</a>
+    <a href="{{ url_for('main.metadata_proposal_new', product_id=product.id) }}"><i class="fa-solid fa-tags" aria-hidden="true"></i>Metadata</a>
+    <a href="{{ url_for('main.proposal_new', proposal_type='new_record_relationship', vendor_id=product.vendor_id, product_id=product.id) }}"><i class="fa-solid fa-link" aria-hidden="true"></i>A relationship</a>
+    <a href="{{ url_for('main.alias_proposal_new', product_ids=product.id) }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i>An alias</a>
+  {% endcall %}
+{% endset %}
+{% call card(product.title or product.name, eyebrow="Product", actions=header_actions|trim, level=1) %}
+  <dl class="record-facts">
+    <div><dt>Vendor</dt><dd><a href="{{ url_for('main.vendor_detail', vendor_uuid=product.vendor.uuid) }}">{{ product.vendor.title or product.vendor.name }}</a></dd></div>
+    <div><dt>Vendor UUID</dt><dd><code>{{ product.vendor.uuid }}</code></dd></div>
+    <div><dt>Token</dt><dd><code>{{ product.name }}</code></dd></div>
+    <div><dt>UUID</dt><dd><code>{{ product.uuid }}</code></dd></div>
+    <div><dt>Approved changes</dt><dd><a href="{{ url_for('main.product_changes_rss', product_uuid=product.uuid) }}">RSS</a> · <a href="{{ url_for('main.product_changes_atom', product_uuid=product.uuid) }}">Atom</a></dd></div>
+  </dl>
+  {% if product.notes %}{{ content_view("markdown", product.notes, "Product notes", "notes.md") }}{% else %}<p class="muted record-empty">No product notes yet.</p>{% endif %}
+{% endcall %}
 
 {% if is_admin and similar_products %}
 <div class="card duplicate-alert">
-  <h2><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Similar Products ({{ similar_products|length }})</h2>
-  <p class="muted">These products have similar names and may be duplicates.</p>
+  {{ section_header("Similar products (" ~ similar_products|length ~ ")", eyebrow="Review", subtitle="These products have similar names and may be duplicates.") }}
   <table>
     <thead><tr><th>Vendor</th><th>Product</th><th>CPEs</th><th>Match</th><th></th></tr></thead>
     <tbody>
@@ -92,7 +68,7 @@
 {% endif %}
 
 <div class="card">
-  <h2>Product aliases</h2>
+  {{ section_header("Product aliases", eyebrow="Catalog") }}
   <ul>
     {% for alias in product_aliases %}
       <li><a href="{{ url_for('main.alias_detail', alias_uuid=alias.uuid) }}">{{ alias.name }}</a> — {{ alias.members|length }} member(s)</li>
@@ -109,12 +85,7 @@
 
 <div class="entity-summary-grid">
 <div class="card">
-  <h2>Approved metadata</h2>
-  {% if session.get("is_admin") %}
-    <a class="button" href="{{ url_for('main.admin_create_metadata', product_id=product.id) }}" style="margin-bottom:.75rem;">
-      <i class="fa-solid fa-plus" aria-hidden="true"></i>Add metadata
-    </a>
-  {% endif %}
+  {{ section_header("Approved metadata", eyebrow="Community") }}
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for metadata in product_metadata %}
       <li>
@@ -149,7 +120,7 @@
 </div>
 
 <div class="card">
-  <h2>Approved notes</h2>
+  {{ section_header("Approved notes", eyebrow="Community") }}
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for note in product_notes %}
       <li>
@@ -174,7 +145,7 @@
 </div>
 
 <div class="card">
-  <h2>Approved relationships</h2>
+  {{ section_header("Approved relationships", eyebrow="Community") }}
   <ul class="js-collapsible-list" data-collapse-limit="5">
     {% for relationship in product_relationships %}
       <li>
@@ -233,7 +204,7 @@
 </div>
 
 <div class="card">
-  <h2>Combined product view</h2>
+  {{ section_header("Combined product view", eyebrow="Catalog") }}
   {% if combined_view_products|length > 1 %}
     <p class="muted">
       Showing CPE entries combined across products connected through:
@@ -295,7 +266,7 @@
 
 
 <div class="card">
-  <h2>PURL mappings</h2>
+  {{ section_header("PURL mappings", eyebrow="Catalog") }}
   <table>
     <thead><tr><th>PURL</th><th>CPE URI</th><th>Version</th><th>Source</th><th>Last updated</th></tr></thead>
     <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
@@ -315,7 +286,7 @@
 </div>
 
 <div class="card">
-  <h2>db.gcve.eu vulnerability lookup</h2>
+  {{ section_header("db.gcve.eu vulnerability lookup", eyebrow="Vulnerabilities") }}
   <p class="muted">Run a CPE search on db.gcve.eu at product-level wildcard or on an exact CPE version.</p>
   <div class="action-row">
     {% if product_level_cpe %}
@@ -331,7 +302,7 @@
 </div>
 
 <div class="card">
-  <h2>CPE entries</h2>
+  {{ section_header("CPE entries", eyebrow="Catalog") }}
   <table>
     <thead><tr><th>CPE URI</th><th>Version</th><th>Part</th><th>GCVE lookup</th><th>Export</th></tr></thead>
     <tbody class="js-collapsible-list" data-item-selector=":scope > tr" data-collapse-limit="5">
