@@ -1,5 +1,6 @@
 """Browser regressions for Vitrine controls on native application tables."""
 import csv
+from datetime import datetime
 import io
 import json
 import os
@@ -39,6 +40,31 @@ def browser_page(app, client):
         page.route("https://**", lambda route: route.abort())
         yield page, errors
         browser.close()
+
+
+@pytest.mark.parametrize("width", [1440, 390])
+def test_approved_changes_rich_cells_have_compact_spacing(app, client, browser_page, width):
+    page, errors = browser_page
+    page.set_viewport_size({"width": width, "height": 1000})
+    cpe = CPEEntry.query.first()
+    for day in (1, 2, 3):
+        db.session.add(Proposal(proposal_type="new_product", status="accepted",
+                                vendor=cpe.vendor, product=cpe.product, cpe_entry=cpe,
+                                reviewed_at=datetime(2026, 11, day, 9)))
+    db.session.commit()
+    page.goto("http://tables.test/changes")
+    host = page.locator("application-table")
+    host.get_by_role("tab", name="Raw", exact=True).wait_for()
+    item = host.locator('[part="row"]' if width == 1440 else '[part="card"]').first
+    assert item.bounding_box()["height"] < (140 if width == 1440 else 360)
+    # Formatting whitespace in the template must not stretch links or buttons.
+    action = host.get_by_role("link", name="Open", exact=True).first
+    assert action.is_visible()
+    assert action.bounding_box()["height"] <= 44
+    assert host.get_by_role("link", name=f"Vendor: {cpe.vendor.title or cpe.vendor.name}", exact=True).first.is_visible()
+    assert host.get_by_role("link", name=f"Product: {cpe.product.title or cpe.product.name}", exact=True).first.is_visible()
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
+    assert not errors
 
 
 @pytest.mark.parametrize("width", [1440, 390])
