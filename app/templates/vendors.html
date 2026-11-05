@@ -21,7 +21,7 @@
 {% endcall %}
 
 {% set results_actions %}
-  {% if vendor_total %}
+  {% if has_export_filters and vendor_total %}
   <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='vendors', q=vendor_q or none) }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all matching vendors (JSON)</a>
   {{ help_tip("export-help", "Export", "Exports include every matching record across all pages. Repeated exports may be up to one hour old.") }}
   {% endif %}
@@ -35,7 +35,7 @@
     <p class="muted results-summary"><strong>0</strong> vendors found</p>
   {% endif %}
   {% if vendors %}
-    <table aria-label="Vendor directory" data-server-columns='{{ [["Vendor", "title", "asc"], ["Token", "name", "asc"], ["Products", "products", "desc"]]|tojson }}' data-server-current='{{ [{"title": "Vendor", "products": "Products"}.get(sort_by, "Token"), direction]|tojson }}' data-server-sort='{{ [["products", "Products"], ["name", "Name"]]|tojson }}' data-server-page-size="{{ per_page }}" data-server-total="{{ vendor_total }}" data-server-total-label="{{ "{:,}".format(vendor_total) }}" data-export-url="{{ url_for('main.api_bulk_export', entity='vendors', q=vendor_q or none) }}" data-server-filters='{{ [["q", "Vendor"], ["sort", "Sort"]]|tojson }}' data-reset-anchor="vendor-search-card">
+    <table aria-label="Vendor directory" data-server-columns='{{ [["Vendor", "title", "asc"], ["Token", "name", "asc"], ["Products", "products", "desc"]]|tojson }}' data-server-current='{{ [{"title": "Vendor", "products": "Products"}.get(sort_by, "Token"), direction]|tojson }}' data-server-sort='{{ [["products", "Products"], ["name", "Name"]]|tojson }}' data-server-page-size="{{ per_page }}" data-server-total="{{ vendor_total }}" data-server-total-label="{{ "{:,}".format(vendor_total) }}" {% if has_export_filters %}data-export-url="{{ url_for('main.api_bulk_export', entity='vendors', q=vendor_q or none) }}"{% endif %} data-server-filters='{{ [["q", "Vendor"], ["sort", "Sort"]]|tojson }}' data-reset-anchor="vendor-search-card">
       <thead><tr><th>Vendor</th><th>Token</th>{% if vendor_product_counts is not none %}<th>Products</th>{% endif %}<th>Export</th></tr></thead>
       <tbody>
       {% for vendor in vendors %}

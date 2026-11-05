@@ -21,7 +21,7 @@
 {% endcall %}
 
 {% set results_actions %}
-  {% if product_total %}
+  {% if has_export_filters and product_total %}
   <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='products', q=product_q or none) }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all matching products (JSON)</a>
   {{ help_tip("export-help", "Export", "Exports include every matching record across all pages. Repeated exports may be up to one hour old.") }}
   {% endif %}
@@ -35,7 +35,7 @@
     <p class="muted results-summary"><strong>0</strong> products found</p>
   {% endif %}
   {% if products %}
-    <table aria-label="Product directory" data-server-columns='{{ [["Product", "title", "asc"], ["Vendor", "vendor", "asc"], ["Token", "name", "asc"], ["CPE entries", "cpes", "desc"]]|tojson }}' data-server-current='{{ [{"title": "Product", "vendor": "Vendor", "cpes": "CPE entries"}.get(sort_by, "Token"), direction]|tojson }}' data-server-sort='{{ [["cpes", "CPE entries"], ["name", "Name"]]|tojson }}' data-server-page-size="{{ per_page }}" data-server-total="{{ product_total }}" data-server-total-label="{{ "{:,}".format(product_total) }}" data-export-url="{{ url_for('main.api_bulk_export', entity='products', q=product_q or none) }}" data-server-filters='{{ [["q", "Product"], ["sort", "Sort"]]|tojson }}' data-reset-anchor="product-search-card">
+    <table aria-label="Product directory" data-server-columns='{{ [["Product", "title", "asc"], ["Vendor", "vendor", "asc"], ["Token", "name", "asc"], ["CPE entries", "cpes", "desc"]]|tojson }}' data-server-current='{{ [{"title": "Product", "vendor": "Vendor", "cpes": "CPE entries"}.get(sort_by, "Token"), direction]|tojson }}' data-server-sort='{{ [["cpes", "CPE entries"], ["name", "Name"]]|tojson }}' data-server-page-size="{{ per_page }}" data-server-total="{{ product_total }}" data-server-total-label="{{ "{:,}".format(product_total) }}" {% if has_export_filters %}data-export-url="{{ url_for('main.api_bulk_export', entity='products', q=product_q or none) }}"{% endif %} data-server-filters='{{ [["q", "Product"], ["sort", "Sort"]]|tojson }}' data-reset-anchor="product-search-card">
       <thead><tr><th>Product</th><th>Vendor</th><th>Token</th>{% if product_cpe_counts is not none %}<th>CPE entries</th>{% endif %}<th>Export</th></tr></thead>
       <tbody>
       {% for product in products %}
