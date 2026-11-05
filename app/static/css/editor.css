@@ -539,3 +539,12 @@ nav .mobile-nav-toggle { display: none; }
   .stat-bar-label { flex-wrap: wrap; gap: .25rem .75rem; }
 }
 @media (forced-colors: active) { .stat-bar-track { border: 1px solid CanvasText; } .stat-bar-track > span { background: Highlight; forced-color-adjust: none; } }
+
+/* Warm accent, for small details only. */
+:root { --accent-warm: #b4530f; }
+[data-theme="dark"] { --accent-warm: #f2a65a; }
+.card-eyebrow, .eyebrow, .note-label, .footer-column h2 { color: var(--accent-warm); }
+.card-header::after, .footer-column h2::after { background: var(--accent-warm); }
+.note { border-left-color: var(--accent-warm); }
+.field-help button:hover, .field-help button:focus-visible,
+[data-theme="dark"] .field-help button:hover, [data-theme="dark"] .field-help button:focus-visible { border-color: var(--accent-warm); color: var(--accent-warm); }
