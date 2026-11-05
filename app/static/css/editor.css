@@ -194,7 +194,9 @@ tbody tr:hover { background: var(--table-row-hover); }
 [data-vitrine-viewer]::part(title) { min-width: 10rem; }
 application-table { display: block; min-width: 0; margin: .75rem 0; --vt-font-size-ui: var(--text-sm); --vt-font-size: var(--text-sm); --vt-font-size-small: var(--text-xs); }
 /* Original interactive content is slotted into vt-table grid cells/cards. */
-.application-cell { display: inline; line-height: 1.7; overflow-wrap: anywhere; }
+/* Native HTML cells collapse template indentation, even inside Vitrine's
+   pre-wrapped grid/card slots. Explicit pre/code formatting still applies. */
+.application-cell { display: inline; white-space: normal; line-height: 1.7; overflow-wrap: anywhere; }
 .application-cell time { display: inline-flex; flex-direction: column; gap: .2rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .application-cell time small { color: var(--muted); }
 .application-cell mark { background: var(--primary-soft); color: var(--text); outline: 1px solid var(--primary); }
