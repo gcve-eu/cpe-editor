@@ -1,25 +1,29 @@
 {% extends "base.html" %}
 {% from "_vitrine.html" import inspect_json, content_view %}
+{% from "_ui.html" import card, empty_state, section_header %}
 {% block title %}Alias {{ alias.name }}{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Aliases", url_for("main.aliases")), (alias.name,)]) }}{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>{{ alias.name }}</h1>
-    <div class="action-row">
-      {% if session.get('is_admin') %}
-      <a class="button" href="{{ url_for('main.admin_edit_alias', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Edit alias</a>
-      <form method="post" action="{{ url_for('main.admin_delete_alias', alias_id=alias.id) }}" onsubmit="return confirm('Delete this alias?');" style="display:inline-block;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="danger" type="submit"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete alias</button>
-      </form>
-      {% endif %}
-      <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Propose update</a>
-      <button class="secondary copy-json" type="button" data-export-url="{{ url_for('main.api_alias_detail', alias_uuid=alias.uuid) }}"><i class="fa-solid fa-copy" aria-hidden="true"></i>Copy JSON</button>
-    </div>
-  </div>
-  {% if alias.description %}{{ content_view("markdown", alias.description, "Alias description", "description.md") }}{% else %}<p>No description provided.</p>{% endif %}
-  <p class="muted">Approved {{ alias.approved_at or alias.created_at }} · {{ alias.members|length }} member(s)</p>
-</div>
+{% set header_actions %}
+  <button class="secondary js-export-json" type="button" data-export-url="{{ url_for('main.api_alias_detail', alias_uuid=alias.uuid) }}" data-export-filename="alias-{{ alias.uuid }}.json"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export JSON</button>
+  <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id) }}"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Propose update</a>
+  {% if session.get('is_admin') %}
+    <a class="button" href="{{ url_for('main.admin_edit_alias', alias_id=alias.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Edit alias</a>
+    <form method="post" action="{{ url_for('main.admin_delete_alias', alias_id=alias.id) }}" onsubmit="return confirm('Delete this alias?');" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="danger" type="submit"><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete alias</button>
+    </form>
+  {% endif %}
+{% endset %}
+{% set approved = alias.approved_at or alias.created_at %}
+{% call card(alias.name, eyebrow="Product alias", actions=header_actions|trim, level=1) %}
+  <dl class="record-facts">
+    <div><dt>Members</dt><dd>{{ alias.members|length }}</dd></div>
+    <div><dt>Approved</dt><dd>{{ approved.strftime("%Y-%m-%d %H:%M UTC") if approved else "Unknown date" }}</dd></div>
+    <div><dt>UUID</dt><dd><code>{{ alias.uuid }}</code></dd></div>
+  </dl>
+  {% if alias.description %}{{ content_view("markdown", alias.description, "Alias description", "description.md") }}{% else %}<p class="muted record-empty">No description provided.</p>{% endif %}
+{% endcall %}
 
 {% set graph_url = url_for('main.alias_graph', alias_uuid=alias.uuid) %}
 {% set graph_include_cpes = true %}
@@ -27,8 +31,9 @@
 {% include "_entity_graph.html" %}
 
 <div class="card">
-  <h2>Vendor/product tuples</h2>
-  <table>
+  {{ section_header("Vendor/product tuples", eyebrow="Members") }}
+  {% if alias.members %}
+  <table aria-label="Vendor/product tuples" data-selectable="none">
     <thead><tr><th>Vendor</th><th>Product</th></tr></thead>
     <tbody>
       {% for member in alias.members %}
@@ -36,11 +41,12 @@
           <td><a href="{{ url_for('main.vendor_detail', vendor_uuid=member.vendor.uuid) }}">{{ member.vendor.title or member.vendor.name }}</a></td>
           <td><a href="{{ url_for('main.product_detail', product_uuid=member.product.uuid) }}">{{ member.product.title or member.product.name }}</a></td>
         </tr>
-      {% else %}
-        <tr><td colspan="2">This alias has no members.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+    {{ empty_state("This alias has no members") }}
+  {% endif %}
 </div>
 {{ inspect_json(url_for('main.api_alias_detail', alias_uuid=alias.uuid), 'alias-' ~ alias.uuid ~ '.json') }}
 {% endblock %}

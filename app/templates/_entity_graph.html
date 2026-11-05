@@ -2,10 +2,15 @@
   data-graph-url="{{ graph_url }}"
   data-library-url="{{ url_for('static', filename='vendor/pivotick/pivotick.iife.js') }}"
   data-styles-url="{{ url_for('static', filename='vendor/pivotick/pivotick.css') }}">
-  <summary><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Relationship graph</summary>
+  <summary class="card-header entity-graph-summary">
+    <span class="card-heading">
+      <span class="card-eyebrow">Explore</span>
+      <span class="entity-graph-title">Relationship graph</span>
+    </span>
+    <i class="fa-solid fa-chevron-down entity-graph-chevron" aria-hidden="true"></i>
+  </summary>
   <p class="muted">{% if graph_include_alias %}Explore this alias's member products, their vendors, approved relationships, and CPE entries.{% else %}Explore approved relationships and the records in the combined view{% if graph_include_cpes %}, including CPE entries{% endif %}.{% endif %} Arrows follow the source → target direction; dashed links show ownership. The outlined node is the current record.</p>
-  <p class="muted">Drag nodes to arrange them, scroll to zoom, and drag the background to pan. Select a node or use the record picker to inspect it.</p>
-  <p class="muted">Use <strong>Simplify graph</strong> to group records in this view. Double-click a group to show its members; switch rules off to restore the full view.</p>
+  <p class="note"><span class="note-label">Tip</span>Drag nodes to arrange them, scroll to zoom, drag the background to pan. Double-click a group from <strong>Simplify graph</strong> to show its members.</p>
   <p class="graph-status muted" role="status" aria-live="polite"></p>
   <button class="secondary graph-retry" type="button" hidden>Retry loading graph</button>
   <div class="graph-content" hidden>

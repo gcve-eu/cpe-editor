@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}API client created{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Admin", url_for("main.admin_dashboard")), ("API client created",)]) }}{% endblock %}
 {% block content %}
 <div class="card">
   <h1>API client created</h1>

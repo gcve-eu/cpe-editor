@@ -1,3 +1,4 @@
+from math import ceil
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from time import monotonic
@@ -160,6 +161,28 @@ def _apply_cpe_search_filters(
     if part:
         query = query.filter(CPEEntry.part == part)
     return query
+
+
+SEARCH_PAGE_SIZES = (10, 25, 50, 100, 250, 500)
+CPE_SEARCH_COUNT_LIMIT = 1000000
+
+
+def _sort_args(allowed):
+    """Read sort/dir from the request; allowed maps each sort to its default direction."""
+    sort = request.args.get("sort")
+    if sort not in allowed:
+        return None, None
+    direction = request.args.get("dir")
+    return sort, direction if direction in {"asc", "desc"} else allowed[sort]
+
+
+def _directed(column, direction):
+    return column.desc() if direction == "desc" else column.asc()
+
+
+def _capped_count(query, limit):
+    """Count matches, stopping after limit + 1 rows to keep broad searches bounded."""
+    return query.limit(limit + 1).count()
 
 
 def _limited_page(query, page, per_page):
@@ -1107,6 +1130,9 @@ def _alias_member_label(member):
     if not vendor or not product:
         return "Unknown vendor/product"
     return f"{vendor.title or vendor.name} / {product.title or product.name}"
+
+
+ALIAS_MEMBER_LIMIT = 500
 
 
 def _normalize_alias_member_ids(raw_ids):
@@ -2207,7 +2233,9 @@ def index():
     purl_q = (request.args.get("purl_q") or "").strip()
     part = (request.args.get("part") or "").strip()
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
-    per_page = 25
+    per_page = request.args.get("per_page", default=25, type=int)
+    if per_page not in SEARCH_PAGE_SIZES:
+        per_page = 25
     has_search_filters = any([vendor_q, product_q, purl_q, part])
 
     if not has_search_filters:
@@ -2223,6 +2251,10 @@ def index():
             has_prev=False,
             has_next=False,
             total_results=0,
+            total_capped=False,
+            sort=None,
+            direction=None,
+            per_page=per_page,
             has_search_filters=has_search_filters,
         )
 
@@ -2239,10 +2271,33 @@ def index():
         query, vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part
     )
 
-    ordered_query = query.order_by(
-        Vendor.name.asc(), Product.name.asc(), CPEEntry.cpe_uri.asc()
-    )
+    sort, direction = _sort_args({"cpe": "asc", "vendor": "asc", "version": "asc"})
+    if sort == "cpe":
+        ordered_query = query.order_by(_directed(CPEEntry.cpe_uri, direction))
+    elif sort == "version":
+        ordered_query = query.order_by(
+            _directed(CPEEntry.version, direction), CPEEntry.cpe_uri.asc()
+        )
+    else:
+        ordered_query = query.order_by(
+            _directed(Vendor.name, direction or "asc"),
+            _directed(Product.name, direction or "asc"),
+            CPEEntry.cpe_uri.asc(),
+        )
     results, has_next = _limited_page(ordered_query, page, per_page)
+    match_count = _capped_count(
+        _apply_cpe_search_filters(
+            CPEEntry.query.with_entities(CPEEntry.id),
+            vendor_q=vendor_q,
+            product_q=product_q,
+            purl_q=purl_q,
+            part=part,
+        ),
+        CPE_SEARCH_COUNT_LIMIT,
+    )
+    total_capped = match_count > CPE_SEARCH_COUNT_LIMIT
+    total_results = min(match_count, CPE_SEARCH_COUNT_LIMIT)
+    total_pages = max(ceil(total_results / per_page), 1)
     has_prev = page > 1
 
     return render_template(
@@ -2253,10 +2308,14 @@ def index():
         purl_q=purl_q,
         part=part,
         page=page,
-        total_pages=None,
+        total_pages=total_pages,
         has_prev=has_prev,
         has_next=has_next,
-        total_results=None,
+        total_results=total_results,
+        total_capped=total_capped,
+        sort=sort,
+        direction=direction,
+        per_page=per_page,
         has_search_filters=has_search_filters,
     )
 
@@ -2270,10 +2329,15 @@ def details():
 def vendors():
     vendor_page = max(request.args.get("page", default=1, type=int) or 1, 1)
     vendor_q = (request.args.get("q") or "").strip()
-    sort_by = (request.args.get("sort") or "name").strip().lower()
-    if sort_by not in {"name", "products"}:
-        sort_by = "name"
-    vendors_per_page = 25
+    sort_by = (request.args.get("sort") or "products").strip().lower()
+    if sort_by not in {"name", "title", "products"}:
+        sort_by = "products"
+    direction = request.args.get("dir")
+    if direction not in {"asc", "desc"}:
+        direction = "desc" if sort_by == "products" else "asc"
+    vendors_per_page = request.args.get("per_page", default=25, type=int)
+    if vendors_per_page not in SEARCH_PAGE_SIZES:
+        vendors_per_page = 25
 
     if sort_by == "products":
         product_count = func.count(Product.id).label("product_count")
@@ -2290,7 +2354,9 @@ def vendors():
                     func.lower(Vendor.title).like(like),
                 )
             )
-        vendor_query = vendor_query.order_by(product_count.desc(), Vendor.name.asc())
+        vendor_query = vendor_query.order_by(
+            _directed(product_count, direction), Vendor.name.asc()
+        )
         vendor_total = vendor_query.count()
         vendor_total_pages = max(
             (vendor_total + vendors_per_page - 1) // vendors_per_page, 1
@@ -2316,7 +2382,14 @@ def vendors():
                     func.lower(Vendor.title).like(like),
                 )
             )
-        vendor_query = vendor_query.order_by(Vendor.name.asc())
+        order_column = (
+            func.lower(func.coalesce(Vendor.title, Vendor.name))
+            if sort_by == "title"
+            else Vendor.name
+        )
+        vendor_query = vendor_query.order_by(
+            _directed(order_column, direction), Vendor.name.asc()
+        )
         vendor_total = vendor_query.count()
         vendor_total_pages = max(
             (vendor_total + vendors_per_page - 1) // vendors_per_page, 1
@@ -2338,7 +2411,9 @@ def vendors():
         vendor_total=vendor_total,
         has_export_filters=bool(vendor_q.strip("%_")),
         sort_by=sort_by,
+        direction=direction,
         vendor_product_counts=vendor_product_counts,
+        per_page=vendors_per_page,
     )
 
 
@@ -2346,10 +2421,15 @@ def vendors():
 def products():
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
     q = (request.args.get("q") or "").strip()
-    sort_by = (request.args.get("sort") or "name").strip().lower()
-    if sort_by not in {"name", "cpes"}:
-        sort_by = "name"
-    per_page = 25
+    sort_by = (request.args.get("sort") or "cpes").strip().lower()
+    if sort_by not in {"name", "title", "vendor", "cpes"}:
+        sort_by = "cpes"
+    direction = request.args.get("dir")
+    if direction not in {"asc", "desc"}:
+        direction = "desc" if sort_by == "cpes" else "asc"
+    per_page = request.args.get("per_page", default=25, type=int)
+    if per_page not in SEARCH_PAGE_SIZES:
+        per_page = 25
 
     query = Product.query.options(selectinload(Product.vendor))
     if q:
@@ -2370,10 +2450,19 @@ def products():
             query.add_columns(cpe_count)
             .outerjoin(CPEEntry, CPEEntry.product_id == Product.id)
             .group_by(Product.id)
-            .order_by(cpe_count.desc(), Product.name.asc(), Product.id.asc())
+            .order_by(_directed(cpe_count, direction), Product.name.asc(), Product.id.asc())
+        )
+    elif sort_by == "vendor":
+        query = query.join(Vendor, Product.vendor_id == Vendor.id).order_by(
+            _directed(Vendor.name, direction), Product.name.asc(), Product.id.asc()
+        )
+    elif sort_by == "title":
+        query = query.order_by(
+            _directed(func.lower(func.coalesce(Product.title, Product.name)), direction),
+            Product.id.asc(),
         )
     else:
-        query = query.order_by(Product.name.asc(), Product.id.asc())
+        query = query.order_by(_directed(Product.name, direction), Product.id.asc())
 
     total_pages = max((total + per_page - 1) // per_page, 1)
     page = min(page, total_pages)
@@ -2395,7 +2484,9 @@ def products():
         product_total=total,
         has_export_filters=bool(q.strip("%_")),
         sort_by=sort_by,
+        direction=direction,
         product_cpe_counts=product_cpe_counts,
+        per_page=per_page,
     )
 
 
@@ -2406,8 +2497,36 @@ def aliases():
     if q:
         alias_like = f"%{q.lower()}%"
         query = query.filter(func.lower(ProductAlias.name).like(alias_like))
-    alias_rows = query.order_by(ProductAlias.name.asc()).all()
-    return render_template("aliases.html", aliases=alias_rows, q=q)
+    per_page = request.args.get("per_page", default=25, type=int)
+    if per_page not in SEARCH_PAGE_SIZES:
+        per_page = 25
+    sort, direction = _sort_args({"name": "asc", "members": "desc", "description": "asc"})
+    alias_column = {
+        "members": select(func.count(ProductAliasMember.id))
+        .where(ProductAliasMember.alias_id == ProductAlias.id)
+        .scalar_subquery(),
+        "description": func.lower(func.coalesce(ProductAlias.description, "")),
+    }.get(sort, ProductAlias.name)
+    alias_total = query.count()
+    total_pages = max(ceil(alias_total / per_page), 1)
+    page = min(max(request.args.get("page", default=1, type=int) or 1, 1), total_pages)
+    alias_rows = (
+        query.order_by(_directed(alias_column, direction or "asc"), ProductAlias.id.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return render_template(
+        "aliases.html",
+        aliases=alias_rows,
+        q=q,
+        alias_total=alias_total,
+        page=page,
+        total_pages=total_pages,
+        per_page=per_page,
+        sort=sort,
+        direction=direction,
+    )
 
 
 @bp.route("/aliases/<string:alias_uuid>")
@@ -2492,6 +2611,7 @@ def _admin_alias_form_context(alias=None):
         "total_products": total_products,
         "selected_product_ids": selected_ids,
         "selected_products": selected_products,
+        "member_limit": ALIAS_MEMBER_LIMIT,
         "page_url": page_url,
     }
 
@@ -2508,6 +2628,10 @@ def _save_admin_alias(alias=None):
         flash(
             "Please select at least one vendor/product tuple for the alias.", "danger"
         )
+        return False
+
+    if len(selected_members) > ALIAS_MEMBER_LIMIT:
+        flash(f"An alias can have at most {ALIAS_MEMBER_LIMIT} members.", "danger")
         return False
 
     conflicting_alias = ProductAlias.query.filter(
@@ -2537,7 +2661,8 @@ def _save_admin_alias(alias=None):
 @bp.route("/admin/aliases/new", methods=["GET", "POST"])
 @admin_required
 def admin_create_alias():
-    if request.method == "POST":
+    # A search or page change posts the form too, so large selections fit: no save.
+    if request.method == "POST" and "refresh" not in request.form:
         alias = _save_admin_alias()
         if alias:
             return redirect(url_for("main.alias_detail", alias_uuid=alias.uuid))
@@ -2548,7 +2673,7 @@ def admin_create_alias():
 @admin_required
 def admin_edit_alias(alias_id):
     alias = ProductAlias.query.get_or_404(alias_id)
-    if request.method == "POST":
+    if request.method == "POST" and "refresh" not in request.form:
         saved_alias = _save_admin_alias(alias)
         if saved_alias:
             return redirect(url_for("main.alias_detail", alias_uuid=saved_alias.uuid))
@@ -2647,7 +2772,29 @@ def alias_proposal_new():
             if Product.query.get(member["product_id"])
         ]
 
-    if request.method == "POST":
+    def render_form():
+        return render_template(
+            "alias_proposal_form.html",
+            alias=alias,
+            q=q,
+            products=products,
+            product_page_ids={product.id for product in products},
+            page=page,
+            total_pages=total_pages,
+            has_prev=page > 1,
+            has_next=page < total_pages,
+            total_products=total_products,
+            selected_product_ids={
+                int(product_id)
+                for product_id in selected_product_ids
+                if str(product_id).isdigit()
+            },
+            selected_products=selected_products,
+            member_limit=ALIAS_MEMBER_LIMIT,
+        )
+
+    # A search or page change posts the form too, so large selections fit.
+    if request.method == "POST" and "refresh" not in request.form:
         submitter_ip = _get_request_ip()
         if _is_rate_limited_for_ip(submitter_ip):
             limit = current_app.config.get("PROPOSAL_RATE_LIMIT_PER_HOUR", 10)
@@ -2668,20 +2815,23 @@ def alias_proposal_new():
 
         if not alias_name:
             flash("Please provide an alias name.", "danger")
-            return redirect(url_for("main.alias_proposal_new", alias_id=alias_id, q=q))
+            return render_form()
         if not selected_members:
             flash(
                 "Please select at least one vendor/product tuple for the alias.",
                 "danger",
             )
-            return redirect(url_for("main.alias_proposal_new", alias_id=alias_id, q=q))
+            return render_form()
+        if len(selected_members) > ALIAS_MEMBER_LIMIT:
+            flash(f"An alias can have at most {ALIAS_MEMBER_LIMIT} members.", "danger")
+            return render_form()
 
         conflicting_alias = ProductAlias.query.filter(
             func.lower(ProductAlias.name) == alias_name.lower()
         ).first()
         if conflicting_alias and (not alias or conflicting_alias.id != alias.id):
             flash("Another alias already uses that name.", "danger")
-            return redirect(url_for("main.alias_proposal_new", alias_id=alias_id, q=q))
+            return render_form()
 
         proposal = Proposal(
             proposal_type=proposal_type,
@@ -2700,29 +2850,26 @@ def alias_proposal_new():
         flash("Alias proposal submitted. An admin will review it.", "success")
         return redirect(url_for("main.aliases"))
 
-    return render_template(
-        "alias_proposal_form.html",
-        alias=alias,
-        q=q,
-        products=products,
-        page=page,
-        total_pages=total_pages,
-        has_prev=page > 1,
-        has_next=page < total_pages,
-        total_products=total_products,
-        selected_product_ids={
-            int(product_id)
-            for product_id in selected_product_ids
-            if str(product_id).isdigit()
-        },
-        selected_products=selected_products,
-    )
+    return render_form()
 
 
 @bp.route("/statistics")
 def statistics():
-    vendor_page = max(request.args.get("vendor_page", default=1, type=int) or 1, 1)
-    vendors_per_page = 25
+    # vendor_page is the older parameter: existing links keep working.
+    vendor_page = request.args.get(
+        "page", default=request.args.get("vendor_page", default=1, type=int), type=int
+    )
+    vendor_page = max(vendor_page or 1, 1)
+    vendors_per_page = request.args.get("per_page", default=25, type=int)
+    if vendors_per_page not in SEARCH_PAGE_SIZES:
+        vendors_per_page = 25
+    vendor_sort = request.args.get("sort")
+    if vendor_sort not in {"products", "name"}:
+        vendor_sort = None
+    vendor_dir = request.args.get("dir")
+    if vendor_dir not in {"asc", "desc"}:
+        vendor_dir = "asc" if vendor_sort == "name" else "desc"
+    vendor_order = (vendor_sort, vendor_dir) if vendor_sort else None
 
     statistics_payload = _build_statistics_payload()
     total_vendors = statistics_payload["counts"]["vendors"]
@@ -2741,7 +2888,7 @@ def statistics():
     average_purls_per_cpe = statistics_payload["averages"]["purls_per_cpe"]
 
     top_list_payload = _build_statistics_top_list_payload(
-        "vendors", vendor_page, vendors_per_page
+        "vendors", vendor_page, vendors_per_page, vendor_order
     )
     vendor_product_total = top_list_payload["total"]
     vendor_product_total_pages = max(
@@ -2752,7 +2899,7 @@ def statistics():
     vendor_offset = (vendor_page - 1) * vendors_per_page
     if vendor_page != top_list_payload["page"]:
         top_list_payload = _build_statistics_top_list_payload(
-            "vendors", vendor_page, vendors_per_page
+            "vendors", vendor_page, vendors_per_page, vendor_order
         )
     vendor_product_counts = [
         dict_to_namespace(item) for item in top_list_payload["items"]
@@ -2792,6 +2939,10 @@ def statistics():
         vendors_without_products=vendors_without_products,
         vendor_product_counts=vendor_product_counts,
         vendor_page=vendor_page,
+        vendor_total=vendor_product_total,
+        vendors_per_page=vendors_per_page,
+        vendor_sort=vendor_sort,
+        vendor_dir=vendor_dir if vendor_sort else None,
         vendor_total_pages=vendor_product_total_pages,
         vendor_has_prev=vendor_page > 1,
         vendor_has_next=vendor_page < vendor_product_total_pages,
@@ -3082,8 +3233,11 @@ def api_statistics():
     return jsonify(_build_statistics_payload())
 
 
-def _build_statistics_top_list_payload(entity, page, per_page):
+def _build_statistics_top_list_payload(entity, page, per_page, order=None):
+    """Build one ranked page; order=(sort, direction) reorders vendors server-side."""
     cache_key = _statistics_top_list_cache_key(entity, page, per_page)
+    if order:
+        cache_key = f"{cache_key}:{order[0]}:{order[1]}"
     cached_payload = cache_get_json(cache_key)
     if cached_payload is not None:
         return cached_payload
@@ -3091,6 +3245,16 @@ def _build_statistics_top_list_payload(entity, page, per_page):
     if entity == "vendors":
         query = _statistics_top_vendors_query()
         serializer = _serialize_top_vendor
+        if order:
+            column = (
+                func.lower(func.coalesce(Vendor.title, Vendor.name))
+                if order[0] == "name"
+                else func.count(Product.id)
+            )
+            query = query.order_by(None).order_by(
+                column.asc() if order[1] == "asc" else column.desc(),
+                Vendor.name.asc(),
+            )
     else:
         query = _statistics_top_products_query()
         serializer = _serialize_top_product
@@ -4006,9 +4170,21 @@ def metadata_proposal_new():
 @bp.route("/changes")
 def approved_changes():
     page = max(request.args.get("page", default=1, type=int) or 1, 1)
-    per_page = 20
+    per_page = request.args.get("per_page", default=25, type=int)
+    if per_page not in SEARCH_PAGE_SIZES:
+        per_page = 25
 
+    sort, direction = _sort_args({"id": "desc", "approved": "desc", "type": "asc"})
     ordered_query = _approved_changes_query()
+    if sort:
+        column = {
+            "id": Proposal.id,
+            "approved": Proposal.reviewed_at,
+            "type": Proposal.proposal_type,
+        }[sort]
+        ordered_query = ordered_query.order_by(None).order_by(
+            _directed(column, direction), Proposal.id.desc()
+        )
     total_changes = ordered_query.count()
     total_pages = max((total_changes + per_page - 1) // per_page, 1)
     if page > total_pages:
@@ -4023,6 +4199,9 @@ def approved_changes():
         has_prev=page > 1,
         has_next=page < total_pages,
         total_changes=total_changes,
+        per_page=per_page,
+        sort=sort,
+        direction=direction,
         proposal_summary=_proposal_summary,
         proposal_focus_links=_proposal_focus_links,
     )
@@ -4193,6 +4372,10 @@ def admin_logout():
 @bp.route("/admin")
 @admin_required
 def admin_dashboard():
+    return _render_admin_dashboard()
+
+
+def _render_admin_dashboard(json_payload="", json_error="", status=200):
     pending = (
         Proposal.query.filter_by(status="pending")
         .order_by(Proposal.created_at.asc())
@@ -4200,7 +4383,23 @@ def admin_dashboard():
     )
     recent = Proposal.query.order_by(Proposal.created_at.desc()).limit(20).all()
     clients = APIClient.query.order_by(APIClient.created_at.desc()).all()
-    return render_template("admin/dashboard.html", pending=pending, recent=recent, clients=clients, now=datetime.utcnow())
+    return (
+        render_template(
+            "admin/dashboard.html",
+            pending=pending,
+            recent=recent,
+            clients=clients,
+            now=datetime.utcnow(),
+            json_payload=json_payload,
+            json_error=json_error,
+        ),
+        status,
+    )
+
+
+def _ingest_json_error(message, raw_payload):
+    """Show the error beside the payload and keep what the admin typed."""
+    return _render_admin_dashboard(raw_payload, message, 400)
 
 
 @bp.route("/admin/proposals/bulk-delete", methods=["POST"])
@@ -4294,18 +4493,18 @@ def _resolve_product_for_ingest(payload):
 def admin_ingest_json():
     raw_payload = (request.form.get("json_payload") or "").strip()
     if not raw_payload:
-        flash("Please paste a JSON object to ingest.", "danger")
         return redirect(url_for("main.admin_dashboard"))
 
     try:
         payload = json.loads(raw_payload)
     except json.JSONDecodeError as exc:
-        flash(f"Invalid JSON payload: {exc.msg}.", "danger")
-        return redirect(url_for("main.admin_dashboard"))
+        return _ingest_json_error(
+            f"Invalid JSON payload: {exc.msg} (line {exc.lineno}, column {exc.colno}).",
+            raw_payload,
+        )
 
     if not isinstance(payload, dict):
-        flash("The payload must be a single JSON object.", "danger")
-        return redirect(url_for("main.admin_dashboard"))
+        return _ingest_json_error("The payload must be a single JSON object.", raw_payload)
 
     object_type = (
         (payload.get("type") or payload.get("entity_type") or "").strip().lower()
@@ -4614,11 +4813,11 @@ def admin_ingest_json():
         db.session.commit()
     except ValueError as exc:
         db.session.rollback()
-        flash(str(exc), "danger")
+        return _ingest_json_error(str(exc), raw_payload)
     except Exception:
         db.session.rollback()
         current_app.logger.exception("Admin JSON ingest failed")
-        flash("Ingest failed due to an internal error.", "danger")
+        return _ingest_json_error("Ingest failed due to an internal error.", raw_payload)
 
     return redirect(url_for("main.admin_dashboard"))
 

@@ -1,15 +1,16 @@
 {% extends "base.html" %}
+{% from "_ui.html" import card, input_field %}
 {% block title %}Admin login{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Admin login",)]) }}{% endblock %}
 {% block content %}
-<div class="card" style="max-width: 480px;">
-  <h1>Admin login</h1>
-  <form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label for="username">Username</label>
-    <input id="username" name="username" required>
-    <label for="password">Password</label>
-    <input id="password" name="password" type="password" required>
-    <p><button type="submit"><i class="fa-solid fa-key" aria-hidden="true"></i>Log in</button></p>
-  </form>
+<div class="auth-page">
+  {% call card("Admin login", eyebrow="Moderation", subtitle="Sign in to review proposals and manage the catalog.", level=1) %}
+    <form method="post" class="grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {{ input_field("username", "Username", required=true) }}
+      {{ input_field("password", "Password", type="password", required=true) }}
+      <button type="submit"><i class="fa-solid fa-key" aria-hidden="true"></i>Log in</button>
+    </form>
+  {% endcall %}
 </div>
 {% endblock %}

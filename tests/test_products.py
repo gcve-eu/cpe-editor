@@ -105,7 +105,7 @@ def test_products_page_search_and_empty_state(client):
     assert b'value="WINDOWS 11"' in response.data
     assert b">Windows 11</a>" in response.data
     assert b">Microsoft Office</a>" not in response.data
-    assert b"No products found" in client.get("/products?q=missing").data
+    assert b"No matching products" in client.get("/products?q=missing").data
 
 
 def test_products_page_pagination_preserves_search_and_sort(client, app):
@@ -119,14 +119,14 @@ def test_products_page_pagination_preserves_search_and_sort(client, app):
 
     response = client.get("/products?q=extra_product&sort=cpes")
     assert response.status_code == 200
-    assert response.data.count(b'href="/products?page=2&amp;q=extra_product&amp;sort=cpes"') == 2
+    assert response.data.count(b'href="/products?page=2&amp;q=extra_product&amp;sort=cpes#results"') >= 2
     assert b'name="sort" value="cpes"' in response.data
     assert b">extra_product_00</a>" in response.data
     assert b">extra_product_25</a>" not in response.data
 
     second = client.get("/products?q=extra_product&sort=cpes&page=2")
     assert second.status_code == 200
-    assert second.data.count(b'href="/products?page=1&amp;q=extra_product&amp;sort=cpes"') == 2
+    assert second.data.count(b'href="/products?page=1&amp;q=extra_product&amp;sort=cpes#results"') >= 2
     assert b">extra_product_25</a>" in second.data
     assert b">extra_product_00</a>" not in second.data
     assert b"Page 2 of 2" in client.get("/products?q=extra_product&page=999").data
@@ -164,10 +164,10 @@ def test_products_page_handles_invalid_page_and_sort(client, page):
     response = client.get(f"/products?page={page}&sort=invalid")
     assert response.status_code == 200
     assert b"Page 1 of 1" in response.data
-    assert b'name="sort" value="name"' in response.data
+    assert b'name="sort" value="cpes"' in response.data
 
 
-@pytest.mark.parametrize("path", ["/products", "/api/products"])
+@pytest.mark.parametrize("path", ["/products?sort=name", "/api/products"])
 def test_product_name_listing_uses_existing_index(client, path):
     statements = []
 

@@ -1,14 +1,17 @@
 <section class="card gcve-tuple-lookup" data-lookup-url="{{ url_for('main.api_gcve_tuple_search') }}" data-table-module-url="{{ url_for('static', filename='js/gcve-results-table.js') }}">
-  <h2>GCVE vulnerability lookup</h2>
-  <p class="muted">Find vulnerabilities on db.gcve.eu for a specific vendor/product tuple, across versions. Choose a tuple from this record or its combined view.</p>
+  <header class="card-header"><div class="card-heading"><p class="card-eyebrow">Vulnerabilities</p><h2>GCVE vulnerability lookup</h2><p class="card-subtitle">Find vulnerabilities on db.gcve.eu for a specific vendor/product tuple, across versions. Choose a tuple from this record or its combined view.</p></div></header>
   {% if combined_view_products %}
     <form class="gcve-tuple-form">
+      <div class="field">
       <label for="gcve-tuple">Vendor / product</label>
+      <div class="field-control">
       <select id="gcve-tuple" class="gcve-tuple-select">
         {% for lookup_product in combined_view_products %}
           <option data-vendor="{{ lookup_product.vendor.name }}" data-product="{{ lookup_product.name }}"{% if product is defined and lookup_product.id == product.id %} selected{% endif %}>{{ lookup_product.vendor.name }} / {{ lookup_product.name }}</option>
         {% endfor %}
       </select>
+      </div>
+      </div>
       <button type="submit" class="button"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Find vulnerabilities on GCVE</button>
     </form>
     <p class="gcve-tuple-status muted" role="status" aria-live="polite">Select a tuple and run a lookup.</p>

@@ -56,14 +56,14 @@ def test_alias_proposal_product_search_is_paginated(client, app):
 
     first_page = client.get("/aliases/proposals/new?q=alias_pagination")
     assert first_page.status_code == 200
-    assert b"Showing page 1 of 2" in first_page.data
+    assert b"Page 1 of 2" in first_page.data
     assert b"Alias Pagination Product 000" in first_page.data
     assert b"Alias Pagination Product 104" not in first_page.data
     assert b"page=2" in first_page.data
 
     second_page = client.get("/aliases/proposals/new?q=alias_pagination&page=2")
     assert second_page.status_code == 200
-    assert b"Showing page 2 of 2" in second_page.data
+    assert b"Page 2 of 2" in second_page.data
     assert b"Alias Pagination Product 104" in second_page.data
     assert b"page=1" in second_page.data
 
@@ -253,3 +253,40 @@ def test_app_dataset_export_import_preserves_product_aliases(app, tmp_path):
         assert {
             member.product.name for member in imported_alias.members
         } == member_product_names
+
+
+def test_admin_alias_member_limit(client, app, monkeypatch):
+    monkeypatch.setattr("app.views.ALIAS_MEMBER_LIMIT", 1)
+    with client.session_transaction() as session:
+        session["is_admin"] = True
+        session["_csrf_token"] = "token"
+    with app.app_context():
+        product_ids = [str(product.id) for product in Product.query.limit(2).all()]
+    assert len(product_ids) == 2
+    response = client.post(
+        "/admin/aliases/new",
+        data={"csrf_token": "token", "alias_name": "Too large", "product_ids": product_ids},
+    )
+    assert response.status_code == 200
+    assert b"at most 1 members" in response.data
+    assert b'value="Too large"' in response.data
+    with app.app_context():
+        assert ProductAlias.query.filter_by(name="Too large").first() is None
+
+
+def test_alias_proposal_member_limit_and_refresh(client, app, monkeypatch):
+    monkeypatch.setattr("app.views.ALIAS_MEMBER_LIMIT", 1)
+    client.get("/aliases/proposals/new")
+    with client.session_transaction() as sess:
+        csrf_token = sess["_csrf_token"]
+    with app.app_context():
+        product_ids = [str(product.id) for product in Product.query.limit(2).all()]
+    data = {"csrf_token": csrf_token, "proposed_alias_name": "Too large", "product_ids": product_ids}
+    response = client.post("/aliases/proposals/new", data=data)
+    assert b"at most 1 members" in response.data
+    assert b'value="Too large"' in response.data
+    response = client.post("/aliases/proposals/new", data={**data, "refresh": "1"})
+    assert response.status_code == 200
+    assert b"at most 1 members" not in response.data
+    with app.app_context():
+        assert Proposal.query.filter_by(proposed_alias_name="Too large").first() is None

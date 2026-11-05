@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_vitrine.html" import content_view %}
 {% block title %}Review proposal #{{ proposal.id }}{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Admin", url_for("main.admin_dashboard")), ("Proposal #" ~ proposal.id,)]) }}{% endblock %}
 {% block content %}
 {% macro render_reference(ref_id, ref_name=None, ref_title=None, fallback='—') -%}
   {%- if ref_id -%}

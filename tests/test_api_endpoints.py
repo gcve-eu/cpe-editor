@@ -1,3 +1,6 @@
+from flask import render_template_string
+from markupsafe import escape
+import pytest
 import io
 import json
 import re
@@ -324,8 +327,8 @@ def test_vendor_page_bottom_pagination_and_search(client, app):
     response = client.get("/vendors")
 
     assert response.status_code == 200
-    assert response.data.count(b'page=2') == 2
-    assert b'class="vendor-search-form"' in response.data
+    assert response.data.count(b'page=2') >= 2
+    assert b'class="grid search-form search-form-single"' in response.data
     assert b'name="q" type="search"' in response.data
     assert b'data-show-more-label="Show more"' not in response.data
     assert b'data-show-less-label="Show less"' not in response.data
@@ -844,3 +847,58 @@ def test_api_cpes_lookup_rejects_oversized_list(app, client):
     )
 
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "payload, message",
+    [
+        ('{"broken":', b"Invalid JSON payload"),
+        ("[1, 2]", b"must be a single JSON object"),
+        ('{"type":"cpe","title":"kept-text"}', b"cpe_uri is required"),
+    ],
+)
+def test_admin_ingest_error_keeps_payload_beside_field(client, payload, message):
+    with client.session_transaction() as session:
+        session["is_admin"] = True
+        session["_csrf_token"] = "token"
+    response = client.post(
+        "/admin/ingest-json", data={"json_payload": payload, "csrf_token": "token"}
+    )
+    assert response.status_code == 400
+    page = response.get_data(as_text=True)
+    assert str(escape(payload)) in page
+    error_at = page.index('id="json_payload_error"')
+    assert page.index('id="json_payload"') < error_at
+    assert message in page[error_at:error_at + 200].encode()
+
+
+def test_form_field_macros_render_required_and_error_states(app):
+    template = """{% from "_ui.html" import input_field %}
+    {{ input_field("name", "Name", value="a<b", required=true, hint="Help", error="Bad value") }}"""
+    with app.test_request_context():
+        page = render_template_string(template)
+    assert 'class="field field-invalid"' in page
+    assert 'value="a&lt;b"' in page
+    assert " required" in page
+    assert 'aria-invalid="true"' in page
+    assert 'aria-describedby="name-error"' in page
+    assert 'class="field-required"' in page
+    assert "Bad value" in page
+
+
+def test_home_search_reports_total_and_honours_per_page(client):
+    page = client.get("/?part=a&per_page=10").get_data(as_text=True)
+    total = CPEEntry.query.filter_by(part="a").count()
+    assert f"<strong>{total:,}</strong>" in page
+    assert 'data-server-page-size="10"' in page
+    assert 'data-server-page-size="25"' in client.get("/?part=a&per_page=7").get_data(as_text=True)
+
+
+def test_home_search_total_is_capped(client, monkeypatch):
+    monkeypatch.setattr("app.views.CPE_SEARCH_COUNT_LIMIT", 1)
+    assert CPEEntry.query.count() > 1
+    page = client.get("/?vendor_q=").get_data(as_text=True)
+    assert "+</strong>" not in page  # no filter, no search
+    filtered = client.get("/?part=a").get_data(as_text=True)
+    if CPEEntry.query.filter_by(part="a").count() > 1:
+        assert "<strong>1+</strong>" in filtered

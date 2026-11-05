@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% from "_ui.html" import active_filters, card, empty_state, field, help_tip, input_field, list_bar %}
 {% block title %}Search CPEs{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([]) }}{% endblock %}
 {% block content %}
-{% if not has_search_filters %}
 <section class="card home-intro" aria-labelledby="home-title">
   <div class="home-intro-main">
     <p class="eyebrow"><i class="fa-solid fa-circle-nodes" aria-hidden="true"></i> CPE Editor · An open source community catalog</p>
@@ -9,7 +10,7 @@
     <p class="home-intro-description">A collaborative catalog of vendors, products, and platform identifiers. Explore CPE records and package URL (PURL) mappings, connect related products, and help improve the data through reviewed proposals.</p>
     <p class="home-intro-definition">Common Platform Enumeration (CPE) gives software, hardware, and operating systems consistent names so teams can match platforms to vulnerability records.</p>
     <div class="action-row home-intro-actions">
-      <a class="button" href="#cpe-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search the catalog</a>
+      <a class="button js-search-jump" href="#cpe-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search the catalog</a>
       <a class="button secondary" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>Contribute an update</a>
     </div>
   </div>
@@ -29,72 +30,50 @@
     <li><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><div><strong>Follow the changes</strong><span>An open history of approved updates.</span></div></li>
   </ul>
 </section>
-{% else %}
-<section class="page-header" aria-labelledby="home-title">
-  <div>
-    <p class="eyebrow">GCVE · Platform catalog</p>
-    <h1 id="home-title">Search the platform catalog</h1>
-    <p class="muted">Explore CPE records and package URL mappings.</p>
-  </div>
-  <a class="button secondary" href="{{ url_for('main.proposal_new') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i>Submit a proposal</a>
-</section>
-{% endif %}
 
-<div id="cpe-search" class="card">
-  <h2>Search CPEs</h2>
-  <p class="muted">Search by vendor and product prefixes, then narrow by part.</p>
-  <form method="get" class="grid search-form" aria-label="CPE search form">
-    <div>
-      <label for="vendor_q">Vendor starts with</label>
-      <input id="vendor_q" name="vendor_q" value="{{ vendor_q }}" placeholder="microsoft">
-    </div>
-    <div>
-      <label for="product_q">Product starts with</label>
-      <input id="product_q" name="product_q" value="{{ product_q }}" placeholder="exchange">
-    </div>
-    <div class="search-field-purl">
-      <label for="purl_q">PURL starts with</label>
-      <input id="purl_q" name="purl_q" value="{{ purl_q }}" placeholder="pkg:npm/react">
-      <small class="muted">Use this to pivot from package coordinates to vendor/product records.</small>
-    </div>
-    <div>
-      <label for="part">Part</label>
+{% call card("Search CPEs", eyebrow="Catalog", subtitle="Search by vendor and product prefixes, then narrow by part.", id="cpe-search") %}
+  <form method="get" action="{{ url_for('main.index') }}#results" class="grid search-form" aria-label="CPE search form">
+    {% if per_page != 25 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    {% if sort %}<input type="hidden" name="sort" value="{{ sort }}"><input type="hidden" name="dir" value="{{ direction }}">{% endif %}
+    {{ input_field("vendor_q", "Vendor starts with", value=vendor_q, placeholder="microsoft", hint="Matches the start of the name, for example micro.", help="The vendor is the organization that publishes the product, as named in the CPE record.") }}
+    {{ input_field("product_q", "Product starts with", value=product_q, placeholder="exchange", hint="Matches the start of the name, for example exch.", help="The product is the software, operating system or device, as named in the CPE record.") }}
+    {{ input_field("purl_q", "PURL starts with", value=purl_q, placeholder="pkg:npm/react", hint="Use this to pivot from package coordinates to vendor/product records.", class="search-field-purl", help="A package URL (PURL) identifies a package by ecosystem and name, for example pkg:npm/react.") }}
+    {% call field("part", "Part", help="The CPE part: a for an application, o for an operating system, h for hardware.") %}
       <select id="part" name="part">
         <option value="">Any</option>
         <option value="a" {% if part == 'a' %}selected{% endif %}>Application (a)</option>
         <option value="o" {% if part == 'o' %}selected{% endif %}>Operating system (o)</option>
         <option value="h" {% if part == 'h' %}selected{% endif %}>Hardware (h)</option>
       </select>
-    </div>
+    {% endcall %}
     <div class="search-actions">
       <button class="search-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Search CPEs</span></button>
       {% if has_search_filters %}
         <a class="button secondary" href="{{ url_for('main.index') }}"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i><span>Reset filters</span></a>
       {% endif %}
+      <span class="search-empty-message" role="alert" hidden></span>
     </div>
-    <p class="muted search-hint"><i class="fa-regular fa-lightbulb" aria-hidden="true"></i>Tip: vendor and product fields use prefix matching (for example, <code>micro</code> or <code>exch</code>).</p>
   </form>
-</div>
+{% endcall %}
 
-<div class="card">
-  <h2>Results</h2>
-  {% if has_search_filters %}
+{% if has_search_filters %}
+{% set results_actions %}
+  {% if has_search_filters and total_results %}
     <a class="button secondary" href="{{ url_for('main.api_bulk_export', entity='cpes', vendor_q=vendor_q or none, product_q=product_q or none, purl_q=purl_q or none, part=part or none) }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i>Export all matching CPEs (JSON)</a>
-    <p class="muted">Exports include every matching record across all pages. Repeated exports may be up to one hour old.</p>
-    <p class="muted">
-      Showing up to {{ results|length }} result{% if results|length != 1 %}s{% endif %}
-      from page {{ page }}.
-      {% if has_next %}
-        More matches are available on the next page.
-      {% elif page > 1 %}
-        This is the last page for the current filters.
-      {% endif %}
-    </p>
-  {% else %}
-    <p class="muted">Enter a query or filter and click Search to view results.</p>
+    {{ help_tip("export-help", "Export", "Exports include every matching record across all pages. Repeated exports may be up to one hour old.") }}
+  {% endif %}
+{% endset %}
+{% call card("Results", eyebrow="Catalog", actions=results_actions|trim, id="results") %}
+  {% if has_search_filters %}
+    {% set list_params = {"vendor_q": vendor_q or none, "product_q": product_q or none, "purl_q": purl_q or none, "part": part or none, "sort": sort, "dir": direction if sort else none} %}
+    {% if total_results %}
+      {% call list_bar("main.index", list_params, page, total_pages, per_page, has_next=has_next, anchor="results", position="top") %}<strong>{{ "{:,}".format(total_results) }}{% if total_capped %}+{% endif %}</strong> result{% if total_results != 1 %}s{% endif %} found · Page {{ "{:,}".format(page) }} of {{ "{:,}".format(total_pages) }}{% endcall %}
+    {% else %}
+      <p class="muted results-summary"><strong>0</strong> results found</p>
+    {% endif %}
   {% endif %}
   {% if results %}
-    <table>
+    <table data-server-columns='{{ [["CPE", "cpe", "asc"], ["Vendor / Product", "vendor", "asc"], ["Version", "version", "asc"]]|tojson }}' data-server-current='{{ [{"cpe": "CPE", "version": "Version"}.get(sort, "Vendor / Product"), direction or "asc"]|tojson }}' data-server-page-size="{{ per_page }}" data-server-total="{{ total_results }}" data-server-total-label="{{ "{:,}".format(total_results) }}{% if total_capped %}+{% endif %}" data-server-filters='{{ [["vendor_q", "Vendor"], ["product_q", "Product"], ["purl_q", "PURL"], ["part", "Part"]]|tojson }}' data-reset-anchor="cpe-search" data-export-url="{{ url_for('main.api_bulk_export', entity='cpes', vendor_q=vendor_q or none, product_q=product_q or none, purl_q=purl_q or none, part=part or none) }}">
       <thead>
         <tr><th>CPE</th><th>Vendor / Product</th><th>Version</th><th>PURLs</th><th>Export</th></tr>
       </thead>
@@ -133,30 +112,21 @@
       {% endfor %}
       </tbody>
     </table>
-    {% if has_prev or has_next %}
-      <div class="action-row" style="margin-top: 1rem;">
-        {% if has_prev %}
-          <a
-            class="button secondary"
-            href="{{ url_for('main.index', vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part, page=page-1) }}"
-          >
-            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
-          </a>
-        {% endif %}
-        {% if has_next %}
-          <a
-            class="button secondary"
-            href="{{ url_for('main.index', vendor_q=vendor_q, product_q=product_q, purl_q=purl_q, part=part, page=page+1) }}"
-          >
-            Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-          </a>
-        {% endif %}
-      </div>
-    {% endif %}
+    {% call list_bar("main.index", list_params, page, total_pages, per_page, has_next=has_next, anchor="results") %}{{ "{:,}".format((page - 1) * per_page + 1) }}–{{ "{:,}".format([page * per_page, total_results]|min) }} of {{ "{:,}".format(total_results) }}{% endcall %}
   {% else %}
     {% if has_search_filters %}
-      <p>No matching CPE entries yet.</p>
+      {{ active_filters("main.index", [("vendor_q", "Vendor", vendor_q), ("product_q", "Product", product_q), ("purl_q", "PURL", purl_q), ("part", "Part", part)], {"per_page": per_page if per_page != 25 else none}, "cpe-search") }}
+      {{ empty_state("No matching CPEs", "Try a shorter prefix or remove a filter. If this platform is missing from the catalog, you can propose it.") }}
     {% endif %}
   {% endif %}
-</div>
+{% endcall %}
+{% endif %}
+<script>
+  document.querySelector(".js-search-jump").addEventListener("click", event => {
+    event.preventDefault();
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById("cpe-search").scrollIntoView({behavior: reduced ? "auto" : "smooth", block: "start"});
+    document.getElementById("vendor_q").focus({preventScroll: true});
+  });
+</script>
 {% endblock %}

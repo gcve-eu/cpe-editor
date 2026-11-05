@@ -1,40 +1,11 @@
 {% extends "base.html" %}
-{% from "_vitrine.html" import field_preview %}
 {% block title %}Create metadata{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Admin", url_for("main.admin_dashboard")), ("Create metadata",)]) }}{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>Create metadata</h1>
-    <a class="button secondary" href="{{ redirect_target }}">
-      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back
-    </a>
-  </div>
-
-  <p class="muted">
-    {% if product %}
-      Creating metadata for product <strong>{{ product.title or product.name }}</strong>.
-    {% elif vendor %}
-      Creating metadata for vendor <strong>{{ vendor.title or vendor.name }}</strong>.
-    {% endif %}
-  </p>
-
-  <form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <label for="metadata_key">Metadata key <span class="required-marker">*</span></label>
-    <select id="metadata_key" name="metadata_key" required>
-      {% for key in allowed_metadata_keys %}
-        <option value="{{ key }}">{{ key }}</option>
-      {% endfor %}
-    </select>
-
-    <label for="metadata_value">Metadata value <span class="required-marker">*</span></label>
-    <textarea id="metadata_value" name="metadata_value" required></textarea>
-    {{ field_preview("metadata_value", "markdown", "Preview description", "metadata_key") }}
-
-    <div class="action-row end">
-      <button type="submit"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>Create metadata</button>
-    </div>
-  </form>
-</div>
+{% set page_title = "Create metadata" %}
+{% set page_subtitle = ("For product " ~ (product.title or product.name)) if product else ("For vendor " ~ (vendor.title or vendor.name)) %}
+{% set current_key = allowed_metadata_keys[0] %}
+{% set current_value = "" %}
+{% set submit_label = "Create metadata" %}
+{% include "admin/_metadata_form.html" %}
 {% endblock %}

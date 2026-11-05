@@ -44,7 +44,7 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   Links, action buttons and form selections remain active after sorting or
   filtering; selected rows stay included when submitting a form while hidden.
   Search/sort operate on loaded rows, with 25 rows per local table page.
-  Copy/download include all loaded rows, even rows hidden by a search or local
+  Copy includes all loaded rows, even rows hidden by a search or local
   paging; selection exports include selected records. Clipboard output is TSV
   for spreadsheets; **Raw** shows CSV. Existing server page links fetch more
   records; **Export all matching … (JSON)** downloads every match across server
@@ -110,7 +110,7 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   vulnerability identifiers stay available after sorting and filtering.
   Search also recognizes formatted dates and readable source labels.
   On phones, a **Sort by** selector controls the card order. Use the GCVE
-  Previous/Next controls to fetch more results. Copy/download keep all rows on
+  Previous/Next controls to fetch more results. Copy keeps all rows on
   the current page, including rows hidden by a local search. The table component
   loads after a lookup; a readable linked table remains if it cannot load.
   CSV values that start with a spreadsheet formula marker (`=`, `+`, `-`, or

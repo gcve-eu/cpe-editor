@@ -1,118 +1,84 @@
 {% extends "base.html" %}
-{% from "_vitrine.html" import field_preview %}
+{% from "_ui.html" import card, empty_state, field, input_field, pagination %}
 {% block title %}Submit alias proposal{% endblock %}
+{% block breadcrumb %}{% from "_ui.html" import breadcrumb %}{{ breadcrumb([("Aliases", url_for("main.aliases")), ("Submit alias proposal",)]) }}{% endblock %}
 {% block content %}
-<div class="card">
-  <div class="page-header">
-    <h1>{% if alias %}Propose alias update{% else %}Propose new product alias{% endif %}</h1>
-    <button type="submit" form="alias-proposal-form"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit alias proposal</button>
-  </div>
-  <p class="muted">Create or update an independently reviewed alias by selecting one or more existing CPE vendor/product tuples.</p>
-</div>
+{% set submit %}<button type="submit" form="alias-proposal-form"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit alias proposal</button>{% endset %}
+{% call card("Propose alias update" if alias else "Propose new product alias", eyebrow="Alias directory", subtitle="Create or update an independently reviewed alias by selecting one or more existing CPE vendor/product tuples.", actions=submit, level=1) %}{% endcall %}
 
-<div class="card">
-  <form method="get" class="search-form">
-    {% if alias %}<input type="hidden" name="alias_id" value="{{ alias.id }}">{% endif %}
-    {% for product in selected_products %}
-      <input type="hidden" name="product_ids" value="{{ product.id }}">
-    {% endfor %}
-    <label for="q">Find vendor/product tuples</label>
-    <input id="q" name="q" value="{{ q }}" placeholder="Search vendor or product name">
-    <button type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search</button>
-  </form>
-</div>
-
-<form method="post" id="alias-proposal-form">
+<form method="post" id="alias-proposal-form" data-accordion data-member-picker>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if alias %}<input type="hidden" name="alias_id" value="{{ alias.id }}">{% endif %}
-  <input type="hidden" name="q" value="{{ q }}">
-  <div class="card">
-    <label for="proposed_alias_name">Alias name</label>
-    <input id="proposed_alias_name" name="proposed_alias_name" required value="{{ alias.name if alias else '' }}" placeholder="Example: Microsoft Windows">
+  {% for product_id in selected_product_ids if product_id not in product_page_ids %}
+    <input type="hidden" name="product_ids" value="{{ product_id }}">
+  {% endfor %}
 
-    <label for="proposed_alias_description">Description</label>
-    <textarea id="proposed_alias_description" name="proposed_alias_description" placeholder="Optional context for users and reviewers">{{ alias.description if alias else '' }}</textarea>
-    {{ field_preview("proposed_alias_description", "markdown", "Preview description") }}
-
-    <label for="rationale">Rationale for reviewers</label>
-    <textarea id="rationale" name="rationale" placeholder="Explain why these tuples belong together or why the alias should change"></textarea>
-
-    <div class="form-grid">
-      <div>
-        <label for="submitter_name">Your name</label>
-        <input id="submitter_name" name="submitter_name" autocomplete="name">
-      </div>
-      <div>
-        <label for="submitter_email">Your email</label>
-        <input id="submitter_email" name="submitter_email" type="email" autocomplete="email">
-      </div>
+  {% call card("Alias", eyebrow="Required", class="card-highlight") %}
+    <div class="grid form-stack">
+      {{ input_field("proposed_alias_name", "Alias name", value=request.values.get("proposed_alias_name", alias.name if alias else ""), placeholder="Example: Microsoft Windows", required=true, help="The name shown in the alias directory. It must be unique.") }}
+      {% call field("proposed_alias_description", "Description", help="Context shown on the alias page. Markdown is supported.") %}
+        <textarea id="proposed_alias_description" name="proposed_alias_description" data-markdown-editor="description.md" placeholder="Write why: context for reviewers… (Markdown)">{{ request.values.get("proposed_alias_description", (alias.description or "") if alias else "") }}</textarea>
+      {% endcall %}
+      {% call field("rationale", "Rationale for reviewers", help="Sources or reasons that help a moderator review this proposal.") %}
+        <textarea id="rationale" name="rationale" placeholder="Explain why these tuples belong together or why the alias should change">{{ request.values.get("rationale", "") }}</textarea>
+      {% endcall %}
     </div>
-  </div>
+    <div class="grid grid-2 alias-submitter">
+      {{ input_field("submitter_name", "Your name", value=request.values.get("submitter_name", ""), help="Shown to moderators with your proposal.") }}
+      {{ input_field("submitter_email", "Your email", type="email", value=request.values.get("submitter_email", ""), help="Lets moderators contact you about this proposal.") }}
+    </div>
+  {% endcall %}
 
-  <div class="card">
-    <h2>Selected tuples</h2>
-    <p class="muted">Checked rows below will be included in the proposal. Search again to add more tuples; current selections are preserved.</p>
-    {% if total_products %}
-      <div class="muted vendor-results-meta">
-        <p>Showing page {{ page }} of {{ total_pages }} ({{ total_products }} matching tuple{% if total_products != 1 %}s{% endif %}).</p>
-        {% if has_prev or has_next %}
-          <div class="action-row">
-            {% if has_prev %}
-              <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id if alias else none, q=q or none, page=page - 1, product_ids=selected_product_ids|list) }}">
-                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
-              </a>
-            {% endif %}
-            {% if has_next %}
-              <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id if alias else none, q=q or none, page=page + 1, product_ids=selected_product_ids|list) }}">
-                Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-              </a>
-            {% endif %}
-          </div>
-        {% endif %}
+  {% call card("Selected tuples", eyebrow="Required", subtitle="These vendor/product tuples will be included in the proposal.") %}
+    <p class="muted member-count" id="selected-members-count" aria-live="polite" data-limit="{{ member_limit }}"></p>
+    <ul class="member-list" id="selected-members"{% if not selected_products %} hidden{% endif %}>
+      {% for product in selected_products %}
+        <li class="active-filter" data-product-id="{{ product.id }}"><span>{{ product.vendor.title or product.vendor.name }} / {{ product.title or product.name }}</span><button type="button" aria-label="Remove member">×</button></li>
+      {% endfor %}
+    </ul>
+    <div class="action-row member-actions" id="selected-members-actions" hidden>
+      <button type="button" class="secondary" id="selected-members-more"></button>
+      <button type="button" class="secondary" id="selected-members-collapse">Collapse</button>
+    </div>
+    <div id="selected-members-empty"{% if selected_products %} hidden{% endif %}>{{ empty_state("No tuples selected yet", "Select one or more products below.") }}</div>
+  {% endcall %}
+
+  {% call card("Find vendor/product tuples", eyebrow="Members", subtitle="Search again to add more tuples; current selections are preserved.", id="find-products") %}
+    <div class="grid form-stack">
+      {{ input_field("q", "Search", value=q, placeholder="Search vendor or product name", help="Matches any part of the vendor or product name or title.") }}
+    </div>
+    <div class="search-actions alias-search-actions">
+      <button class="secondary" type="button" id="alias-product-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>Search products</button>
+      <button class="secondary" type="button" id="alias-product-reset" data-applied="{{ q }}"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i>Reset filters</button>
+    </div>
+    {% if products %}
+      {% set page_params = {"alias_id": alias.id if alias else none, "q": q or none} %}
+      <div class="list-bar list-bar-top">
+        <p class="list-bar-summary muted"><strong>{{ "{:,}".format(total_products) }}</strong> matching tuple{% if total_products != 1 %}s{% endif %} · Page {{ "{:,}".format(page) }} of {{ "{:,}".format(total_pages) }}</p>
+        <div class="list-bar-pages">{{ pagination("main.alias_proposal_new", page_params, page, total_pages, anchor="find-products", position="top") }}</div>
       </div>
-    {% endif %}
-    <table>
-      <thead><tr><th>Include</th><th>Vendor</th><th>Product</th></tr></thead>
-      <tbody>
-        {% set rendered_ids = [] %}
-        {% for product in selected_products %}
-          {% set _ = rendered_ids.append(product.id) %}
-          <tr>
-            <td><input type="checkbox" name="product_ids" value="{{ product.id }}" checked></td>
-            <td>{{ product.vendor.title or product.vendor.name }}</td>
-            <td>{{ product.title or product.name }}</td>
-          </tr>
-        {% endfor %}
-        {% for product in products %}
-          {% if product.id not in rendered_ids %}
+      <table aria-label="Matching tuples" data-sortable="false" data-query-bar="false" data-bulk-bar="false" data-hidden-columns='{{ ["Include"]|tojson }}' data-server-page-size="{{ products|length }}" data-server-total="{{ total_products }}" data-server-total-label="{{ "{:,}".format(total_products) }}">
+        <thead><tr><th>Include</th><th>Vendor</th><th>Product</th></tr></thead>
+        <tbody>
+          {% for product in products %}
             <tr>
-              <td><input type="checkbox" name="product_ids" value="{{ product.id }}" {% if product.id in selected_product_ids %}checked{% endif %}></td>
+              <td><input type="checkbox" name="product_ids" value="{{ product.id }}" data-member-label="{{ product.vendor.title or product.vendor.name }} / {{ product.title or product.name }}" aria-label="Include {{ product.vendor.title or product.vendor.name }} / {{ product.title or product.name }}" {% if product.id in selected_product_ids %}checked{% endif %}></td>
               <td>{{ product.vendor.title or product.vendor.name }}</td>
               <td>{{ product.title or product.name }}</td>
             </tr>
-          {% endif %}
-        {% else %}
-          {% if not selected_products %}<tr><td colspan="3">No products found. Search by vendor or product name.</td></tr>{% endif %}
-        {% endfor %}
-      </tbody>
-    </table>
-    {% if total_products and (has_prev or has_next) %}
-      <div class="muted vendor-results-meta">
-        <p>Showing page {{ page }} of {{ total_pages }} ({{ total_products }} matching tuple{% if total_products != 1 %}s{% endif %}).</p>
-        <div class="action-row">
-          {% if has_prev %}
-            <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id if alias else none, q=q or none, page=page - 1, product_ids=selected_product_ids|list) }}">
-              <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>Previous
-            </a>
-          {% endif %}
-          {% if has_next %}
-            <a class="button" href="{{ url_for('main.alias_proposal_new', alias_id=alias.id if alias else none, q=q or none, page=page + 1, product_ids=selected_product_ids|list) }}">
-              Next<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-            </a>
-          {% endif %}
-        </div>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="list-bar list-bar-bottom">
+        <p class="list-bar-summary muted">{{ "{:,}".format((page - 1) * 100 + 1) }}–{{ "{:,}".format([page * 100, total_products]|min) }} of {{ "{:,}".format(total_products) }}</p>
+        <div class="list-bar-pages">{{ pagination("main.alias_proposal_new", page_params, page, total_pages, anchor="find-products") }}</div>
       </div>
+    {% else %}
+      {{ empty_state("No products found", "Search by vendor or product name.") }}
     {% endif %}
-  </div>
+  {% endcall %}
+  <div class="action-row end"><button type="submit"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i>Submit alias proposal</button></div>
 </form>
+<script type="module" src="{{ url_for('static', filename='js/markdown-editor.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/alias-members.js') }}"></script>
 {% endblock %}
