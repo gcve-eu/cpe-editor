@@ -1,0 +1,25 @@
+{% macro content_view(kind, value, label, filename='') -%}
+<div class="vitrine-content" data-vitrine-kind="{{ kind }}" data-vitrine-label="{{ label }}" data-vitrine-filename="{{ filename }}">
+  <div data-vitrine-fallback>{% if kind == 'markdown' %}<p class="vitrine-source">{{ value }}</p>{% elif kind == 'diff' %}<dl><dt>Current</dt><dd><pre>{{ value.original }}</pre></dd><dt>Proposed</dt><dd><pre>{{ value.modified }}</pre></dd></dl>{% else %}<pre><code>{{ value }}</code></pre>{% endif %}</div>
+  <script type="application/json" data-vitrine-value>{{ value|tojson }}</script>
+  <p class="muted vitrine-status" role="status"></p>
+</div>
+{%- endmacro %}
+
+{% macro inspect_json(url, filename='record.json', label='Inspect record JSON') -%}
+<details class="card vitrine-disclosure" data-vitrine-kind="json" data-vitrine-url="{{ url }}" data-vitrine-label="{{ label }}" data-vitrine-filename="{{ filename }}">
+  <summary>{{ label }}</summary>
+  <p><a href="{{ url }}">Open JSON directly</a></p>
+  <div data-vitrine-fallback><p class="muted">Open this panel to browse, search, copy or download the JSON record.</p></div>
+  <p class="muted vitrine-status" role="status"></p>
+</details>
+{%- endmacro %}
+
+{% macro field_preview(input_id, kind='markdown', label='Preview formatting', condition='') -%}
+<details class="vitrine-disclosure" data-vitrine-kind="{{ kind }}" data-vitrine-input="{{ input_id }}" data-vitrine-label="{{ label }}"{% if condition %} data-vitrine-condition="{{ condition }}"{% endif %}>
+  <summary>{{ label }}</summary>
+  {% if kind == 'markdown' %}<p class="muted">Use Markdown for headings, lists and links.</p>{% endif %}
+  <div data-vitrine-fallback><p class="muted">The preview follows the field above. Your original text is submitted.</p></div>
+  <p class="muted vitrine-status" role="status"></p>
+</details>
+{%- endmacro %}

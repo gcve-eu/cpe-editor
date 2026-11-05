@@ -139,6 +139,7 @@
 
     collapseLists.forEach((listEl, index) => {
       if (listEl.closest("table")) return;
+      if (listEl.closest('[data-vitrine-kind="chart"]')) return;
       const itemSelector = listEl.dataset.itemSelector || ":scope > li";
       const items = listEl.querySelectorAll(itemSelector);
       const limit = Number(listEl.dataset.collapseLimit || 5);
@@ -223,5 +224,6 @@
   });
 </script>
 <script defer src="{{ url_for('static', filename='js/table-tools.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/content-views.js') }}"></script>
 </body>
 </html>

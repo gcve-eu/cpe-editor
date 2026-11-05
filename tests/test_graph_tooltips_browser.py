@@ -141,6 +141,9 @@ def test_pinned_tooltips_stay_inside_graph(graph_page):
 
     page.locator(".entity-graph > summary").click()
     assert not page.locator(".pvt-tooltip-floating").first.is_visible()
+    assert page.locator(".graph-canvas .pvt-canvas-element").evaluate(
+        "svg => svg.hasAttribute('viewBox') && svg.viewBox.baseVal.width > 0 && svg.viewBox.baseVal.height > 0"
+    )
     page.locator(".entity-graph > summary").click()
     _assert_contained(page)
     page.locator(".pvt-tooltip-floating .close-button").last.click()

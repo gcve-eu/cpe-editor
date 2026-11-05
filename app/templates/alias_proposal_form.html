@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import field_preview %}
 {% block title %}Submit alias proposal{% endblock %}
 {% block content %}
 <div class="card">
@@ -31,6 +32,7 @@
 
     <label for="proposed_alias_description">Description</label>
     <textarea id="proposed_alias_description" name="proposed_alias_description" placeholder="Optional context for users and reviewers">{{ alias.description if alias else '' }}</textarea>
+    {{ field_preview("proposed_alias_description", "markdown", "Preview description") }}
 
     <label for="rationale">Rationale for reviewers</label>
     <textarea id="rationale" name="rationale" placeholder="Explain why these tuples belong together or why the alias should change"></textarea>

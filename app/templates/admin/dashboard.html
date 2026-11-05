@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import field_preview %}
 {% block title %}Admin dashboard{% endblock %}
 {% block content %}
 <div class="card">
@@ -16,12 +17,14 @@
   <form method="post" action="{{ url_for('main.admin_ingest_json') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <textarea
+      id="json_payload"
       name="json_payload"
       rows="14"
       placeholder='{"type":"vendor","vendor_name":"microsoft","title":"Microsoft"}'
       required
       style="font-family: var(--font-mono);"
     ></textarea>
+    {{ field_preview("json_payload", "json", "Inspect JSON payload") }}
     <button type="submit"><i class="fa-solid fa-file-import" aria-hidden="true"></i>Ingest JSON</button>
   </form>
 </div>

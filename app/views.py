@@ -37,6 +37,7 @@ from .cache import cache_get_json, cache_set_json, dict_to_namespace
 from .exports import build_export_artifact, cache_export, get_cached_export
 from .gcve import fetch_tuple_matches
 from .graphs import GRAPH_NODE_LIMIT, build_entity_graph
+from .previews import proposal_comparison
 from .search import apply_cpe_text_search
 from .models import (
     APIClient,
@@ -4840,6 +4841,7 @@ def admin_proposal_review(proposal_id):
     return render_template(
         "admin/review_proposal.html",
         proposal=proposal,
+        comparison=proposal_comparison(proposal),
         duplicates=duplicates,
         product_by_id=lambda product_id: (
             Product.query.get(product_id) if product_id else None

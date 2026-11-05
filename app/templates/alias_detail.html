@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import inspect_json, content_view %}
 {% block title %}Alias {{ alias.name }}{% endblock %}
 {% block content %}
 <div class="card">
@@ -16,7 +17,7 @@
       <button class="secondary copy-json" type="button" data-export-url="{{ url_for('main.api_alias_detail', alias_uuid=alias.uuid) }}"><i class="fa-solid fa-copy" aria-hidden="true"></i>Copy JSON</button>
     </div>
   </div>
-  <p>{{ alias.description or 'No description provided.' }}</p>
+  {% if alias.description %}{{ content_view("markdown", alias.description, "Alias description", "description.md") }}{% else %}<p>No description provided.</p>{% endif %}
   <p class="muted">Approved {{ alias.approved_at or alias.created_at }} · {{ alias.members|length }} member(s)</p>
 </div>
 
@@ -41,4 +42,5 @@
     </tbody>
   </table>
 </div>
+{{ inspect_json(url_for('main.api_alias_detail', alias_uuid=alias.uuid), 'alias-' ~ alias.uuid ~ '.json') }}
 {% endblock %}

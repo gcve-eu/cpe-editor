@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import field_preview %}
 {% block title %}{{ 'Edit alias' if alias else 'Create alias' }}{% endblock %}
 {% block content %}
 <section class="card">
@@ -21,6 +22,7 @@
     <input id="alias_name" name="alias_name" required value="{{ alias.name if alias else '' }}" placeholder="Example: Microsoft Windows">
     <label for="alias_description">Description</label>
     <textarea id="alias_description" name="alias_description" placeholder="Optional context for users">{{ alias.description if alias else '' }}</textarea>
+    {{ field_preview("alias_description", "markdown", "Preview description") }}
   </div>
 
   <h2>Selected members</h2>

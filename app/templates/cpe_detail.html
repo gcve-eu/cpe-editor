@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vitrine.html" import inspect_json, content_view %}
 {% block title %}{{ cpe.cpe_uri }}{% endblock %}
 {% block feed_links %}
   <link rel="alternate" type="application/rss+xml" title="Approved changes for {{ cpe.title or cpe.cpe_uri }} RSS" href="{{ url_for('main.cpe_changes_rss', cpe_id=cpe.id) }}">
@@ -24,7 +25,7 @@
     </div>
   </div>
   <p class="muted">Approved changes feed: <a href="{{ url_for('main.cpe_changes_rss', cpe_id=cpe.id) }}">RSS</a> · <a href="{{ url_for('main.cpe_changes_atom', cpe_id=cpe.id) }}">Atom</a></p>
-  <p><code>{{ cpe.cpe_uri }}</code></p>
+  {{ content_view("code", cpe.cpe_uri, "CPE identifier", "cpe.txt") }}
   <p>
     <span class="pill">part: {{ cpe.part }}</span>
     <span class="pill">version: {{ cpe.version }}</span>
@@ -39,9 +40,12 @@
     <tr><th>Target software</th><td>{{ cpe.target_sw }}</td></tr>
     <tr><th>Target hardware</th><td>{{ cpe.target_hw }}</td></tr>
     <tr><th>Other</th><td>{{ cpe.other }}</td></tr>
-    <tr><th>Notes</th><td>{{ cpe.notes or "—" }}</td></tr>
   </table>
 </div>
+
+{% if cpe.notes %}
+<div class="card"><h2>Notes</h2>{{ content_view("markdown", cpe.notes, "CPE notes", "notes.md") }}</div>
+{% endif %}
 
 {% if is_admin and similar_cpes %}
 <div class="card duplicate-alert">
@@ -147,4 +151,5 @@
   <h2>Contribute</h2>
   <p>You can submit an edit proposal for this CPE entry or suggest a related product/vendor addition using the action button above.</p>
 </div>
+{{ inspect_json(url_for('main.api_cpe_detail', cpe_id=cpe.id), 'cpe-' ~ cpe.id ~ '.json') }}
 {% endblock %}
