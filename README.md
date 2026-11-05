@@ -48,11 +48,13 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   paging; selection exports include selected records. Clipboard output is TSV
   for spreadsheets; **Raw** shows CSV. Existing server page links fetch more
   records; **Export all matching … (JSON)** downloads every match across server
-  pages. CSV exports omit hidden
-  form fields and guard spreadsheet formula markers. Dates use readable UTC
-  date/time lines, with exact timestamps on hover and in CSV. Wide tables scroll
-  within their own region. Tables remain usable if the component cannot load or
-  rejects oversized content.
+  pages. CSV exports omit hidden form fields and guard spreadsheet formula
+  markers. Dates use readable UTC
+  date/time lines, with exact timestamps on hover and in CSV. Tables expand to
+  show the full height of the current page, including mobile cards and Raw CSV;
+  use the page scrollbar to read them. Wide tables can scroll horizontally.
+  Fullscreen tables scroll inside the available screen. Tables remain usable if
+  the component cannot load or rejects oversized content.
 - Drill into vendor/product detail pages and linked relationships.
 - Combined views follow approved `synonym-of`, `canonical-of`, `equivalent-to`,
   `renamed-to`, and `vendor-merge-into` relationships in either direction, including
@@ -87,8 +89,8 @@ The online version is available at [https://cpe.gcve.eu](https://cpe.gcve.eu/).
   pages; changing the tuple clears the previous results. GCVE lookups do not
   modify local records or create vulnerability references.
   The lookup table keeps identifiers and headers intact, shows dates and UTC
-  times on separate lines (with the original timestamp on hover), and scrolls
-  within a bounded region with sticky headers. On phones, rows stack into cards
+  times on separate lines (with the original timestamp on hover), and expands
+  to its full height within the page. On phones, rows stack into cards
   so the identifier, date and summary can be read without sideways scrolling.
   The same table includes Vitrine's multi-column sorting, filters, grouping,
   selection/column controls, raw CSV, copy/download and fullscreen. Full summaries and clickable

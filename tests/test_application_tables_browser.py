@@ -67,6 +67,9 @@ def test_table_controls_preserve_rows_and_forms(app, client, browser_page, width
     host.get_by_role("tab", name="Raw", exact=True).wait_for()
     assert host.locator("table").count() == (1 if width == 1440 else 0)
     assert host.locator('[part="row"], [part="card"]').count() == 25
+    region = host.locator(".tb-body")
+    assert region.evaluate("element => element.scrollHeight <= element.clientHeight + 1")
+    assert region.evaluate("element => element.clientHeight > innerHeight")
     host.get_by_role("button", name="Next page", exact=True).click()
     assert host.locator('[part="row"], [part="card"]').count() == 5
     host.get_by_role("button", name="Previous page", exact=True).click()
@@ -122,6 +125,7 @@ def test_table_controls_preserve_rows_and_forms(app, client, browser_page, width
     assert "SECRET-TOKEN" not in page.evaluate("window.copiedCSV")
     host.get_by_role("tab", name="Raw", exact=True).click()
     assert "SECRET-TOKEN" not in host.locator("pre.code").text_content()
+    assert host.locator(".editor-raw").evaluate("element => element.scrollHeight <= element.clientHeight + 1")
     host.get_by_role("tab", name="Table", exact=True).click()
     host.get_by_role("searchbox", name="Search", exact=True).fill("summary-tail")
     page.wait_for_function("document.querySelector('application-table').shadowRoot.querySelectorAll('[part=row], [part=card]').length === 22")
@@ -130,7 +134,11 @@ def test_table_controls_preserve_rows_and_forms(app, client, browser_page, width
     page.wait_for_function("document.querySelector('application-table').shadowRoot.querySelectorAll('[part=row], [part=card]').length === 25")
     assert host.locator("time").first.text_content() == "10 Jul 2026 14:40 UTC"
     host.get_by_role("button", name="Full screen", exact=True).click()
+    page.wait_for_function("document.querySelector('application-table').shadowRoot.querySelector('.vt').dataset.fullscreen")
+    assert host.locator(".tb-body").evaluate("element => element.scrollHeight > element.clientHeight + 1")
     host.get_by_role("button", name="Exit full screen", exact=True).click()
+    page.wait_for_function("!document.querySelector('application-table').shadowRoot.querySelector('.vt').dataset.fullscreen")
+    assert host.locator(".tb-body").evaluate("element => element.scrollHeight <= element.clientHeight + 1")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
     page.wait_for_function("document.querySelector('application-table').getAttribute('theme') === 'dark'")
     host.get_by_role("searchbox", name="Search", exact=True).fill("")

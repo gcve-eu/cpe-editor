@@ -18,6 +18,11 @@ filters, AND/OR condition chips, grouping, row details, selection with CSV/JSON
 exports, column visibility/order/width/pinning, footer aggregates, density,
 numbered pagination with page-size controls, mobile cards, keyboard navigation,
 fullscreen and saved layouts. Editing stays off: record changes use proposals.
+Application and GCVE tables set `sticky-header="false"` and omit `max-height`
+to disable Vitrine's default bounded table viewport. Tables, mobile cards, Raw
+CSV and native fallbacks grow with their content; the document handles vertical
+scrolling. Horizontal scrolling and pagination remain available. Fullscreen
+tables retain internal scrolling to fit the screen.
 
 `app/static/js/editor-table.js` extends `VtTable` with application policy:
 Raw CSV, full-loaded-page copy/download, and spreadsheet formula protection
