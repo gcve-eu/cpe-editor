@@ -13,7 +13,7 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% if duplicates %}
+{% if duplicates.vendors or duplicates.products or duplicates.cpes %}
 <div class="card duplicate-alert">
   <h2><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Potential Duplicates Detected</h2>
   <p class="muted">The following records may be similar to the proposed changes. Review carefully before accepting.</p>
